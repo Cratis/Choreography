@@ -53,12 +53,15 @@ public class a_run : Specification
 
     protected WorkflowTrigger Trigger = new(WorkflowTriggerKind.Manual, "spec", "one", new("manual", "subject"), WorkflowContractReference.Any, WorkflowData.Empty, [], "correlation", WorkflowCausationKey.None, WorkflowActor.System, DateTimeOffset.UtcNow);
 
+    protected virtual bool WakesItself => false;
+
     async Task Establish()
     {
         Jobs = Silo.AddProbe<IJobsManager>(0, Scopes.JobsManagerFor(Key.Scope).ToString());
         Jobs.Setup(jobs => jobs.GetJobsOfType<IWorkflowWaveJob, WorkflowWaveRequest>()).ReturnsAsync(ImmutableList<Cratis.Orleans.Storage.Jobs.JobState>.Empty);
         Jobs.Setup(jobs => jobs.Start<IWorkflowWaveJob, WorkflowWaveRequest>(It.IsAny<JobId>(), It.IsAny<WorkflowWaveRequest>()))
             .ReturnsAsync((JobId id, WorkflowWaveRequest _) => Result<JobId, StartJobError>.Success(id));
+        Jobs.Setup(jobs => jobs.Stop(It.IsAny<JobId>())).ReturnsAsync(Result<StopJobError>.Success());
         Index = Silo.AddProbe<IWorkflowRunIndex>(Key.Scope.Value);
         AddServices(Silo);
         Grain = await Silo.CreateGrainAsync<WorkflowRunGrain>(Key.ToString());
@@ -78,7 +81,7 @@ public class a_run : Specification
         silo.AddService<IWorkflowRunJournal>(Journal);
         silo.AddService(Scopes);
         silo.AddService(new WorkflowScopes(Options.Create(new WorkflowsOptions()), []));
-        silo.AddService(Options.Create(new WorkflowsOptions { WakeRunsItself = false }));
+        silo.AddService(Options.Create(new WorkflowsOptions { WakeRunsItself = WakesItself }));
         silo.AddService(TimeProvider.System);
     }
 }

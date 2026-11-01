@@ -60,8 +60,7 @@ public static class WorkflowsSiloBuilderExtensions
         services.TryAddSingleton<IWorkflowExecutionScopes, DefaultWorkflowExecutionScopes>();
         services.TryAddSingleton<WorkflowScopes>();
         services.TryAddSingleton<IWorkflowRunSweeper, WorkflowRunSweeper>();
-        services.TryAddSingleton<WorkflowRunSweepService>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService>(provider => provider.GetRequiredService<WorkflowRunSweepService>()));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, WorkflowRunSweepService>());
 
         services.TryAddScoped<IWorkflowNodePerformers, WorkflowNodePerformers>();
         services.TryAddScoped<IWorkflowDefinitionSource, CompositeWorkflowDefinitionSource>();

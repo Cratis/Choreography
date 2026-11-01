@@ -49,8 +49,7 @@ public static class EventSourcedWorkflowsServiceCollectionExtensions
         services.Replace(ServiceDescriptor.Singleton<IWorkflowRunJournal, ChronicleWorkflowRunJournal>());
         services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionScopes, ChronicleWorkflowExecutionScopes>());
         services.TryAddSingleton<IWorkflowSignals, WorkflowSignals>();
-        services.TryAddSingleton<WorkflowScheduleService>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService>(provider => provider.GetRequiredService<WorkflowScheduleService>()));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, WorkflowScheduleService>());
 
         // Open generic, constrained to ChronicleOptions: the container only applies it to the options types that
         // derive from it - ChronicleOptions, ChronicleClientOptions, the ASP.NET Core options - and skips the rest.
