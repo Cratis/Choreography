@@ -1,6 +1,8 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using Cratis.Orleans.Workflows;
+
 namespace Cratis.Orleans.Hosting;
 
 /// <summary>
@@ -37,4 +39,29 @@ public class CratisOrleansOptions
     /// Gets the MongoDB connection string to use.
     /// </summary>
     public string ConnectionString { get; init; } = "mongodb://localhost:27017";
+
+    /// <summary>
+    /// Gets where grain state - jobs, job steps and workflow runs - is kept. Defaults to MongoDB.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="GrainStorageMode.InMemory"/> with <see cref="ClusteringMode.Localhost"/> is a local configuration that needs no
+    /// database: it suits development, tests and hosts such as a sandboxed runtime that run a single silo. Nothing survives the process.
+    /// </remarks>
+    public GrainStorageMode Storage { get; init; } = GrainStorageMode.MongoDB;
+
+    /// <summary>
+    /// Gets whether the workflow engine is hosted - its grains' storage, journal, sweep and node execution. Defaults to false.
+    /// </summary>
+    public bool Workflows { get; init; }
+
+    /// <summary>
+    /// Gets how the workflow engine is configured when <see cref="Workflows"/> is on.
+    /// </summary>
+    public Action<WorkflowsOptions>? ConfigureWorkflows { get; init; }
+
+    /// <summary>
+    /// Gets a <see cref="CratisOrleansOptions"/> for running a single silo locally: localhost clustering and in-memory grain storage.
+    /// </summary>
+    /// <returns>The options.</returns>
+    public static CratisOrleansOptions Local() => new() { Clustering = ClusteringMode.Localhost, Storage = GrainStorageMode.InMemory };
 }

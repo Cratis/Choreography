@@ -89,7 +89,10 @@ public static class CratisOrleansSiloBuilderExtensions
             silo.Services.TryAddSingleton<IOptions<JobsOptions>>(_ => Options.Create(new JobsOptions()));
             silo.AddCratisOrleansJobsRecovery();
 
-            silo.UseMongoDBClient(options.ConnectionString);
+            if (options.Storage == GrainStorageMode.MongoDB || options.Clustering == ClusteringMode.MongoDB)
+            {
+                silo.UseMongoDBClient(options.ConnectionString);
+            }
 
             if (options.Clustering == ClusteringMode.MongoDB)
             {
@@ -104,9 +107,25 @@ public static class CratisOrleansSiloBuilderExtensions
                 silo.UseLocalhostClustering();
             }
 
-            // Durable grain state for the job system - a running job survives a silo going away mid-flight.
-            silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.Jobs, grainStorageOptions => grainStorageOptions.DatabaseName = options.DatabaseName);
-            silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.JobSteps, grainStorageOptions => grainStorageOptions.DatabaseName = options.DatabaseName);
+            if (options.Storage == GrainStorageMode.MongoDB)
+            {
+                // Durable grain state for the job system - a running job survives a silo going away mid-flight.
+                silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.Jobs, grainStorageOptions => grainStorageOptions.DatabaseName = options.DatabaseName);
+                silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.JobSteps, grainStorageOptions => grainStorageOptions.DatabaseName = options.DatabaseName);
+                if (options.Workflows)
+                {
+                    silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.Workflows, grainStorageOptions => grainStorageOptions.DatabaseName = options.DatabaseName);
+                }
+            }
+            else
+            {
+                // The local configuration: jobs, steps and workflow runs live in memory of the one silo.
+                silo.Services.TryAddSingleton<IJobsStorage, InMemoryJobsStorage>();
+                if (options.Workflows)
+                {
+                    silo.AddMemoryGrainStorage(WellKnownGrainStorageProviders.Workflows);
+                }
+            }
 
             // Never the 9.x MongoDB reminder table on the 10.x runtime - it hangs the reminder service outright
             // (see the remarks on this method).
@@ -119,6 +138,11 @@ public static class CratisOrleansSiloBuilderExtensions
                 new(serviceProvider.GetRequiredService<IJobsStorage>()));
             silo.Services.AddGrainStorage<Jobs.JobStepGrainStorageProvider>(WellKnownGrainStorageProviders.JobSteps, (serviceProvider, _) =>
                 new(serviceProvider.GetRequiredService<IJobsStorage>()));
+
+            if (options.Workflows)
+            {
+                silo.AddCratisOrleansWorkflows(options.ConfigureWorkflows);
+            }
         });
 
         return builder;
