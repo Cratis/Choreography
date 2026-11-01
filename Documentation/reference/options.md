@@ -17,6 +17,11 @@ The silo co-hosting options, passed to `AddCratisOrleans`.
 | `ServiceId` | `"default"` | The service id every instance joins |
 | `DatabaseName` | `"orleans"` | The MongoDB database holding cluster membership and grain storage |
 | `ConnectionString` | `"mongodb://localhost:27017"` | The MongoDB connection string |
+| `Storage` | `MongoDB` | Where grain state is kept. `InMemory` keeps jobs, job steps and workflow runs in the silo's memory, for development and tests; nothing survives the process |
+| `Workflows` | `false` | Host the [workflow engine](../concepts/workflows.md): its grain storage, journal, sweep and node execution |
+| `ConfigureWorkflows` | `null` | Configures the `WorkflowsOptions` when `Workflows` is on |
+
+`CratisOrleansOptions.Local()` is localhost clustering with `Storage = InMemory`: a silo that needs no database.
 
 ## JobsOptions
 
@@ -96,6 +101,34 @@ pool settings are yours. These `MongoClientSettings` matter for the job system:
 | --- | --- |
 | `OptionsResolver` | Required. Returns the `DbContextOptions<JobsDbContext>` for a scope and namespace - the place you choose provider (SQL Server, PostgreSQL, SQLite) and connection |
 
+## WorkflowsOptions
+
+The workflow engine, passed to `AddCratisOrleansWorkflows` (or `CratisOrleansOptions.ConfigureWorkflows`). See
+[Workflows](../concepts/workflows.md).
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `JobsScope` | `"workflows"` | The scope of the jobs manager that holds the wave jobs of a run, for the default `IWorkflowExecutionScopes` |
+| `Scopes` | empty | Scopes the sweep and the recovery of wave jobs act on, besides those an `IWorkflowScopeSource` names and those the silo has served |
+| `WakeRunsItself` | `true` | While a retry or a wait deadline is pending, the run's grain keeps a timer and a reminder so it acts when the time comes |
+| `Sweep` | `true` | Whether the sweep runs on this silo |
+| `SweepInterval` | 30 seconds | How often the sweep asks every active run whether it has anything to do |
+| `SweepStartupDelay` | 20 seconds | How long after start the first sweep runs |
+| `IdleBeforeResume` | 15 minutes | How long a run may be idle before the sweep takes it forward again from its recorded history |
+
+## EventSourcedWorkflowsOptions
+
+The Chronicle adapter, passed to `AddEventSourcedWorkflows` in `Cratis.Orleans.Chronicle`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `EventStore` | `"Default"` | The event store the facts of runs are appended to, and the jobs scope of the wave jobs |
+| `NamespaceFor` | the scope's value | Maps a `WorkflowScope` onto an event store namespace |
+| `ScopeFor` | the namespace's value | Maps an event store namespace back onto a `WorkflowScope`; used by event triggers |
+| `ReadModels` | `true` | Register the run listing and open waits read models |
+| `OnEvent<TEvent>(...)` | none | Declares that an event admits a run of a workflow |
+| `Schedule(...)` | none | Declares that a workflow starts on a schedule |
+
 ## Well-known grain storage providers
 
 The silo registers the job system's grain storage under these names; job grains reference them by name:
@@ -104,3 +137,4 @@ The silo registers the job system's grain storage under these names; job grains 
 | --- | --- |
 | `jobs` | The job grain's persisted state |
 | `job-steps` | The job step grain's persisted state |
+| `workflows` | The facts of workflow runs for the journal on grain storage, and the run index of each scope |

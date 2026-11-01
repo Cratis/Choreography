@@ -2,7 +2,7 @@
     <PropertyGroup>
         <AssemblyName>Cratis.Orleans</AssemblyName>
         <RootNamespace>Cratis.Orleans</RootNamespace>
-        <Description>Shared Orleans building blocks for the Cratis platform - job system, workers, typed grain keys, serializers and silo hosting tooling</Description>
+        <Description>Shared Orleans building blocks for the Cratis platform - job system, workers, durable workflows, typed grain keys, serializers and silo hosting tooling</Description>
         <PackageTags>orleans;jobs;grains;serializers;hosting;cratis</PackageTags>
         <RepositoryUrl>https://github.com/Cratis/Orleans</RepositoryUrl>
         <ProjectUrl>https://github.com/Cratis/Orleans</ProjectUrl>
