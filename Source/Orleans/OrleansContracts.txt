@@ -75,3 +75,45 @@ interface [GrainInterfaceType("Cratis.Orleans.Workers.IGrainWithBackgroundTask")
 
 interface [GrainInterfaceType("Cratis.Orleans.Workers.IGrainWithBackgroundTask`2")] Cratis.Orleans.Workers.IGrainWithBackgroundTask<TRequest, TResult> [Version(0)]
   F13D2F19: GetResult() -> Task<Cratis.Monads.Result<Cratis.Orleans.Workers.PerformWorkResult<TResult>, Cratis.Orleans.Workers.WorkerGetResultError>>
+
+interface [GrainInterfaceType("Cratis.Orleans.Workflows.Execution.IWorkflowNodeStep")] Cratis.Orleans.Workflows.Execution.IWorkflowNodeStep [Version(0)]
+
+interface [GrainInterfaceType("Cratis.Orleans.Workflows.Execution.IWorkflowWaveJob")] Cratis.Orleans.Workflows.Execution.IWorkflowWaveJob [Version(0)]
+
+# Cratis.Orleans.Workflows.Execution.WorkflowNodeStep
+class [GrainType("cratis-orleans-workflow-node-step")] Cratis.Orleans.Workflows.Execution.WorkflowNodeStep
+
+# Cratis.Orleans.Workflows.Execution.WorkflowWaveJob
+class [GrainType("cratis-orleans-workflow-wave-job")] Cratis.Orleans.Workflows.Execution.WorkflowWaveJob
+
+interface [GrainInterfaceType("Cratis.Orleans.Workflows.IWorkflow")] Cratis.Orleans.Workflows.IWorkflow [Version(0)]
+  22D9A1EC: Admit(Cratis.Orleans.Workflows.Triggers.WorkflowTrigger) -> Task<Cratis.Orleans.Workflows.Runs.WorkflowAdmission>
+
+interface [GrainInterfaceType("Cratis.Orleans.Workflows.Runs.IWorkflowRun")] Cratis.Orleans.Workflows.Runs.IWorkflowRun [Version(0)]
+  78D6B7D4: Admit(Cratis.Orleans.Workflows.Definitions.WorkflowDefinitionSnapshot, Cratis.Orleans.Workflows.Triggers.WorkflowTrigger) -> Task<Cratis.Orleans.Workflows.Runs.WorkflowAdmission>
+  B6855ED2: Cancel(Cratis.Orleans.Workflows.Runs.WorkflowFailureReason) -> Task
+  41B24BBC: CompleteNode(Cratis.Orleans.Workflows.Runs.NodeExecutionKey, Cratis.Orleans.Workflows.Runs.WorkflowAttempt, Cratis.Orleans.Workflows.Adapters.WorkflowNodeOutcome) -> Task
+  8ECF07EC: CompleteOperation(Cratis.Orleans.Workflows.Runs.NodeExecutionKey, Cratis.Orleans.Workflows.Runs.WorkflowAttempt, Cratis.Orleans.Workflows.Adapters.WorkflowOperationName, Cratis.Orleans.Workflows.Contracts.WorkflowData) -> Task
+  D5C26857: ExpireDueWaits(System.DateTimeOffset) -> Task
+  ACE2D892: FailAttempt(Cratis.Orleans.Workflows.Runs.NodeExecutionKey, Cratis.Orleans.Workflows.Runs.WorkflowAttempt, Cratis.Orleans.Workflows.Runs.WorkflowFailureKind, Cratis.Orleans.Workflows.Runs.WorkflowFailureReason) -> Task
+  2E894D7C: GetOperationOutput(Cratis.Orleans.Workflows.Runs.NodeExecutionKey, Cratis.Orleans.Workflows.Runs.WorkflowAttempt, Cratis.Orleans.Workflows.Adapters.WorkflowOperationName) -> Task<Cratis.Orleans.Workflows.Contracts.WorkflowData>
+  1F0071A9: GetSnapshot() -> Task<Cratis.Orleans.Workflows.Runs.WorkflowRunSnapshot>
+  CFBA69F1: ResolveWait(Cratis.Orleans.Workflows.Waits.WorkflowWaitId, Cratis.Orleans.Workflows.Graphs.OutletName, Cratis.Orleans.Workflows.Contracts.WorkflowData, Cratis.Orleans.Workflows.WorkflowActor) -> Task
+  07781018: Resume() -> Task
+  0403464F: StartDueRetries(System.DateTimeOffset) -> Task
+  C794408B: Tend(System.DateTimeOffset) -> Task
+  CBF26E32: TryStartInvocation(Cratis.Orleans.Workflows.Runs.NodeExecutionKey, Cratis.Orleans.Workflows.Runs.WorkflowAttempt) -> Task<bool>
+
+# Cratis.Orleans.Workflows.Runs.WorkflowRunGrain
+class [GrainType("cratis-orleans-workflow-run")] Cratis.Orleans.Workflows.Runs.WorkflowRunGrain
+
+interface [GrainInterfaceType("Cratis.Orleans.Workflows.Sweeping.IWorkflowRunIndex")] Cratis.Orleans.Workflows.Sweeping.IWorkflowRunIndex [Version(0)]
+  73A3A047: Add(Cratis.Orleans.Workflows.WorkflowRunId) -> Task
+  6237F5F5: GetActive() -> Task<System.Collections.Generic.IReadOnlyList<Cratis.Orleans.Workflows.WorkflowRunId>>
+  52E82315: Remove(Cratis.Orleans.Workflows.WorkflowRunId) -> Task
+
+# Cratis.Orleans.Workflows.Sweeping.WorkflowRunIndexGrain
+class [GrainType("cratis-orleans-workflow-run-index")] Cratis.Orleans.Workflows.Sweeping.WorkflowRunIndexGrain
+
+# Cratis.Orleans.Workflows.WorkflowGrain
+class [GrainType("cratis-orleans-workflow")] Cratis.Orleans.Workflows.WorkflowGrain

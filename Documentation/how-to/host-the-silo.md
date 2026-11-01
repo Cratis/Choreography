@@ -59,6 +59,31 @@ builder.AddCratisOrleans(new CratisOrleansOptions
 });
 ```
 
+## Run without a database
+
+A silo for development, tests, or a runtime that hosts one silo does not need MongoDB. Keep grain state in memory and
+cluster on localhost:
+
+```csharp
+builder.AddCratisOrleans(CratisOrleansOptions.Local());
+```
+
+Jobs, job steps and, with `Workflows = true`, workflow runs live in the silo's memory and nothing survives the process.
+The in-memory jobs storage is registered for you, so do not call `AddCratisOrleansMongoDBJobsStorage`.
+
+## Host the workflow engine
+
+Set `Workflows = true` to host the [workflow engine](../concepts/workflows.md) with the silo. It registers the `workflows`
+grain storage provider, the journal, the sweep and node execution:
+
+```csharp
+builder.AddCratisOrleans(new CratisOrleansOptions
+{
+    Workflows = true,
+    ConfigureWorkflows = options => options.Scopes.Add("tenant-1")
+});
+```
+
 ## Place job controllers and step workers separately
 
 By default Orleans places jobs and steps using resource-optimized placement. To dedicate silos to controlling

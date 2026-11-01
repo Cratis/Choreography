@@ -21,6 +21,7 @@ three.
 - [Storage scopes](concepts/storage-scopes.md) — how job state finds its database
 - [State machines](concepts/state-machines.md) — model a grain's lifecycle as explicit states
 - [Event-sourced state machines](concepts/event-sourced-state-machines.md) — drive a state machine from Chronicle events
+- [Workflows](concepts/workflows.md) — durable, grain-based workflows defined as a graph of nodes
 - [Host the silo](how-to/host-the-silo.md)
 - [Configure storage](how-to/configure-storage.md)
 - [Options reference](reference/options.md)
@@ -29,11 +30,11 @@ three.
 
 | Package | Holds |
 | --- | --- |
-| `Cratis.Orleans` | The job engine, Workers, state machines, typed grain keys, Orleans serializers, silo hosting |
+| `Cratis.Orleans` | The job engine, Workers, state machines, workflows, typed grain keys, Orleans serializers, silo hosting |
 | `Cratis.Orleans.Storage` | The jobs storage API and the scope resolver |
 | `Cratis.Orleans.Storage.MongoDB` | MongoDB storage provider |
 | `Cratis.Orleans.Storage.Sql` | SQL storage provider (EF Core: SQL Server, PostgreSQL, SQLite) |
-| `Cratis.Orleans.Chronicle` | Event-sourced state machines driven by Chronicle events and read models |
+| `Cratis.Orleans.Chronicle` | Event-sourced state machines driven by Chronicle events and read models, and workflows whose runs are kept as Chronicle events |
 
 Apart from `Cratis.Orleans.Chronicle`, the packages have no dependency on Chronicle; Chronicle is a consumer, like
 every other Cratis service.

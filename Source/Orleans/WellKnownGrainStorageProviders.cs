@@ -17,4 +17,9 @@ public static class WellKnownGrainStorageProviders
     /// The name of the storage provider used for job steps.
     /// </summary>
     public const string JobSteps = "job-steps";
+
+    /// <summary>
+    /// The name of the storage provider used for the facts of workflow runs.
+    /// </summary>
+    public const string Workflows = "workflows";
 }

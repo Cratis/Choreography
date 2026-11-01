@@ -10,3 +10,5 @@
   href: state-machines.md
 - name: Event-sourced state machines
   href: event-sourced-state-machines.md
+- name: Workflows
+  href: workflows.md

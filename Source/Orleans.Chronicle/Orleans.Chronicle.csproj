@@ -2,7 +2,7 @@
     <PropertyGroup>
         <AssemblyName>Cratis.Orleans.Chronicle</AssemblyName>
         <RootNamespace>Cratis.Orleans.Chronicle</RootNamespace>
-        <Description>Chronicle integration for Cratis Orleans - event-sourced state machines whose model is a Chronicle read model and whose transitions are driven by Chronicle events</Description>
+        <Description>Chronicle integration for Cratis Orleans - event-sourced state machines whose model is a Chronicle read model and whose transitions are driven by Chronicle events, and workflows whose runs are kept as Chronicle events</Description>
         <PackageTags>orleans;chronicle;event-sourcing;state-machines;grains;cratis</PackageTags>
         <RepositoryUrl>https://github.com/Cratis/Orleans</RepositoryUrl>
         <ProjectUrl>https://github.com/Cratis/Orleans</ProjectUrl>
