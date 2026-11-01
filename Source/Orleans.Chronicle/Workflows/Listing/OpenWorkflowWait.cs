@@ -1,0 +1,39 @@
+// Copyright (c) Cratis. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+using Cratis.Chronicle.Projections;
+using Cratis.Orleans.Workflows;
+using Cratis.Orleans.Workflows.Contracts;
+using Cratis.Orleans.Workflows.Runs;
+using Cratis.Orleans.Workflows.Waits;
+
+namespace Cratis.Orleans.Chronicle.Workflows.Listing;
+
+/// <summary>
+/// A wait that is open - waiting for a signal, a deadline or an approval.
+/// </summary>
+/// <param name="Id">The wait.</param>
+/// <param name="Run">The run it belongs to.</param>
+/// <param name="Execution">The execution that is waiting.</param>
+/// <param name="Kind">What it waits for.</param>
+/// <param name="Correlation">What a signal must be correlated with to resolve it.</param>
+/// <param name="Signal">The contract of the signal it waits for.</param>
+/// <param name="Deadline">When it expires, or <see cref="WaitDeadline.None"/>.</param>
+public record OpenWorkflowWait(
+    WorkflowWaitId Id,
+    WorkflowRunId Run,
+    NodeExecutionKey Execution,
+    WaitKind Kind,
+    WorkflowCorrelationKey Correlation,
+    WorkflowContractReference Signal,
+    WaitDeadline Deadline)
+{
+    /// <summary>
+    /// Defines the projection that keeps the open waits - added when a wait opens, removed when it is resolved or cancelled.
+    /// </summary>
+    /// <param name="builder">The <see cref="IProjectionBuilderFor{TReadModel}"/>.</param>
+    public static void Define(IProjectionBuilderFor<OpenWorkflowWait> builder) => builder
+        .From<WorkflowWaitOpened>(from => from.UsingKey(@event => @event.Wait).Set(model => model.Run).ToEventSourceId())
+        .RemovedWith<WorkflowWaitResolved>(removed => removed.UsingKey(@event => @event.Wait))
+        .RemovedWith<WorkflowWaitCancelled>(removed => removed.UsingKey(@event => @event.Wait));
+}
