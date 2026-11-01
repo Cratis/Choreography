@@ -7,6 +7,9 @@ using Cratis.Orleans.Workflows.Contracts;
 using Cratis.Orleans.Workflows.Runs;
 using Cratis.Orleans.Workflows.Waits;
 
+// The fact types are registered explicitly with the Chronicle client instead of carrying an event type attribute (CHR0002).
+#pragma warning disable CHR0002
+
 namespace Cratis.Orleans.Chronicle.Workflows.Listing;
 
 /// <summary>

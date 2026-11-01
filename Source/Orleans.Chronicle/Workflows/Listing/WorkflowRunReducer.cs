@@ -8,7 +8,9 @@ using Cratis.Orleans.Workflows.Runs;
 using Cratis.Orleans.Workflows.Waits;
 
 // A reducer method receives the event it handles even when what it does depends on the run alone.
-#pragma warning disable IDE0060
+// The fact types carry no event type attribute because the core package does not know Chronicle; the adapter registers them
+// explicitly with the Chronicle client (see RegisterEventSourcedWorkflows), which is what CHR0007 asks the attribute for.
+#pragma warning disable IDE0060, CHR0007
 
 namespace Cratis.Orleans.Chronicle.Workflows.Listing;
 
