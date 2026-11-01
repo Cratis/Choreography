@@ -14,7 +14,7 @@ public enum WorkflowTriggerKind
     /// <summary>A signal from outside started it.</summary>
     Signal = 1,
 
-    /// <summary>A subject reaching a stage started it.</summary>
+    /// <summary>A subject reaching a stage - a state machine entering a state - started it.</summary>
     StageHook = 2,
 
     /// <summary>A schedule started it.</summary>

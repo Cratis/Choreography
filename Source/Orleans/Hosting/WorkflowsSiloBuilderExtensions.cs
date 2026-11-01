@@ -56,6 +56,7 @@ public static class WorkflowsSiloBuilderExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ITypes>(_ => new Cratis.Types.Types());
         services.TryAddSingleton<IWorkflowRunJournal, GrainStorageWorkflowRunJournal>();
+        services.TryAddSingleton<IWorkflows, WorkflowStarter>();
         services.TryAddSingleton<IWorkflowExecutionScopes, DefaultWorkflowExecutionScopes>();
         services.TryAddSingleton<WorkflowScopes>();
         services.TryAddSingleton<IWorkflowRunSweeper, WorkflowRunSweeper>();
