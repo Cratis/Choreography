@@ -58,6 +58,8 @@ refers to its plan until it reaches `Running` (or finishes). Let such jobs get t
 silo: an older silo does not know the reference, drops it when it rewrites the job, and cannot find the plan, so the
 job cannot be recovered from preparation.
 
+When a job activation retires itself after a write of unknown outcome, it asks the jobs manager to recover it with a one-way, best-effort call; if that request is lost, for example while an older silo hosts the manager, the job is brought back by the normal recovery paths: the next step report, startup rehydration, or member-death rehydration.
+
 ## Initialize before dispatch on start and resume
 
 A silo can stop during step preparation or inside your start hook, before initialization finishes. Override

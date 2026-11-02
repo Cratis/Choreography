@@ -18,6 +18,8 @@ public class and_the_running_write_is_not_committed : given.a_job_with_a_plan_st
     SomeJob _retired;
     TestKitSilo _retiredSilo;
     int _writesAfterFailure;
+    int _successesAfterFailure;
+    JobError? _lateError;
 
     async Task Establish()
     {
@@ -31,9 +33,11 @@ public class and_the_running_write_is_not_committed : given.a_job_with_a_plan_st
         _retired.RejectWrite = state => state.Status is JobStatus.Running;
         (await _retired.Resume()).IsSuccess.ShouldBeFalse();
         _writesAfterFailure = _retired.WriteAttempts;
+        _successesAfterFailure = _retired.CurrentState.Progress.SuccessfulSteps;
 
         // A report that reaches the retiring activation.
-        await _retired.OnStepSucceeded(_secondId, JobStepResult.Succeeded());
+        var lateReport = await _retired.OnStepSucceeded(_secondId, JobStepResult.Succeeded());
+        _lateError = lateReport.TryGetError(out var error) ? error : null;
         _retired.WriteAttempts.ShouldEqual(_writesAfterFailure);
         await ActivateFrom(_durable);
     }
@@ -41,6 +45,8 @@ public class and_the_running_write_is_not_committed : given.a_job_with_a_plan_st
     async Task Because() => _result = await _job.Resume();
 
     [Fact] void should_retire_the_activation() => _retiredSilo.GrainRuntime.Mock.Verify(runtime => runtime.DeactivateOnIdle(It.IsAny<IGrainContext>()), Times.Once);
+    [Fact] void should_reject_a_report_in_the_retired_activation_as_a_persist_error() => _lateError.ShouldEqual(JobError.PersistStateError);
+    [Fact] void should_not_count_or_advance_in_the_retired_activation() => _retired.CurrentState.Progress.SuccessfulSteps.ShouldEqual(_successesAfterFailure);
     [Fact] void should_persist_nothing_in_the_retired_activation() => _retired.WrittenStates.ShouldBeEmpty();
     [Fact] void should_not_attempt_a_write_after_the_failure() => _retired.WriteAttempts.ShouldEqual(_writesAfterFailure);
     [Fact] async Task should_keep_the_plan_for_the_next_activation() => (await PlanIsStored()).ShouldBeTrue();

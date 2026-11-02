@@ -12,7 +12,7 @@ namespace Cratis.Orleans.Jobs;
 /// <summary>
 /// Defines a system that manages jobs.
 /// </summary>
-[Version(1)]
+[Version(2)]
 public interface IJobsManager : IGrainWithIntegerCompoundKey
 {
     /// <summary>

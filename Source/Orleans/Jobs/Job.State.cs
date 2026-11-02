@@ -58,8 +58,9 @@ public abstract partial class Job<TRequest, TJobState>
 
     /// <summary>
     /// Asks the jobs manager to bring the job back. The watchdog dies with this activation, and a storage outage - the usual cause of
-    /// the failed write - would also make the next step report fail to activate a replacement. The call is one-way, touches no job
-    /// storage, and its failure is only logged: a manager that cannot be told leaves the job to the next report or rehydration.
+    /// the failed write - would also make the next step report fail to activate a replacement. The call is one-way and best-effort: it
+    /// touches no job storage, and a remote dispatch failure cannot be observed here. A request that never arrives leaves the job to
+    /// the normal recovery paths: the next step report, startup rehydration, or member-death rehydration.
     /// </summary>
     void RequestRecoveryFromTheJobsManager()
     {

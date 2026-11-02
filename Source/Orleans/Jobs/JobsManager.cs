@@ -53,6 +53,7 @@ public class JobsManager(
     Task? _rehydrationPreparation;
     Task? _rehydration;
     bool _rehydrationActive;
+    int _keepAliveHolders;
     bool _rehydrationRequested;
     JobsStorage? _jobsStorageForScope;
     IJobStorage? _jobStorage;
@@ -147,8 +148,8 @@ public class JobsManager(
         // running shares it - the job is only ever taken forward once, and a normal step report may already have done it.
         if (_recoveries.Add(jobId))
         {
-            // Held for as long as any recovery runs: this is the only thing that will bring the job back.
-            DelayDeactivation(Timeout.InfiniteTimeSpan);
+            // Held for as long as this recovery runs: it is the only thing that will bring the job back.
+            AcquireKeepAlive();
             _ = RecoverInBackground(jobId, _rehydrationCancellation.Token);
         }
         return Task.CompletedTask;
@@ -389,7 +390,7 @@ public class JobsManager(
                 runningJobs =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    DelayDeactivation(Timeout.InfiniteTimeSpan);
+                    AcquireKeepAlive();
                     _rehydration = ResumeJobsInBackground(runningJobs.Where(_needsRehydration), cancellationToken);
                     drainStarted = true;
                     return Task.CompletedTask;
@@ -437,10 +438,23 @@ public class JobsManager(
         }
     }
 
+    /// <summary>
+    /// Takes a hold on this activation. Rehydration and each recovery hold it independently; it is kept alive until every holder let go.
+    /// </summary>
+    void AcquireKeepAlive()
+    {
+        if (++_keepAliveHolders == 1)
+        {
+            DelayDeactivation(Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    /// <summary>
+    /// Lets go of a hold taken with <see cref="AcquireKeepAlive"/>. Only the last holder releases the activation.
+    /// </summary>
     void ReleaseKeepAlive()
     {
-        // A recovery that is still running holds the activation until it ends.
-        if (_recoveries.Count > 0)
+        if (--_keepAliveHolders > 0)
         {
             return;
         }

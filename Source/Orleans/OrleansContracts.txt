@@ -49,7 +49,7 @@ interface [GrainInterfaceType("Cratis.Orleans.Jobs.IJobStepDrain")] Cratis.Orlea
 interface [GrainInterfaceType("Cratis.Orleans.Jobs.IJobStopFinalization")] Cratis.Orleans.Jobs.IJobStopFinalization [Version(0)]
   C3F6AC81: FinalizeStop() -> Task
 
-interface [GrainInterfaceType("Cratis.Orleans.Jobs.IJobsManager")] Cratis.Orleans.Jobs.IJobsManager [Version(1)]
+interface [GrainInterfaceType("Cratis.Orleans.Jobs.IJobsManager")] Cratis.Orleans.Jobs.IJobsManager [Version(2)]
   E4F940C5: CleanupDeadJobs() -> Task
   256EF80D: Delete(Cratis.Orleans.Jobs.JobId) -> Task
   C8943C1C: GetAllJobs() -> Task<System.Collections.Immutable.IImmutableList<Cratis.Orleans.Storage.Jobs.JobState>>

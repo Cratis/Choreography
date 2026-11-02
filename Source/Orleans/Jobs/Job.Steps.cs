@@ -21,6 +21,12 @@ public abstract partial class Job<TRequest, TJobState>
     public async Task<Result<JobError>> OnStepSucceeded(JobStepId stepId, JobStepResult jobStepResult)
     {
         using var scope = _logger.BeginJobScope(JobId, JobKey);
+        if (_retired)
+        {
+            // Counts, stage advances and hooks belong to the next activation; the step's delivery retry reaches it.
+            return JobError.PersistStateError;
+        }
+
         var (ignored, attempt, _, unsaved) = await IgnoreStepOutcome(stepId, stopped: false);
         if (unsaved is { } error)
         {
@@ -44,6 +50,12 @@ public abstract partial class Job<TRequest, TJobState>
     public async Task<Result<JobError>> OnStepStopped(JobStepId stepId, JobStepResult jobStepResult)
     {
         using var scope = _logger.BeginJobScope(JobId, JobKey);
+        if (_retired)
+        {
+            // Counts, stage advances and hooks belong to the next activation; the step's delivery retry reaches it.
+            return JobError.PersistStateError;
+        }
+
         var (ignored, _, ofEarlierExecution, unsaved) = await IgnoreStepOutcome(stepId, stopped: true);
         if (unsaved is { } error)
         {
@@ -71,6 +83,12 @@ public abstract partial class Job<TRequest, TJobState>
     public async Task<Result<JobError>> OnStepFailed(JobStepId stepId, JobStepResult jobStepResult)
     {
         using var scope = _logger.BeginJobScope(JobId, JobKey);
+        if (_retired)
+        {
+            // Counts, stage advances and hooks belong to the next activation; the step's delivery retry reaches it.
+            return JobError.PersistStateError;
+        }
+
         var (ignored, attempt, _, unsaved) = await IgnoreStepOutcome(stepId, stopped: false);
         if (unsaved is { } error)
         {
