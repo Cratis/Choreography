@@ -307,12 +307,11 @@ public abstract partial class Job<TRequest, TJobState>
             var grainId = this.GetGrainId();
             var steps = await PrepareSteps(request);
             PlanStages(steps);
-            State.StepPlan = SaveStepPlan(steps);
+            await PlaceStepPlan(SaveStepPlan(steps));
             State.Progress.TotalSteps = steps.Count;
-            if (!await TryWriteStatusChanged(JobStatus.PreparingSteps))
+            if (await WriteStatusChangedOrUndo(JobStatus.PreparingSteps) is { } notPersisted)
             {
-                DeactivateOnIdleDuringShutdown();
-                return StartJobError.Unknown;
+                return await FailStart(notPersisted, StartJobError.Unknown);
             }
             if (steps.Count == 0)
             {
@@ -327,9 +326,37 @@ public abstract partial class Job<TRequest, TJobState>
         catch (Exception ex)
         {
             _logger.ErrorPreparingJobSteps(ex);
-            _ = await WriteStatusChanged(JobStatus.Failed, ex);
-            return ex is JobStepRequestCannotRoundTrip ? StartJobError.InvalidStepPlan : StartJobError.Unknown;
+            return await FailStart(ex, ex is JobStepRequestCannotRoundTrip ? StartJobError.InvalidStepPlan : StartJobError.Unknown);
         }
+    }
+
+    /// <summary>
+    /// Marks a job whose start could not be persisted as failed, with the reason recorded and without its plan.
+    /// </summary>
+    /// <param name="reason">Why the start failed.</param>
+    /// <param name="error">The error to answer the start with.</param>
+    /// <returns>The failed result.</returns>
+    /// <remarks>
+    /// A stored plan is removed only once the failure is durable. If it cannot be written the job deactivates and
+    /// the plan stays: the job document may still say it is preparing, and recovery then needs the plan.
+    /// </remarks>
+    async Task<Result<StartJobError>> FailStart(Exception reason, StartJobError error)
+    {
+        var hadStoredPlan = State.HasStoredStepPlan;
+        State.StepPlan = null;
+        State.HasStoredStepPlan = false;
+        if ((await WriteStatusChanged(JobStatus.Failed, reason)).IsSuccess)
+        {
+            if (hadStoredPlan)
+            {
+                await RemoveStoredStepPlan();
+            }
+        }
+        else
+        {
+            DeactivateOnIdleDuringShutdown();
+        }
+        return error;
     }
 
     async Task<Result<StartJobError>> PrepareAndStartAllJobSteps(GrainId grainId, IImmutableList<JobStepDetails> jobSteps)

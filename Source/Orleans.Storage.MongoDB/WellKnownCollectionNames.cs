@@ -22,4 +22,9 @@ public static class WellKnownCollectionNames
     /// The name of the collection holding failed job steps.
     /// </summary>
     public const string FailedJobSteps = "failed-job-steps";
+
+    /// <summary>
+    /// The name of the collection holding the step plans that are too large to live inside the job document.
+    /// </summary>
+    public const string JobStepPlans = "job-step-plans";
 }

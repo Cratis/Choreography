@@ -22,7 +22,7 @@ public class InMemoryJobsStorage(IJobTypes jobTypes) : IJobsStorage
     public JobsStorage GetFor(string scope, string @namespace) =>
         _storageByScopeAndNamespace.GetOrAdd(
             string.Join('#', scope, @namespace),
-            static (_, jobTypes) => new JobsStorage(new InMemory.JobStorage(jobTypes), new InMemory.JobStepStorage()),
+            static (_, jobTypes) => new JobsStorage(new InMemory.JobStorage(jobTypes), new InMemory.JobStepStorage()) { StepPlans = new InMemory.JobStepPlanStorage() },
             jobTypes);
 
     /// <inheritdoc/>

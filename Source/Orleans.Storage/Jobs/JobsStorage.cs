@@ -10,4 +10,10 @@ namespace Cratis.Orleans.Storage;
 /// </summary>
 /// <param name="Jobs">The <see cref="IJobStorage"/> for the scope.</param>
 /// <param name="JobSteps">The <see cref="IJobStepStorage"/> for the scope.</param>
-public record JobsStorage(IJobStorage Jobs, IJobStepStorage JobSteps);
+public record JobsStorage(IJobStorage Jobs, IJobStepStorage JobSteps)
+{
+    /// <summary>
+    /// Gets the <see cref="IJobStepPlanStorage"/> for the scope, or null when the storage keeps every step plan inside the job document.
+    /// </summary>
+    public IJobStepPlanStorage? StepPlans { get; init; }
+}

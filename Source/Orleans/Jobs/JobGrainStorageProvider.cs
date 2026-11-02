@@ -33,6 +33,12 @@ public class JobGrainStorageProvider(IJobsStorage jobsStorage) : IGrainStorage
 
             await HandleCatch(jobStepStorage.RemoveAllForJob(jobId), type, nameof(ClearStateAsync));
             await HandleCatch(jobStorage.Remove(jobId), type, nameof(ClearStateAsync));
+
+            // Only once the job is gone: until then a job document that still says it has a plan needs it.
+            if (storage.StepPlans is { } stepPlans)
+            {
+                await HandleCatch(stepPlans.RemoveForJob(jobId), type, nameof(ClearStateAsync));
+            }
         }
     }
 

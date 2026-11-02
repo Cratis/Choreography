@@ -194,6 +194,18 @@ public class JobsOptions
     public TimeSpan StepStopTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
+    /// Gets the summed size, in characters of serialized step requests, above which a job's step plan is kept outside
+    /// the job document. Defaults to 1 MiB.
+    /// </summary>
+    /// <remarks>
+    /// Only storage that can keep a plan separately (see IJobStepPlanStorage), and only when every silo that hosts
+    /// the job supports it, keeps a plan outside the job document. Otherwise the plan stays inline whatever its size,
+    /// and a job whose document cannot be written is marked failed. Zero keeps every plan outside the job document
+    /// whenever that is possible.
+    /// </remarks>
+    public int MaxInlineStepPlanSize { get; init; } = 1_048_576;
+
+    /// <summary>
     /// Gets the effective maximum parallel steps to use.
     /// </summary>
     /// <returns>The maximum parallel steps value.</returns>

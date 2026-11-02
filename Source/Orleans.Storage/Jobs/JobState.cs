@@ -93,6 +93,15 @@ public class JobState
     public IReadOnlyList<PlannedJobStep>? StepPlan { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the step plan is kept in <see cref="IJobStepPlanStorage"/> instead of in <see cref="StepPlan"/>.
+    /// </summary>
+    /// <remarks>
+    /// True only while the job is preparing or starting its steps, for a plan too large for the job document. It is
+    /// false once the job is running. Storage that cannot keep a plan separately never sets it.
+    /// </remarks>
+    public bool HasStoredStepPlan { get; set; }
+
+    /// <summary>
     /// Gets or sets the request associated with the job.
     /// </summary>
     public IJobRequest Request { get; set; } = default!;

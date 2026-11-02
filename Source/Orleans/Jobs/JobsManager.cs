@@ -298,6 +298,8 @@ public class JobsManager(
                 return Task.CompletedTask;
             });
 
+        await CleanupOrphanedStepPlans();
+
         if (cleanupOptions.TerminalJobRetention == Timeout.InfiniteTimeSpan)
         {
             return;
@@ -456,7 +458,7 @@ public class JobsManager(
     {
         var deadJobs = new List<JobState>();
 
-        foreach (var job in preparingJobs.Where(job => job.StepPlan is null))
+        foreach (var job in preparingJobs.Where(job => job.StepPlan is null && !job.HasStoredStepPlan))
         {
             var stepCountResult = await _jobStepStorage!.CountForJob(job.Id);
             var shouldDelete = await stepCountResult.Match(
@@ -482,6 +484,52 @@ public class JobsManager(
         else
         {
             logger.NoDeadJobsFound();
+        }
+    }
+
+    /// <summary>
+    /// Removes the stored step plans that no job needs any more.
+    /// </summary>
+    /// <remarks>
+    /// A plan is needed while its job is preparing or starting its steps. It is an orphan when its job is gone, which
+    /// is what a crash after the plan was saved and before the job said so leaves, or when its job is already running
+    /// or terminal, which is what a crash right after the job durably got there leaves. A job that cannot be read for
+    /// any other reason keeps its plan.
+    /// </remarks>
+    /// <returns>Awaitable task.</returns>
+    async Task CleanupOrphanedStepPlans()
+    {
+        if (_jobsStorageForScope?.StepPlans is not { } stepPlans)
+        {
+            return;
+        }
+
+        try
+        {
+            var withPlans = await stepPlans.GetJobsWithPlans();
+            withPlans.RethrowError();
+            foreach (var jobId in withPlans.AsT0)
+            {
+                var job = await _jobStorage!.GetJob(jobId);
+                var isOrphan = job.Match(
+                    state => state.Status is not (JobStatus.PreparingJob or JobStatus.PreparingSteps or JobStatus.StartingSteps),
+                    error => error is Storage.Jobs.JobError.NotFound,
+                    _ => false);
+                if (!isOrphan)
+                {
+                    continue;
+                }
+
+                var removed = await stepPlans.RemoveForJob(jobId);
+                if (removed.TryGetException(out var exception))
+                {
+                    logger.FailedToRemoveStoredStepPlan(jobId, exception);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.FailedToCleanUpOrphanedStepPlans(exception);
         }
     }
 

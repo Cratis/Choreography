@@ -42,7 +42,7 @@ public class the_manager : Specification
         _jobStorage = Substitute.For<job_storage>();
         _jobStepStorage = Substitute.For<IJobStepStorage>();
         _jobTypes = Substitute.For<IJobTypes>();
-        _jobsStorage.GetFor(Arg.Any<string>(), Arg.Any<string>()).Returns(new JobsStorage(_jobStorage, _jobStepStorage));
+        _jobsStorage.GetFor(Arg.Any<string>(), Arg.Any<string>()).Returns(new JobsStorage(_jobStorage, _jobStepStorage) { StepPlans = CreatePlanStore() });
         _jobTypes.GetClrTypeFor(Arg.Any<JobType>()).Returns(Result.Failed<Type, IJobTypes.GetClrTypeForError>(IJobTypes.GetClrTypeForError.CouldNotFindType));
 
         _jobStorage.GetJobs(Arg.Any<JobStatus[]>()).Returns(_ => Task.FromResult(Catch.Success<IImmutableList<JobState>>([.. _storedJobs])));
@@ -113,6 +113,8 @@ public class the_manager : Specification
     }
 
     protected virtual JobsOptions CreateOptions() => new();
+
+    protected virtual IJobStepPlanStorage? CreatePlanStore() => null;
 
     protected virtual ILogger<JobsManager> CreateLogger() => NullLogger<JobsManager>.Instance;
 

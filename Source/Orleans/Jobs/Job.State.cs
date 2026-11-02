@@ -68,14 +68,21 @@ public abstract partial class Job<TRequest, TJobState>
     /// Used where what follows must only happen on a durable change - such as starting steps in an execution whose
     /// beginning a restart would not find.
     /// </remarks>
-    async Task<bool> TryWriteStatusChanged(JobStatus status)
+    async Task<bool> TryWriteStatusChanged(JobStatus status) => await WriteStatusChangedOrUndo(status) is null;
+
+    /// <summary>
+    /// Changes the status and writes it, undoing the change in memory when the write fails.
+    /// </summary>
+    /// <param name="status">The <see cref="JobStatus"/> to change to.</param>
+    /// <returns>Null when the change is durable, otherwise the failure of the write, with the change undone.</returns>
+    async Task<Exception?> WriteStatusChangedOrUndo(JobStatus status)
     {
         var written = await WriteOrUndo(() =>
         {
             _logger.ChangingStatus(status);
             StatusChanged(status);
         });
-        return !written.TryGetException(out _);
+        return written.TryGetException(out var exception) ? exception : null;
     }
 
     /// <summary>

@@ -36,6 +36,25 @@ The plan is removed in the write that makes `Running` durable, so later progress
 do not retain all preparation requests. Saved plans, including empty plans, are excluded from dead-job
 preparation cleanup even after a long outage.
 
+### A very large plan is kept outside the job document
+
+A plan whose serialized requests add up to more than `JobsOptions.MaxInlineStepPlanSize` (1 MiB by default) would
+make the job document too large for some stores. Where the storage provider can keep a plan separately
+(`JobsStorage.StepPlans`, which the MongoDB and in-memory providers set) the job saves it there instead, one small
+document per step, and its own document only says `HasStoredStepPlan`. Providers without a limit, such as SQL, keep
+the plan inline. The stored plan is written before the job document says it exists and removed only after the job
+has durably reached `Running` or a terminal state, so a crash never leaves a job that refers to missing plans. What a crash
+leaves behind is an orphan, which `CleanupDeadJobs` removes: a plan whose job is gone, running or terminal.
+
+A job whose start or plan persistence fails is written as `Failed`, with the reason and without its plan, instead of
+staying in preparation. If that write also fails the job deactivates and keeps its stored plan for recovery.
+
+**Rolling upgrades.** Every job class advertises `JobStepPlanStorageSupportAttribute` in the cluster manifest. A job
+externalizes its plan only when every silo that hosts the job class advertises it. While a release without the
+capability is still in the cluster the plan stays inline whatever its size, and a plan too large for the job document fails
+the job cleanly with a recorded reason. Nothing needs configuring and nothing needs rolling back: once the last older
+silo has left, new jobs externalize large plans. A job started before that keeps its inline plan.
+
 ## Initialize before dispatch on start and resume
 
 A silo can stop during step preparation or inside your start hook, before initialization finishes. Override

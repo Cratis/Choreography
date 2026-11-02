@@ -122,6 +122,12 @@ public static partial class JobsManagerLogMessages
     [LoggerMessage(LogLevel.Warning, "Failed to remove steps for terminal job {JobId}")]
     public static partial void FailedToRemoveTerminalJobSteps(this ILogger<JobsManager> logger, JobId jobId, Exception exception);
 
+    [LoggerMessage(LogLevel.Warning, "Failed to remove the stored step plan of job {JobId}")]
+    public static partial void FailedToRemoveStoredStepPlan(this ILogger<JobsManager> logger, JobId jobId, Exception exception);
+
+    [LoggerMessage(LogLevel.Warning, "Failed to clean up orphaned step plans")]
+    public static partial void FailedToCleanUpOrphanedStepPlans(this ILogger<JobsManager> logger, Exception exception);
+
     [LoggerMessage(LogLevel.Warning, "Failed to remove terminal job {JobId}")]
     public static partial void FailedToRemoveTerminalJob(this ILogger<JobsManager> logger, JobId jobId, Exception exception);
 

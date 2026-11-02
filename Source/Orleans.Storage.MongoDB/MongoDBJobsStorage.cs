@@ -69,7 +69,10 @@ public class MongoDBJobsStorage(
             _loggerFactory.CreateLogger<TransientRetry>());
         storage = new JobsStorage(
             new Jobs.JobStorage(database, jobTypes, _loggerFactory.CreateLogger<Jobs.JobStorage>(), retry),
-            new Jobs.JobStepStorage(database, retry));
+            new Jobs.JobStepStorage(database, retry))
+        {
+            StepPlans = new Jobs.JobStepPlanStorage(database, retry)
+        };
         _storageByScopeAndNamespace.TryAdd(key, storage);
         return storage;
     }

@@ -20,6 +20,7 @@ namespace Cratis.Orleans.Jobs;
 /// <typeparam name="TJobState">Type of state for the job.</typeparam>
 [StorageProvider(ProviderName = WellKnownGrainStorageProviders.Jobs)]
 [ResourceOptimizedPlacement]
+[JobStepPlanStorageSupport]
 public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<TRequest>, IJobDrain
     where TRequest : class, IJobRequest
     where TJobState : JobState

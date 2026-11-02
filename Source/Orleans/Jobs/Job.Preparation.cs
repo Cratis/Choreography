@@ -20,6 +20,8 @@ public abstract partial class Job<TRequest, TJobState>
     JsonSerializerOptions StepPlanSerializerOptions =>
         ServiceProvider.GetService<JsonSerializerOptions>() ?? CratisJsonSerializer.CreateSerializerOptions();
 
+    bool HasStepPlan => State.StepPlan is not null || State.HasStoredStepPlan;
+
     List<PlannedJobStep> SaveStepPlan(IImmutableList<JobStepDetails> steps) => steps.Select(SavePlannedStep).ToList();
 
     PlannedJobStep SavePlannedStep(JobStepDetails step)
@@ -42,16 +44,102 @@ public abstract partial class Job<TRequest, TJobState>
         }
     }
 
+    /// <summary>
+    /// Gets the step plan, from the job document or from the plan store.
+    /// </summary>
+    /// <returns>The plan, or null when the job has none.</returns>
+    /// <exception cref="InvalidOperationException">The job has a stored plan but its storage has no plan store.</exception>
+    async Task<IReadOnlyList<PlannedJobStep>?> LoadStepPlan()
+    {
+        if (State.StepPlan is { } plan)
+        {
+            return plan;
+        }
+        if (!State.HasStoredStepPlan)
+        {
+            return null;
+        }
+
+        var stored = await (Storage.StepPlans ?? throw new InvalidOperationException("The job has a stored step plan, but its storage has no step plan store")).GetForJob(JobId);
+        stored.RethrowError();
+        return stored.AsT0;
+    }
+
+    /// <summary>
+    /// Removes the stored step plan, which is only safe once the job is durably running or terminal.
+    /// </summary>
+    /// <returns>Awaitable task.</returns>
+    async Task RemoveStoredStepPlan()
+    {
+        if (Storage.StepPlans is not { } store)
+        {
+            return;
+        }
+
+        var removed = await store.RemoveForJob(JobId);
+        if (removed.TryGetException(out var exception))
+        {
+            _logger.FailedRemovingStoredStepPlan(exception);
+        }
+    }
+
     async Task<bool> TryEnterRunning()
     {
         var plan = State.StepPlan;
+        var stored = State.HasStoredStepPlan;
         State.StepPlan = null;
+        State.HasStoredStepPlan = false;
         if (await TryWriteStatusChanged(JobStatus.Running))
         {
+            if (stored)
+            {
+                await RemoveStoredStepPlan();
+            }
             return true;
         }
         State.StepPlan = plan;
+        State.HasStoredStepPlan = stored;
         return false;
+    }
+
+    /// <summary>
+    /// Puts the plan where it belongs: outside the job document when it is large, storage can keep it and every silo supports it.
+    /// </summary>
+    /// <param name="plan">The plan.</param>
+    /// <returns>Awaitable task.</returns>
+    /// <remarks>
+    /// The plan documents are written before the job document says it has them, so a crash in between leaves
+    /// documents that no job refers to, never a job that refers to missing ones.
+    /// </remarks>
+    async Task PlaceStepPlan(List<PlannedJobStep> plan)
+    {
+        var size = plan.Sum(step => step.RequestJson.Length);
+        if (size <= JobsOptionsOrDefault.MaxInlineStepPlanSize || Storage.StepPlans is not { } store)
+        {
+            State.StepPlan = plan;
+            State.HasStoredStepPlan = false;
+            return;
+        }
+
+        if (!JobStepPlanStorageIsSupportedByEverySilo())
+        {
+            _logger.KeepingLargeStepPlanInline(size);
+            State.StepPlan = plan;
+            State.HasStoredStepPlan = false;
+            return;
+        }
+
+        var saved = await store.Save(JobId, plan);
+        saved.RethrowError();
+        State.StepPlan = null;
+        State.HasStoredStepPlan = true;
+    }
+
+    bool JobStepPlanStorageIsSupportedByEverySilo()
+    {
+        var support = ServiceProvider.GetService<IJobStepPlanStorageSupport>()
+            ?? (ServiceProvider.GetService<IClusterManifestProvider>() is { } manifestProvider ? new ClusterManifestJobStepPlanStorageSupport(manifestProvider) : null);
+        return support?.IsSupportedByEverySilo(this.GetGrainId().Type) ?? false;
     }
 
     async Task RunDispatchHook(bool initializationMayBeIncomplete)
@@ -67,7 +155,7 @@ public abstract partial class Job<TRequest, TJobState>
 
     async Task<Result<ResumeJobSuccess, ResumeJobError>> RecoverStepPreparation()
     {
-        if (State.StepPlan is not { } plan)
+        if (await LoadStepPlan() is not { } plan)
         {
             return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.MissingStepPlan);
         }
@@ -108,7 +196,7 @@ public abstract partial class Job<TRequest, TJobState>
 
     async Task<Result<ResumeJobSuccess, ResumeJobError>> RecoverStepStartup()
     {
-        if (State.StepPlan is not { } plan)
+        if (await LoadStepPlan() is not { } plan)
         {
             return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.MissingStepPlan);
         }
