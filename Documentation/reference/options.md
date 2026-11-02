@@ -32,7 +32,7 @@ setup registers the defaults.
 | --- | --- | --- |
 | `MaxParallelSteps` | processor count − 1, minimum 1 | How many steps may run concurrently on one silo |
 | `DeadJobThreshold` | 1 hour | How old a job stuck in preparation with no steps may be before cleanup removes it |
-| `MaxInlineStepPlanSize` | 1 MiB | The summed size of a job's serialized step requests above which its plan is kept outside the job document, when storage and every silo support it |
+| `MaxInlineStepPlanSize` | 1 MiB | The serialized size of a job's whole step plan (requests, identities, types and stages) above which its plan is kept outside the job document, when storage and every silo support it |
 | `CleanupCadence` | 1 hour | How often the scavenger looks for dead jobs |
 | `StepCheckpointBatchInterval` | 100 | How many reported batches a step accumulates before its progress checkpoint is persisted |
 | `StepCheckpointFlushInterval` | 5 seconds | How long a step may hold an unpersisted checkpoint before it is flushed regardless; zero or less disables the timed flush |

@@ -194,7 +194,7 @@ public class JobsOptions
     public TimeSpan StepStopTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// Gets the summed size, in characters of serialized step requests, above which a job's step plan is kept outside
+    /// Gets the size, in bytes of the serialized whole step plan (requests, identities, types and stages), above which a job's step plan is kept outside
     /// the job document. Defaults to 1 MiB.
     /// </summary>
     /// <remarks>

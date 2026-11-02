@@ -62,7 +62,9 @@ public abstract partial class Job<TRequest, TJobState>
 
         var stored = await (Storage.StepPlans ?? throw new InvalidOperationException("The job has a stored step plan, but its storage has no step plan store")).GetForJob(JobId);
         stored.RethrowError();
-        return stored.AsT0;
+
+        // A stored plan is never empty: an empty answer means it is gone, and a job must not run or finish on that.
+        return stored.AsT0.Count == 0 ? null : stored.AsT0;
     }
 
     /// <summary>
@@ -99,7 +101,46 @@ public abstract partial class Job<TRequest, TJobState>
         }
         State.StepPlan = plan;
         State.HasStoredStepPlan = stored;
-        return false;
+        return await ReloadDurableRunningState();
+    }
+
+    /// <summary>
+    /// After a failed Running write, whose outcome may be unknown, continues from what is durable instead of from the restored memory.
+    /// </summary>
+    /// <returns>True when the durable state is Running, otherwise false.</returns>
+    /// <remarks>
+    /// The write may have committed. Then the document no longer refers to the plan, orphan cleanup may delete it, and a
+    /// later write of the restored state would point at a deleted plan. If the durable state cannot be read the job deactivates.
+    /// </remarks>
+    async Task<bool> ReloadDurableRunningState()
+    {
+        if (!_stateMayBeUnsaved)
+        {
+            return false;
+        }
+
+        try
+        {
+            await ReadStateAsync();
+            _stateMayBeUnsaved = false;
+        }
+        catch (Exception exception)
+        {
+            _logger.Failed(exception);
+            DeactivateOnIdleDuringShutdown();
+            return false;
+        }
+
+        if (State.Status is not JobStatus.Running)
+        {
+            return false;
+        }
+
+        if (!State.HasStoredStepPlan)
+        {
+            await RemoveStoredStepPlan();
+        }
+        return true;
     }
 
     /// <summary>
@@ -113,8 +154,9 @@ public abstract partial class Job<TRequest, TJobState>
     /// </remarks>
     async Task PlaceStepPlan(List<PlannedJobStep> plan)
     {
-        var size = plan.Sum(step => step.RequestJson.Length);
-        if (size <= JobsOptionsOrDefault.MaxInlineStepPlanSize || Storage.StepPlans is not { } store)
+        // An empty plan stays inline: a stored plan is never empty, so an empty answer from the store means it is missing.
+        var size = plan.Count == 0 ? 0 : JsonSerializer.SerializeToUtf8Bytes(plan, StepPlanSerializerOptions).Length;
+        if (plan.Count == 0 || size <= JobsOptionsOrDefault.MaxInlineStepPlanSize || Storage.StepPlans is not { } store)
         {
             State.StepPlan = plan;
             State.HasStoredStepPlan = false;

@@ -38,7 +38,7 @@ preparation cleanup even after a long outage.
 
 ### A very large plan is kept outside the job document
 
-A plan whose serialized requests add up to more than `JobsOptions.MaxInlineStepPlanSize` (1 MiB by default) would
+A plan whose whole serialized form (requests, identities, types and stages) is larger than `JobsOptions.MaxInlineStepPlanSize` (1 MiB by default) would
 make the job document too large for some stores. Where the storage provider can keep a plan separately
 (`JobsStorage.StepPlans`, which the MongoDB and in-memory providers set) the job saves it there instead, one small
 document per step, and its own document only says `HasStoredStepPlan`. Providers without a limit, such as SQL, keep
@@ -52,8 +52,11 @@ staying in preparation. If that write also fails the job deactivates and keeps i
 **Rolling upgrades.** Every job class advertises `JobStepPlanStorageSupportAttribute` in the cluster manifest. A job
 externalizes its plan only when every silo that hosts the job class advertises it. While a release without the
 capability is still in the cluster the plan stays inline whatever its size, and a plan too large for the job document fails
-the job cleanly with a recorded reason. Nothing needs configuring and nothing needs rolling back: once the last older
-silo has left, new jobs externalize large plans. A job started before that keeps its inline plan.
+the job cleanly with a recorded reason. Nothing needs configuring: once the last older
+silo has left, new jobs externalize large plans. A job started before that keeps its inline plan. An externalized job
+refers to its plan until it reaches `Running` (or finishes). Let such jobs get there before rolling back to an older
+silo: an older silo does not know the reference, drops it when it rewrites the job, and cannot find the plan, so the
+job cannot be recovered from preparation.
 
 ## Initialize before dispatch on start and resume
 
