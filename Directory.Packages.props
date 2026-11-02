@@ -42,7 +42,7 @@
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
     <!-- Cratis -->
     <PackageVersion Include="Cratis.Arc.MongoDB" Version="22.155.0" />
-    <PackageVersion Include="Cratis.Chronicle" Version="19.115.2" />
+    <PackageVersion Include="Cratis.Chronicle" Version="19.114.0" />
     <PackageVersion Include="Cratis.Chronicle.XUnit.Integration" Version="19.14.0" />
     <!-- Cratis.Chronicle's net9.0 assembly is compiled against System.Collections.Immutable 10 without declaring it for net9.0. -->
     <PackageVersion Include="System.Collections.Immutable" Version="10.0.0" />
