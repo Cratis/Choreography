@@ -10,16 +10,6 @@ public abstract partial class Job<TRequest, TJobState>
     bool _retired;
 
     /// <summary>
-    /// Ends this activation after a write whose outcome is unknown: it persists nothing more, and deactivates so the next
-    /// activation recovers from the durable state. Callers whose write is refused retry against that activation.
-    /// </summary>
-    void RetireActivation()
-    {
-        _retired = true;
-        DeactivateOnIdleDuringShutdown();
-    }
-
-    /// <summary>
     /// Writes persisted state.
     /// </summary>
     /// <returns>A task returning <see cref="Catch"/>.</returns>
@@ -53,6 +43,16 @@ public abstract partial class Job<TRequest, TJobState>
             _logger.FailedWritingState(e);
             return e;
         }
+    }
+
+    /// <summary>
+    /// Ends this activation after a write whose outcome is unknown: it persists nothing more, and deactivates so the next
+    /// activation recovers from the durable state. Callers whose write is refused retry against that activation.
+    /// </summary>
+    void RetireActivation()
+    {
+        _retired = true;
+        DeactivateOnIdleDuringShutdown();
     }
 
     async Task<Result<JobError>> WriteStatusChanged(JobStatus status, Exception? exception = null)

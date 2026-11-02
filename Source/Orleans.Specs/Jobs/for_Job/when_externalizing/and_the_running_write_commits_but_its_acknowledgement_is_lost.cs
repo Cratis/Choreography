@@ -1,6 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using Cratis.Orleans.Jobs.for_Job.given;
 using Moq;
 using Orleans.TestKit;
 
@@ -36,13 +37,18 @@ public class and_the_running_write_commits_but_its_acknowledgement_is_lost : giv
     [Fact] void should_retire_the_activation() => _retiredSilo.GrainRuntime.Mock.Verify(runtime => runtime.DeactivateOnIdle(It.IsAny<IGrainContext>()), Times.Once);
     [Fact] void should_not_attempt_a_write_after_the_failure() => _retired.WriteAttempts.ShouldEqual(_attemptsBeforeReport);
     [Fact] void should_persist_nothing_after_the_failure() => _retired.WrittenStates.Count.ShouldEqual(_writesBeforeReport);
-    [Fact] void should_not_write_a_reference_to_the_deleted_plan() => _retired.WrittenStates.Last().HasStoredStepPlan.ShouldBeFalse();
-    [Fact] void should_have_a_durable_running_state() => _retired.WrittenStates.Last().Status.ShouldEqual(JobStatus.Running);
+    [Fact] void should_not_write_a_reference_to_the_deleted_plan() => _retired.WrittenStates[^1].HasStoredStepPlan.ShouldBeFalse();
+    [Fact] void should_have_a_durable_running_state() => _retired.WrittenStates[^1].Status.ShouldEqual(JobStatus.Running);
     [Fact] void should_not_complete_the_job() => _retired.AllStepsCompletedCount.ShouldEqual(0);
     [Fact] async Task should_run_the_next_activation_from_durable_running()
     {
-        await ActivateFrom(_retired.WrittenStates.Last());
+        await ActivateFrom(_retired.WrittenStates[^1]);
         _job.CurrentState.Status.ShouldEqual(JobStatus.Running);
         _job.CurrentState.HasStoredStepPlan.ShouldBeFalse();
+    }
+    [Fact] async Task should_resume_in_the_next_activation()
+    {
+        await ActivateFrom(_retired.WrittenStates[^1]);
+        (await _job.Resume()).IsSuccess.ShouldBeTrue();
     }
 }

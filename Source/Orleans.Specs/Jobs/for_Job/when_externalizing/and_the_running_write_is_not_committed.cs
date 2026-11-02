@@ -1,6 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using Cratis.Orleans.Jobs.for_Job.given;
 using Cratis.Orleans.Jobs.Stages;
 using Moq;
 using Orleans.TestKit;
@@ -20,6 +21,7 @@ public class and_the_running_write_is_not_committed : given.a_job_with_a_plan_st
 
     async Task Establish()
     {
+        _planRemovalFails = true;
         await _job.Start(new());
         _storedJobStepStates.Remove(StoredJobStep(_firstId));
         _durable = _job.WrittenStates.Last(state => state.Status is JobStatus.StartingSteps);
