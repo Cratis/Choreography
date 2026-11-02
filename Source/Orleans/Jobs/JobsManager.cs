@@ -46,6 +46,7 @@ public class JobsManager(
     /// </summary>
     static readonly Func<JobState, bool> _needsRehydration = state => !(state.Status is JobStatus.Stopped && state.StopFinalized);
 
+    readonly HashSet<JobId> _recoveries = [];
     CancellationTokenSource _rehydrationCancellation = null!;
     IDisposable? _deactivationSubscription;
     bool _deactivationNotificationsUnavailable;
@@ -137,6 +138,20 @@ public class JobsManager(
         logger.ResumingJob(jobId);
 
         return await ResumeJobAndHandleResult(jobId);
+    }
+
+    /// <inheritdoc/>
+    public Task RecoverRetiredJob(JobId jobId)
+    {
+        // Reentrant, so this runs between awaits of the same activation: the set needs no lock. A second request while one is
+        // running shares it - the job is only ever taken forward once, and a normal step report may already have done it.
+        if (_recoveries.Add(jobId))
+        {
+            // Held for as long as any recovery runs: this is the only thing that will bring the job back.
+            DelayDeactivation(Timeout.InfiniteTimeSpan);
+            _ = RecoverInBackground(jobId, _rehydrationCancellation.Token);
+        }
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc/>
@@ -415,19 +430,104 @@ public class JobsManager(
         {
             _deactivationSubscription?.Dispose();
             _deactivationSubscription = null;
-            try
-            {
-                DelayDeactivation(TimeSpan.Zero);
-            }
-            catch (InvalidOperationException exception)
-            {
-                // Teardown can invalidate the activation before this continuation runs.
-                logger.RehydrationKeepAliveAlreadyReleased(exception);
-            }
+            ReleaseKeepAlive();
 
             // Release everything this pass owns before admitting another one. Task completion happens later.
             _rehydrationActive = false;
         }
+    }
+
+    void ReleaseKeepAlive()
+    {
+        // A recovery that is still running holds the activation until it ends.
+        if (_recoveries.Count > 0)
+        {
+            return;
+        }
+
+        try
+        {
+            DelayDeactivation(TimeSpan.Zero);
+        }
+        catch (InvalidOperationException exception)
+        {
+            // Teardown can invalidate the activation before this continuation runs.
+            logger.RehydrationKeepAliveAlreadyReleased(exception);
+        }
+    }
+
+    async Task RecoverInBackground(JobId jobId, CancellationToken cancellationToken)
+    {
+        // Onto the grain scheduler, so the bookkeeping below never runs beside another turn.
+        await Task.Yield();
+        using var scope = logger.BeginJobsManagerScope(_key);
+        var delay = options.Value.StepDeliveryRetryDelay;
+        try
+        {
+            while (true)
+            {
+                // The retired activation needs a moment to go away, and storage trouble needs time to pass.
+                await Task.Delay(delay, cancellationToken);
+                if (await TryRecover(jobId))
+                {
+                    return;
+                }
+                logger.RetiredJobNotRecovered(jobId, delay);
+                delay = TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, options.Value.MaxStepDeliveryRetryDelay.Ticks));
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Teardown ends this; the next rehydration finds the job in storage.
+        }
+        catch (Exception exception)
+        {
+            logger.UnknownError(exception);
+        }
+        finally
+        {
+            _recoveries.Remove(jobId);
+            ReleaseKeepAlive();
+        }
+    }
+
+    /// <summary>
+    /// Takes a retired job forward once.
+    /// </summary>
+    /// <param name="jobId">The job.</param>
+    /// <returns>True when nothing more is owed: the job was resumed, is already running, is settled, or is gone.</returns>
+    async Task<bool> TryRecover(JobId jobId)
+    {
+        try
+        {
+            var read = await _jobStorage!.GetJob(jobId);
+            var gone = read.Match(_ => false, jobError => jobError == Storage.Jobs.JobError.NotFound, _ => false);
+            if (gone)
+            {
+                logger.JobCouldNotBeFound(jobId);
+                return true;
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.UnknownError(exception);
+            return false;
+        }
+
+        var outcome = await DoActionOnJobGrain(jobId, async (state, job) =>
+        {
+            // Terminal, stopped or removing jobs have their own paths; only an interrupted one is left to take forward.
+            if (!_interruptedStatuses.Contains(state.Status))
+            {
+                return true;
+            }
+            var result = await job.Resume();
+            await result.Match(
+                success => HandleResumeJobSuccess(jobId, success),
+                error => HandleResumeJobError(jobId, error));
+            return result.IsSuccess;
+        });
+        return outcome.Match(done => done, _ => false);
     }
 
     async Task DrainRehydrationPasses(IEnumerable<JobState> runningJobs, CancellationToken cancellationToken)

@@ -53,6 +53,29 @@ public abstract partial class Job<TRequest, TJobState>
     {
         _retired = true;
         DeactivateOnIdleDuringShutdown();
+        RequestRecoveryFromTheJobsManager();
+    }
+
+    /// <summary>
+    /// Asks the jobs manager to bring the job back. The watchdog dies with this activation, and a storage outage - the usual cause of
+    /// the failed write - would also make the next step report fail to activate a replacement. The call is one-way, touches no job
+    /// storage, and its failure is only logged: a manager that cannot be told leaves the job to the next report or rehydration.
+    /// </summary>
+    void RequestRecoveryFromTheJobsManager()
+    {
+        try
+        {
+            GrainFactory.GetJobsManager(JobKey.Scope, JobKey.Namespace).RecoverRetiredJob(JobId)
+                .ContinueWith(
+                    task => _logger.FailedRequestingRecovery(task.Exception!),
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+        }
+        catch (Exception exception)
+        {
+            _logger.FailedRequestingRecovery(exception);
+        }
     }
 
     async Task<Result<JobError>> WriteStatusChanged(JobStatus status, Exception? exception = null)
