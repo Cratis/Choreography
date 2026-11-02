@@ -7,6 +7,17 @@ namespace Cratis.Orleans.Jobs;
 public abstract partial class Job<TRequest, TJobState>
 {
     bool _stateMayBeUnsaved;
+    bool _retired;
+
+    /// <summary>
+    /// Ends this activation after a write whose outcome is unknown: it persists nothing more, and deactivates so the next
+    /// activation recovers from the durable state. Callers whose write is refused retry against that activation.
+    /// </summary>
+    void RetireActivation()
+    {
+        _retired = true;
+        DeactivateOnIdleDuringShutdown();
+    }
 
     /// <summary>
     /// Writes persisted state.
@@ -14,6 +25,12 @@ public abstract partial class Job<TRequest, TJobState>
     /// <returns>A task returning <see cref="Catch"/>.</returns>
     protected async Task<Catch> WriteState()
     {
+        if (_retired)
+        {
+            _stateMayBeUnsaved = true;
+            return new InvalidOperationException("The job activation is retiring and persists nothing more");
+        }
+
         _logger.BeginJobScope(JobId, JobKey);
         try
         {

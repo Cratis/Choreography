@@ -85,6 +85,14 @@ public abstract partial class Job<TRequest, TJobState>
         }
     }
 
+    /// <summary>
+    /// Writes Running and drops the plan reference. A failed or unacknowledged write retires the activation.
+    /// </summary>
+    /// <returns>True when Running is durable.</returns>
+    /// <remarks>
+    /// The write may have committed, and then cleanup may delete the plan. The memory is restored, but the activation persists
+    /// nothing more and the next one recovers from what is durable.
+    /// </remarks>
     async Task<bool> TryEnterRunning()
     {
         var plan = State.StepPlan;
@@ -101,46 +109,8 @@ public abstract partial class Job<TRequest, TJobState>
         }
         State.StepPlan = plan;
         State.HasStoredStepPlan = stored;
-        return await ReloadDurableRunningState();
-    }
-
-    /// <summary>
-    /// After a failed Running write, whose outcome may be unknown, continues from what is durable instead of from the restored memory.
-    /// </summary>
-    /// <returns>True when the durable state is Running, otherwise false.</returns>
-    /// <remarks>
-    /// The write may have committed. Then the document no longer refers to the plan, orphan cleanup may delete it, and a
-    /// later write of the restored state would point at a deleted plan. If the durable state cannot be read the job deactivates.
-    /// </remarks>
-    async Task<bool> ReloadDurableRunningState()
-    {
-        if (!_stateMayBeUnsaved)
-        {
-            return false;
-        }
-
-        try
-        {
-            await ReadStateAsync();
-            _stateMayBeUnsaved = false;
-        }
-        catch (Exception exception)
-        {
-            _logger.Failed(exception);
-            DeactivateOnIdleDuringShutdown();
-            return false;
-        }
-
-        if (State.Status is not JobStatus.Running)
-        {
-            return false;
-        }
-
-        if (!State.HasStoredStepPlan)
-        {
-            await RemoveStoredStepPlan();
-        }
-        return true;
+        RetireActivation();
+        return false;
     }
 
     /// <summary>

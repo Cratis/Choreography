@@ -8,16 +8,16 @@ namespace Cratis.Orleans.Jobs.for_Job.when_externalizing;
 /// </summary>
 public class with_many_small_requests_that_exceed_the_threshold_together : given.a_job_with_a_plan_store
 {
-    bool _requestsAloneFit;
+    bool _externalized;
 
     protected override JobsOptions CreateOptions() => new() { MaxConcurrentStepStarts = 1, MaxInlineStepPlanSize = 500 };
 
     async Task Because()
     {
         _start = await _job.Start(new());
-        _requestsAloneFit = _job.WrittenStates.First(state => state.Status is JobStatus.PreparingSteps).HasStoredStepPlan;
+        _externalized = _job.WrittenStates.First(state => state.Status is JobStatus.PreparingSteps).HasStoredStepPlan;
     }
 
-    [Fact] void should_have_externalized_the_plan() => _requestsAloneFit.ShouldBeTrue();
+    [Fact] void should_have_externalized_the_plan() => _externalized.ShouldBeTrue();
     [Fact] void should_not_keep_the_plan_inline() => _job.WrittenStates.First(state => state.Status is JobStatus.PreparingSteps).StepPlan.ShouldBeNull();
 }
