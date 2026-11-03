@@ -35,7 +35,7 @@ public sealed class RollingUpgradeClusterConfigurator : ISiloConfigurator, IClie
 
         siloBuilder.Services.AddCratisChoreographySerializers();
         siloBuilder.Services.AddSingleton<IInstancesOf<ICanApplyPatch>>(
-            new ShippedPatches(release.Patches.Select(_ => new RecordedPatch(_.Key, _.Value, label, signals))));
+            new ShippedPatches(release.Patches.Select(_ => new RecordedPatch<object>(_.Key, _.Value, label, signals))));
         siloBuilder.Services.AddCratisChoreographyMongoDBPatchStorage(
             new MongoClient(JobsClusterFixture.ConnectionString),
             options => options.DatabaseName = signals.Database);
