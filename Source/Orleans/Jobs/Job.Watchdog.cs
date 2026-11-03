@@ -24,7 +24,7 @@ public abstract partial class Job<TRequest, TJobState>
     /// stands between it and dispatch.
     /// </summary>
     bool IsStartupWhoseResumeHookIsOwed =>
-        _resumeHookOwed && !State.DrainPending && State.StepPlan is not null &&
+        _resumeHookOwed && !State.DrainPending && HasStepPlan &&
         State.Status is JobStatus.PreparingJob or JobStatus.PreparingSteps or JobStatus.StartingSteps;
 
     bool WatchdogIsEnabled => WatchdogInterval > TimeSpan.Zero && WatchdogInterval != Timeout.InfiniteTimeSpan;

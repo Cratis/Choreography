@@ -20,6 +20,8 @@ public abstract partial class Job<TRequest, TJobState>
     JsonSerializerOptions StepPlanSerializerOptions =>
         ServiceProvider.GetService<JsonSerializerOptions>() ?? CratisJsonSerializer.CreateSerializerOptions();
 
+    bool HasStepPlan => State.StepPlan is not null || State.HasStoredStepPlan;
+
     List<PlannedJobStep> SaveStepPlan(IImmutableList<JobStepDetails> steps) => steps.Select(SavePlannedStep).ToList();
 
     PlannedJobStep SavePlannedStep(JobStepDetails step)
@@ -42,16 +44,119 @@ public abstract partial class Job<TRequest, TJobState>
         }
     }
 
+    /// <summary>
+    /// Gets the step plan, from the job document or from the plan store.
+    /// </summary>
+    /// <returns>The plan, or null when the job has none.</returns>
+    /// <exception cref="InvalidOperationException">The job has a stored plan but its storage has no plan store.</exception>
+    async Task<IReadOnlyList<PlannedJobStep>?> LoadStepPlan()
+    {
+        if (State.StepPlan is { } plan)
+        {
+            return plan;
+        }
+        if (!State.HasStoredStepPlan || State.StoredStepPlanIncarnation is not { } incarnation)
+        {
+            return null;
+        }
+
+        var stored = await (Storage.StepPlans ?? throw new InvalidOperationException("The job has a stored step plan, but its storage has no step plan store")).GetForJob(JobId, incarnation);
+        stored.RethrowError();
+
+        // A stored plan is never empty: an empty answer means it is gone, and a job must not run or finish on that.
+        return stored.AsT0.Count == 0 ? null : stored.AsT0;
+    }
+
+    /// <summary>
+    /// Removes the stored step plan, which is only safe once the job is durably terminal or removed.
+    /// </summary>
+    /// <returns>Awaitable task.</returns>
+    async Task RemoveStoredStepPlan()
+    {
+        if (State.StoredStepPlanIncarnation is not { } incarnation || Storage.StepPlans is not { } store)
+        {
+            return;
+        }
+
+        try
+        {
+            var removed = await store.RemoveForJob(JobId, incarnation);
+            if (removed.TryGetException(out var exception))
+            {
+                _logger.FailedRemovingStoredStepPlan(exception);
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.FailedRemovingStoredStepPlan(exception);
+        }
+    }
+
+    /// <summary>
+    /// Writes Running and drops the plan reference, restoring memory when the write fails.
+    /// </summary>
+    /// <returns>True when Running is durable.</returns>
+    /// <remarks>
+    /// The stored plan is retained until a durable terminal state, including when a Running acknowledgement is lost.
+    /// </remarks>
     async Task<bool> TryEnterRunning()
     {
         var plan = State.StepPlan;
+        var stored = State.HasStoredStepPlan;
         State.StepPlan = null;
+        State.HasStoredStepPlan = false;
         if (await TryWriteStatusChanged(JobStatus.Running))
         {
             return true;
         }
         State.StepPlan = plan;
+        State.HasStoredStepPlan = stored;
         return false;
+    }
+
+    /// <summary>
+    /// Puts the plan where it belongs: outside the job document when it is large, storage can keep it and every silo supports it.
+    /// </summary>
+    /// <param name="plan">The plan.</param>
+    /// <returns>Awaitable task.</returns>
+    /// <remarks>
+    /// A fresh incarnation is persisted before publishing any documents. The plan reference is set only after
+    /// publication succeeds; cleanup and loading are fenced against any other publication using the same job id.
+    /// </remarks>
+    async Task PlaceStepPlan(List<PlannedJobStep> plan)
+    {
+        // An empty plan stays inline: a stored plan is never empty, so an empty answer from the store means it is missing.
+        var size = plan.Count == 0 ? 0 : JsonSerializer.SerializeToUtf8Bytes(plan, StepPlanSerializerOptions).Length;
+        if (plan.Count == 0 || size <= JobsOptionsOrDefault.MaxInlineStepPlanSize || Storage.StepPlans is not { } store)
+        {
+            State.StepPlan = plan;
+            State.HasStoredStepPlan = false;
+            return;
+        }
+
+        if (!JobStepPlanStorageIsSupportedByEverySilo())
+        {
+            _logger.KeepingLargeStepPlanInline(size);
+            State.StepPlan = plan;
+            State.HasStoredStepPlan = false;
+            return;
+        }
+
+        // Each publication gets a fresh fence, durable before Save, including when a supplied JobId is reused.
+        var incarnation = Guid.NewGuid();
+        State.StoredStepPlanIncarnation = incarnation;
+        await WriteStateAsync();
+        var saved = await store.Save(JobId, incarnation, plan);
+        saved.RethrowError();
+        State.StepPlan = null;
+        State.HasStoredStepPlan = true;
+    }
+
+    bool JobStepPlanStorageIsSupportedByEverySilo()
+    {
+        var support = ServiceProvider.GetService<IJobStepPlanStorageSupport>()
+            ?? (ServiceProvider.GetService<IClusterManifestProvider>() is { } manifestProvider ? new ClusterManifestJobStepPlanStorageSupport(manifestProvider) : null);
+        return support?.IsSupportedByEverySilo(this.GetGrainId().Type) ?? false;
     }
 
     async Task RunDispatchHook(bool initializationMayBeIncomplete)
@@ -67,7 +172,7 @@ public abstract partial class Job<TRequest, TJobState>
 
     async Task<Result<ResumeJobSuccess, ResumeJobError>> RecoverStepPreparation()
     {
-        if (State.StepPlan is not { } plan)
+        if (await LoadStepPlan() is not { } plan)
         {
             return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.MissingStepPlan);
         }
@@ -108,7 +213,7 @@ public abstract partial class Job<TRequest, TJobState>
 
     async Task<Result<ResumeJobSuccess, ResumeJobError>> RecoverStepStartup()
     {
-        if (State.StepPlan is not { } plan)
+        if (await LoadStepPlan() is not { } plan)
         {
             return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.MissingStepPlan);
         }

@@ -32,6 +32,7 @@ setup registers the defaults.
 | --- | --- | --- |
 | `MaxParallelSteps` | processor count − 1, minimum 1 | How many steps may run concurrently on one silo |
 | `DeadJobThreshold` | 1 hour | How old a job stuck in preparation with no steps may be before cleanup removes it |
+| `MaxInlineStepPlanSize` | 1 MiB | The serialized size of a job's whole step plan (requests, identities, types and stages) above which its plan is kept outside the job document, when storage and every silo support it |
 | `CleanupCadence` | 1 hour | How often the scavenger looks for dead jobs |
 | `StepCheckpointBatchInterval` | 100 | How many reported batches a step accumulates before its progress checkpoint is persisted |
 | `StepCheckpointFlushInterval` | 5 seconds | How long a step may hold an unpersisted checkpoint before it is flushed regardless; zero or less disables the timed flush |
@@ -50,6 +51,18 @@ setup registers the defaults.
 | `StepDeliveryMaxAttempts` | 10 | How many times a step delivers its persisted outcome to its job before it leaves it to the job's watchdog; values below 1 count as 1 |
 | `StepDeliveryRetryDelay` | 1 second | The delay before a step delivers its outcome a second time; every further delivery doubles it |
 | `MaxStepDeliveryRetryDelay` | 30 seconds | The longest delay between two deliveries of a step's outcome |
+
+`MaxInlineStepPlanSize` measures the whole serialized plan, not summed request lengths. Externalization requires storage
+support and every hosting silo's capability advertisement; during upgrades, oversized inline plans fail cleanly until the
+last older silo leaves. Stored plans survive `Running` and are deleted only after a durable terminal state or job removal;
+cleanup retains non-terminal plans. MongoDB creates the ordered `{jobId:1, index:1}` index idempotently and leaves any
+legacy jobId-only index in place.
+
+Before rollback, drain externalized jobs and let them finish: older silos cannot resume their preparation. For an existing
+zombie `PreparingJob` without a plan, remove it or wait for dead-job cleanup, then release observer-owned catching-up
+partitions through the host's recovery procedure. See [upgrade and repair guidance](../concepts/jobs.md#a-very-large-plan-is-kept-outside-the-job-document).
+A lost Running acknowledgement can still stall progress until rehydration; see
+[Cratis/Orleans#177](https://github.com/Cratis/Orleans/issues/177).
 
 Rehydration and cleanup isolate each job, so one job that fails to resume or delete never stops the others.
 Cleanup reads an oldest-first, storage-filtered page; it does not materialize the entire job collection. Terminal cleanup only conditionally removes immutable terminal states, so it cannot remove preparing, running, stopped, or removing jobs. It removes regular and failed job steps before the terminal job record; a failed removal is safe to retry on the next bounded pass.

@@ -135,7 +135,7 @@ public static class CratisOrleansSiloBuilderExtensions
             // IJobsStorage - the MongoDB jobs storage package registers that. Register the providers under the
             // names the job grains ask for by name.
             silo.Services.AddGrainStorage<Jobs.JobGrainStorageProvider>(WellKnownGrainStorageProviders.Jobs, (serviceProvider, _) =>
-                new(serviceProvider.GetRequiredService<IJobsStorage>()));
+                new(serviceProvider.GetRequiredService<IJobsStorage>(), serviceProvider.GetRequiredService<ILogger<Jobs.JobGrainStorageProvider>>()));
             silo.Services.AddGrainStorage<Jobs.JobStepGrainStorageProvider>(WellKnownGrainStorageProviders.JobSteps, (serviceProvider, _) =>
                 new(serviceProvider.GetRequiredService<IJobsStorage>()));
 

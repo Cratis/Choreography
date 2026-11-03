@@ -19,9 +19,10 @@ public class a_job_with_a_durable_plan : the_job
 
     protected override JobsOptions CreateOptions() => new() { MaxConcurrentStepStarts = 1 };
 
-    protected async Task ActivateFrom(JobStatus status)
+    protected Task ActivateFrom(JobStatus status) => ActivateFrom(_job.WrittenStates.Last(state => state.Status == status));
+
+    protected async Task ActivateFrom(SomeJobState snapshot)
     {
-        var snapshot = _job.WrittenStates.Last(state => state.Status == status);
         _silo = new();
         ConfigureSilo();
         _silo.StorageManager.GetStorage<SomeJobState>(typeof(SomeJob).FullName!).State = snapshot;

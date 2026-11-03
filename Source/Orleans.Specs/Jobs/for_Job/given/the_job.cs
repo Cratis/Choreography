@@ -28,6 +28,12 @@ public class the_job : Specification
 
     protected List<JobStepState> _storedJobStepStates;
 
+    protected IJobStepPlanStorageSupport? _planStorageSupport;
+
+    protected virtual IJobStepPlanStorage? CreatePlanStore() => null;
+
+    protected virtual IJobStepPlanStorageSupport? CreatePlanStorageSupport() => null;
+
     protected virtual JobsOptions CreateOptions() => new();
 
     protected int Writes => _silo.StorageStats<SomeJob, SomeJobState>().Writes;
@@ -117,6 +123,10 @@ public class the_job : Specification
         _silo.AddService(Serialization.CratisJsonSerializer.CreateSerializerOptions());
         _silo.AddService(_jobTypes);
         _silo.AddService(Options.Create(CreateOptions()));
+        if (_planStorageSupport is not null)
+        {
+            _silo.AddService(_planStorageSupport);
+        }
         _silo.AddService(NullLogger<IJob>.Instance);
         _silo.AddService(NullLogger<ObserverManager<JobStepId, IJobObserver>>.Instance);
         var loggerFactory = Substitute.For<ILoggerFactory>();
@@ -133,7 +143,8 @@ public class the_job : Specification
         _jobStepStorage = Substitute.For<IJobStepStorage>();
         _jobTypes = Substitute.For<IJobTypes>();
         _countingStepStorage = new(_jobStepStorage);
-        _jobsStorage.GetFor(Arg.Any<string>(), Arg.Any<string>()).Returns(new JobsStorage(_jobStorage, _countingStepStorage));
+        _jobsStorage.GetFor(Arg.Any<string>(), Arg.Any<string>()).Returns(new JobsStorage(_jobStorage, _countingStepStorage) { StepPlans = CreatePlanStore() });
+        _planStorageSupport = CreatePlanStorageSupport();
 
         // Filtered by status the way the real storage filters, so a step that already completed is not handed back as
         // one still left to run.

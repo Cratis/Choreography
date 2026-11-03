@@ -272,6 +272,12 @@ public static partial class JobLogMessages
     [LoggerMessage(LogLevel.Debug, "Step {StepId} stopped in an earlier execution; telling its current run the job is removed")]
     internal static partial void NotifyingCurrentRunOfRemoval(this ILogger<IJob> logger, JobStepId stepId);
 
+    [LoggerMessage(LogLevel.Warning, "The step plan of {Count} characters is kept in the job document because not every silo supports a separate step plan store; the job fails if the document is too large for storage")]
+    internal static partial void KeepingLargeStepPlanInline(this ILogger<IJob> logger, int count);
+
+    [LoggerMessage(LogLevel.Warning, "Could not remove the stored step plan of the job; it is left for the cleanup of orphaned step plans")]
+    internal static partial void FailedRemovingStoredStepPlan(this ILogger<IJob> logger, Exception exception);
+
     [LoggerMessage(LogLevel.Warning, "Job could not finish its removal; it will try again in {Delay}")]
     internal static partial void SchedulingRemovalFinalizationRetry(this ILogger<IJob> logger, TimeSpan delay);
 }

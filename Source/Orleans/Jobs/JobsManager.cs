@@ -298,6 +298,8 @@ public class JobsManager(
                 return Task.CompletedTask;
             });
 
+        await CleanupOrphanedStepPlans();
+
         if (cleanupOptions.TerminalJobRetention == Timeout.InfiniteTimeSpan)
         {
             return;
@@ -456,7 +458,7 @@ public class JobsManager(
     {
         var deadJobs = new List<JobState>();
 
-        foreach (var job in preparingJobs.Where(job => job.StepPlan is null))
+        foreach (var job in preparingJobs.Where(job => job.StepPlan is null && !job.HasStoredStepPlan))
         {
             var stepCountResult = await _jobStepStorage!.CountForJob(job.Id);
             var shouldDelete = await stepCountResult.Match(
@@ -483,6 +485,64 @@ public class JobsManager(
         {
             logger.NoDeadJobsFound();
         }
+    }
+
+    /// <summary>
+    /// Removes the stored step plans that no job needs any more.
+    /// </summary>
+    /// <remarks>
+    /// A fresh plan incarnation is persisted in non-terminal job state before any plan documents are saved.
+    /// Recheck a candidate immediately before deletion, then delete only the incarnation read from those documents.
+    /// Reusing a job id cannot publish that incarnation, even between the final read and deletion.
+    /// An unreadable or non-terminal job keeps its plans.
+    /// </remarks>
+    /// <returns>Awaitable task.</returns>
+    async Task CleanupOrphanedStepPlans()
+    {
+        if (_jobsStorageForScope?.StepPlans is not { } stepPlans)
+        {
+            return;
+        }
+
+        try
+        {
+            var withPlans = await stepPlans.GetJobsWithPlans();
+            withPlans.RethrowError();
+            foreach (var plan in withPlans.AsT0)
+            {
+                var jobId = plan.JobId;
+                try
+                {
+                    if (!await IsOrphanedPlan(jobId) || !await IsOrphanedPlan(jobId))
+                    {
+                        continue;
+                    }
+
+                    var removed = await stepPlans.RemoveForJob(jobId, plan.Incarnation);
+                    if (removed.TryGetException(out var exception))
+                    {
+                        logger.FailedToRemoveStoredStepPlan(jobId, exception);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    logger.FailedToRemoveStoredStepPlan(jobId, exception);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.FailedToCleanUpOrphanedStepPlans(exception);
+        }
+    }
+
+    async Task<bool> IsOrphanedPlan(JobId jobId)
+    {
+        var job = await _jobStorage!.GetJob(jobId);
+        return job.Match(
+            state => _terminalStatuses.Contains(state.Status) || (state.Status is JobStatus.Stopped && state.StopFinalized),
+            error => error is Storage.Jobs.JobError.NotFound,
+            _ => false);
     }
 
     async Task CleanupTerminalJobs(IImmutableList<JobState> terminalJobs)

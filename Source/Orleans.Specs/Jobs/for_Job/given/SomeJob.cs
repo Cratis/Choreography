@@ -37,6 +37,7 @@ public class SomeJob : Job<SomeRequest, SomeJobState>, IGrainType
     public SomeJobState CurrentState => State;
 
     public int PrepareStepsCount;
+    SomeJobState? _durable;
 
     protected override Task<IImmutableList<JobStepDetails>> PrepareSteps(SomeRequest request)
     {
@@ -130,7 +131,7 @@ public class SomeJob : Job<SomeRequest, SomeJobState>, IGrainType
         if (!rejected || PersistBeforeFailingWrite)
         {
             await base.WriteStateAsync();
-            WrittenStates.Add(new()
+            var written = new SomeJobState
             {
                 Id = State.Id,
                 Type = State.Type,
@@ -142,8 +143,12 @@ public class SomeJob : Job<SomeRequest, SomeJobState>, IGrainType
                 StoppedStepsCounted = State.StoppedStepsCounted.ToList(),
                 CompletedStepsCounted = State.CompletedStepsCounted.ToList(),
                 StepPlan = State.StepPlan?.ToList(),
+                HasStoredStepPlan = State.HasStoredStepPlan,
+                StoredStepPlanIncarnation = State.StoredStepPlanIncarnation,
                 Progress = State.Progress with { Stages = State.Progress.Stages.Select(stage => stage with { }).ToList() }
-            });
+            };
+            WrittenStates.Add(written);
+            _durable = written;
         }
         if (rejected)
         {
@@ -153,6 +158,30 @@ public class SomeJob : Job<SomeRequest, SomeJobState>, IGrainType
         {
             await AfterWrite();
         }
+    }
+
+    /// <summary>
+    /// Reads what was last written, as a real storage would, instead of the in-memory state that a failed write may have undone.
+    /// </summary>
+    /// <returns>Awaitable task.</returns>
+    protected override async Task ReadStateAsync()
+    {
+        await base.ReadStateAsync();
+        if (_durable is null)
+        {
+            return;
+        }
+
+        State.Status = _durable.Status;
+        State.StatusChanges = _durable.StatusChanges.ToList();
+        State.DrainPending = _durable.DrainPending;
+        State.StopFinalized = _durable.StopFinalized;
+        State.StoppedStepsCounted = _durable.StoppedStepsCounted.ToList();
+        State.CompletedStepsCounted = _durable.CompletedStepsCounted.ToList();
+        State.StepPlan = _durable.StepPlan?.ToList();
+        State.HasStoredStepPlan = _durable.HasStoredStepPlan;
+        State.StoredStepPlanIncarnation = _durable.StoredStepPlanIncarnation;
+        State.Progress = _durable.Progress with { Stages = _durable.Progress.Stages.Select(stage => stage with { }).ToList() };
     }
 
     protected override Task ClearStateAsync()
