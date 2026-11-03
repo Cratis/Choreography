@@ -76,3 +76,5 @@ Each returns an `OperationOutcome`: `Succeeded`, `Blocked` (with a reason), `Not
 - **Multi-event operations are one unit.** One inverse command, one undo operation, all its events associated with it.
 - **A new operation clears the actor's redo stack** (the undone operations become `Discarded`). Other actors' operations do not, but may make redo ineligible through `CanRedoWhen`.
 - A serialized intent of each forward command is stored with its operation. Commands, mementos and outcomes serialize with System.Text.Json, so they can cross to a client as plain records.
+
+For the frontend, see [Use operation history and undo/redo in React](../how-to/use-operation-history-in-react.md).

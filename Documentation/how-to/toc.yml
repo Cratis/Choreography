@@ -2,3 +2,5 @@
   href: host-the-silo.md
 - name: Configure storage
   href: configure-storage.md
+- name: Use operation history in React
+  href: use-operation-history-in-react.md
