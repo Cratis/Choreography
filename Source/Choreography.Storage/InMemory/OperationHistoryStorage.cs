@@ -10,7 +10,7 @@ namespace Cratis.Choreography.Storage.InMemory;
 /// </summary>
 public class OperationHistoryStorage : IOperationHistoryStorage
 {
-    readonly Lock _lock = new();
+    readonly object _lock = new();
     readonly List<OperationEntry> _entries = [];
     ulong _position;
 
