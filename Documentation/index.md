@@ -23,6 +23,7 @@ three.
 - [State machines](concepts/state-machines.md) — model a grain's lifecycle as explicit states
 - [Event-sourced state machines](concepts/event-sourced-state-machines.md) — drive a state machine from Chronicle events
 - [Workflows](concepts/workflows.md) — durable, grain-based workflows defined as a graph of nodes
+- [Operation history and undo/redo](concepts/operations.md) — record logical operations and reverse them as new operations
 - [Host the silo](how-to/host-the-silo.md)
 - [Configure storage](how-to/configure-storage.md)
 - [Options reference](reference/options.md)

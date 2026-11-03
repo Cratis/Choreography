@@ -12,3 +12,5 @@
   href: event-sourced-state-machines.md
 - name: Workflows
   href: workflows.md
+- name: Operation history and undo/redo
+  href: operations.md
