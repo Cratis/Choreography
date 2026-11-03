@@ -14,7 +14,8 @@ to `Cratis.Choreography.Patching` and ship in `Cratis.Choreography.Storage`. For
 | --- | --- | --- |
 | `HostVersion` | informational version of the entry assembly, without build metadata | The version of the running host. When not set, unparseable or `1.0.0`, it is unknown: patches run, the store is not marked and the older-host gate is bypassed |
 | `MaxAttempts` | `5` | How many times the host asks the patch manager while waiting for it to reach a host at least as new as itself |
-| `RelocationDelay` | 1 second | Wait before asking again, doubled after every attempt |
+| `RelocationDelay` | 1 second | Wait before asking again, doubled after every attempt up to 30 seconds |
+| `MaxWait` | 15 minutes | Longest the host keeps asking while calls fail transiently, before it throws `PatchingDidNotComplete` |
 
 ## ICanApplyPatch
 
@@ -33,8 +34,9 @@ to `Cratis.Choreography.Patching` and ship in `Cratis.Choreography.Storage`. For
 | --- | --- |
 | `Task ApplyPatches(CancellationToken cancellationToken = default)` | Applies every pending patch and returns when the patch manager has completed |
 
-Throws `PatchManagerCouldNotRelocate` when no host at least as new as this one takes over within `MaxAttempts`, throws what a
-failing patch throws, and honors the cancellation token between attempts and during the wait.
+Throws `PatchManagerCouldNotRelocate` when no host at least as new as this one takes over within `MaxAttempts`, throws
+`PatchingDidNotComplete` when transient call failures outlast `MaxWait`, throws what a failing patch throws, and honors the
+cancellation token between attempts and during the wait.
 
 ## IPatchManager
 
@@ -56,6 +58,12 @@ placement preference. Hosts do not call it directly.
 
 An `Exception` raised by `IPatchRunner.ApplyPatches` after the last attempt. Its message names the host version and states that
 an older host is still holding the patch manager. The runner also logs it at `Critical` before it throws.
+
+## PatchingDidNotComplete
+
+An `Exception` raised by `IPatchRunner.ApplyPatches` when response timeouts, an unavailable silo or rejected messages kept the
+call from completing for `MaxWait`. Its message names the host version and the time waited, and its inner exception is the last
+failure seen. The runner logs it at `Critical` before it throws.
 
 ## AppliedPatch
 

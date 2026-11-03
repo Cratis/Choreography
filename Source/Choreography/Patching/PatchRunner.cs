@@ -26,41 +26,70 @@ public class PatchRunner(
     ILogger<PatchRunner> logger) : IPatchRunner
 {
     /// <summary>
+    /// The prefix of the message Orleans gives a call that got no response in time.
+    /// </summary>
+    internal const string ResponseTimeoutPrefix = "Response did not arrive on time";
+
+    /// <summary>
     /// The prefix of the failure Orleans raises while the cluster's manifests have not yet converged on a silo that can host the patch manager.
     /// </summary>
     internal const string PlacementFailurePrefix = "No active nodes are compatible with grain cratis-choreography-patch-manager and interface Cratis.Choreography.Patching.IPatchManager version ";
+
+    static readonly TimeSpan _maxDelay = TimeSpan.FromSeconds(30);
 
     /// <inheritdoc/>
     public async Task ApplyPatches(CancellationToken cancellationToken = default)
     {
         var hostVersion = options.Value.HostVersion ?? HostVersion.Current;
         var manager = grainFactory.GetGrain<IPatchManager>(0);
+        var started = timeProvider.GetUtcNow();
+        var relocations = 0;
+        var delay = options.Value.RelocationDelay;
+        Exception? lastFailure = null;
 
         RequestContext.Set(PatchRelocation.CallerSiloKey, localSiloDetails.SiloAddress);
         try
         {
-            var delay = options.Value.RelocationDelay;
-            for (var attempt = 0; attempt < options.Value.MaxAttempts; attempt++)
+            while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                var waitingForRelocation = false;
                 try
                 {
                     if (await manager.ApplyPatchesFor(hostVersion) == PatchOutcome.Completed) return;
+                    waitingForRelocation = true;
                 }
                 catch (OrleansException exception) when (IsAwaitingManifest(exception))
                 {
                     // The placement can be asked before the new silo's manifest has converged.
+                    waitingForRelocation = true;
+                    lastFailure = exception;
                 }
-
-                if (attempt < options.Value.MaxAttempts - 1)
+                catch (Exception exception) when (IsTransient(exception))
                 {
-                    await Task.Delay(delay, timeProvider, cancellationToken);
-                    delay += delay;
+                    // The call failed, not the patch: it timed out while a long patch kept running, or the silo holding the
+                    // manager is gone. Patches are recorded only once they have run, so asking again either waits for the one
+                    // still running or reaches a manager on a silo that is alive.
+                    lastFailure = exception;
+                    logger.CallFailed(hostVersion, exception);
                 }
-            }
 
-            logger.CouldNotRelocate(hostVersion);
-            throw new PatchManagerCouldNotRelocate(hostVersion);
+                if (waitingForRelocation && ++relocations >= options.Value.MaxAttempts)
+                {
+                    logger.CouldNotRelocate(hostVersion);
+                    throw new PatchManagerCouldNotRelocate(hostVersion);
+                }
+
+                var waited = timeProvider.GetUtcNow() - started;
+                if (waited >= options.Value.MaxWait)
+                {
+                    logger.DidNotComplete(hostVersion, waited);
+                    throw new PatchingDidNotComplete(hostVersion, waited, lastFailure);
+                }
+
+                await Task.Delay(delay, timeProvider, cancellationToken);
+                delay = TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, _maxDelay.Ticks));
+            }
         }
         finally
         {
@@ -75,4 +104,21 @@ public class PatchRunner(
     /// <returns>Whether asking again can succeed.</returns>
     internal static bool IsAwaitingManifest(OrleansException exception) =>
         exception.Message.StartsWith(PlacementFailurePrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Recognizes a call that failed for reasons of transport rather than because a patch failed.
+    /// </summary>
+    /// <param name="exception">The exception the call raised.</param>
+    /// <returns>Whether asking again can succeed.</returns>
+    /// <remarks>
+    /// A timeout counts only when it is Orleans' own response timeout: a patch that throws a <see cref="TimeoutException"/> of its own
+    /// is a failing patch, and fails the start.
+    /// </remarks>
+    internal static bool IsTransient(Exception exception) => exception switch
+    {
+        SiloUnavailableException => true,
+        OrleansMessageRejectionException => true,
+        TimeoutException timeout => timeout.Message.StartsWith(ResponseTimeoutPrefix, StringComparison.Ordinal),
+        _ => false
+    };
 }

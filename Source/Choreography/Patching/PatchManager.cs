@@ -42,9 +42,11 @@ public class PatchManager(
     /// <inheritdoc/>
     public async Task<PatchOutcome> ApplyPatchesFor(SemanticVersion caller)
     {
+        logger.PatchingRequested(caller, _hostVersion);
         var knownVersion = HostVersion.IsKnown(_hostVersion);
         if (knownVersion && HostVersion.IsKnown(caller) && _hostVersion < caller)
         {
+            logger.RelocatingToCaller(caller, _hostVersion);
             return RelocateToCaller();
         }
 

@@ -52,15 +52,32 @@ data nobody had patched.
 
 So when a newer host calls an older manager, the manager answers `PatchOutcome.Relocate`. It migrates itself to the caller's
 silo, using a hint the caller sent in the request context, and deactivates when idle if there is no hint. `IPatchRunner` on the
-new host keeps asking. It waits `RelocationDelay` (one second by default), doubles the wait after every attempt, and gives up
-after `MaxAttempts` (five by default). Giving up throws `PatchManagerCouldNotRelocate` and the host does not start. With the
-defaults the runner waits 1, 2, 4 and 8 seconds between its five attempts, 15 seconds in all. If an older silo keeps the manager
-busy for longer than that, raise `RelocationDelay` or `MaxAttempts`.
+new host keeps asking. It waits `RelocationDelay` (one second by default), doubles the wait after every attempt up to 30
+seconds, and gives up after `MaxAttempts` (five by default) answers of "relocate". Giving up throws
+`PatchManagerCouldNotRelocate` and the host does not start. With the defaults the runner waits 1, 2, 4 and 8 seconds between
+its five attempts, 15 seconds in all. If an older silo keeps the manager busy for longer than that, raise `RelocationDelay` or
+`MaxAttempts`.
+
+You never scale the old release down to make room. The new pods start while the old ones keep serving, the manager moves to the
+first new pod that asks, and the old pods that restart later find the store marked with the newer host and apply nothing.
 
 The manager answers for the host it runs on. When an older host asks while the manager sits on a newer host, the manager
 applies the pending patches of that newer host, or finds them already applied, and answers `Completed`. The older host starts
 against a store the newer release has patched. A manager on an older host never patches a store that a newer host has already
 marked: it logs a warning and answers `Completed` without applying anything.
+
+## Calls that fail while nothing is wrong
+
+A rolling deployment also loses pods, and a patch can take longer than Orleans lets one grain call wait. Neither is a failed
+patch. The runner treats Orleans' own response timeout, an unavailable silo and a rejected message as transient: it asks again
+with the same back-off, which either waits for the patch that is still running in the manager or reaches a manager that has
+been re-created on a silo that is alive. A patch records only after it ran, so a patch that was interrupted is attempted again,
+which is why `Up()` must be safe to repeat.
+
+These retries are bounded by `MaxWait` (15 minutes by default), the longest a host waits in total. When it runs out,
+`IPatchRunner.ApplyPatches` throws `PatchingDidNotComplete`, keeping the last failure as its inner exception. A timeout raised
+by a patch itself is a failing patch, not a transient one, and fails the start at once. Set the Orleans
+`SiloMessagingOptions.ResponseTimeout` and `MaxWait` above the longest patch you ship.
 
 ## Unknown host versions
 

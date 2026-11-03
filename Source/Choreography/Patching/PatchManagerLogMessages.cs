@@ -39,4 +39,10 @@ internal static partial class PatchManagerLogMessages
 
     [LoggerMessage(LogLevel.Warning, "Host version {HostVersion} is unknown; bypassing the patch version gate without recording a host version")]
     internal static partial void UnknownHostVersion(this ILogger<PatchManager> logger, SemanticVersion hostVersion);
+
+    [LoggerMessage(LogLevel.Debug, "Patching requested by host {Caller}; the patch manager runs on host {HostVersion}")]
+    internal static partial void PatchingRequested(this ILogger<PatchManager> logger, SemanticVersion caller, SemanticVersion hostVersion);
+
+    [LoggerMessage(LogLevel.Information, "Host {Caller} is newer than the patch manager's host {HostVersion}; relocating the patch manager to the caller before patching")]
+    internal static partial void RelocatingToCaller(this ILogger<PatchManager> logger, SemanticVersion caller, SemanticVersion hostVersion);
 }

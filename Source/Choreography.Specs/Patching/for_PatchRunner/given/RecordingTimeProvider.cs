@@ -8,7 +8,15 @@ namespace Cratis.Choreography.Patching.for_PatchRunner.given;
 /// </summary>
 public class RecordingTimeProvider : TimeProvider
 {
+    readonly DateTimeOffset _start = new(2026, 9, 1, 12, 0, 0, TimeSpan.Zero);
+
     public List<TimeSpan> Delays { get; } = [];
+
+    /// <summary>
+    /// The clock advances by every delay it was asked to wait, so a spec can run out a time budget without waiting for it.
+    /// </summary>
+    /// <returns>The start of the clock plus everything waited so far.</returns>
+    public override DateTimeOffset GetUtcNow() => _start + TimeSpan.FromTicks(Delays.Sum(_ => _.Ticks));
 
     public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
     {

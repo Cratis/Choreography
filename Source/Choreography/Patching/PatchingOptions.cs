@@ -31,4 +31,19 @@ public class PatchingOptions
     /// The older activation deactivates once idle, and under load that can take longer than a short fixed wait allows.
     /// </remarks>
     public TimeSpan RelocationDelay { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Gets or sets how long a host waits in total for patching to complete before it gives up and fails the start. Defaults to 15 minutes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A patch that takes longer than Orleans allows a grain call to wait, or a silo that holds the patch manager and is lost
+    /// while the host starts, makes a single call fail without anything being wrong. The host asks again, which waits for
+    /// the patch that is still running or reaches a manager on a silo that is alive. This is the longest it keeps asking.
+    /// </para>
+    /// <para>
+    /// It does not apply to waiting for the manager to move to a newer host, which <see cref="MaxAttempts"/> bounds.
+    /// </para>
+    /// </remarks>
+    public TimeSpan MaxWait { get; set; } = TimeSpan.FromMinutes(15);
 }

@@ -30,5 +30,13 @@ public class a_patch_runner : Specification
 
     protected static OrleansException AwaitingManifest() => new(PatchRunner.PlacementFailurePrefix + "0. Known nodes with grain type: none.");
 
+    /// <summary>
+    /// Orleans keeps the constructor of its message rejection exception internal, so a spec that needs one creates it the way Orleans does.
+    /// </summary>
+    /// <param name="message">The message of the exception.</param>
+    /// <returns>An <see cref="OrleansMessageRejectionException"/>.</returns>
+    protected static OrleansMessageRejectionException Rejection(string message) =>
+        (OrleansMessageRejectionException)Activator.CreateInstance(typeof(OrleansMessageRejectionException), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, null, [message], null)!;
+
     protected Task Apply() => _runner.ApplyPatches(_cancellation.Token);
 }

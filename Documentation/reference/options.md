@@ -126,7 +126,8 @@ Namespace `Cratis.Choreography.Patching`. See [Patching](../patching/index.md) a
 | --- | --- | --- |
 | `HostVersion` | `null` | Version of the running host. When `null`, the informational version of the entry assembly without build metadata, falling back to its assembly version. An unset or `1.0.0` version is unknown: patches apply, but the store is not marked. |
 | `MaxAttempts` | 5 | Times the host asks the patch manager to apply patches while waiting for it to move to a host at least as new, before the start fails. |
-| `RelocationDelay` | 1 second | Wait before asking again; it doubles after every attempt. |
+| `RelocationDelay` | 1 second | Wait before asking again; it doubles after every attempt, up to 30 seconds. |
+| `MaxWait` | 15 minutes | Longest a host keeps asking while calls fail transiently (response timeout, silo lost, message rejected) before `PatchingDidNotComplete`. |
 
 ## MongoDBJobsStorageOptions
 
