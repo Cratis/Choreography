@@ -1,13 +1,14 @@
 ---
-title: Cratis.Orleans
-description: The shared Orleans building blocks for the Cratis platform - the job system, storage API and silo hosting tooling.
+title: Cratis.Choreography
+description: The runtime for durable business processes on Orleans - workflows, state machines, jobs, storage and silo hosting for the Cratis platform.
 ---
 
-# Cratis.Orleans
+# Cratis.Choreography
 
-Cratis.Orleans holds the Orleans building blocks every Cratis service needs: a durable **job system** for work
-that outlives a request, a **storage API** the job state persists through with MongoDB and SQL providers, and the
-**silo hosting tooling** that co-hosts Orleans next to your application.
+Cratis.Choreography runs long-lived, stateful behavior on Orleans so it survives restarts and moves between silos: a
+**workflow engine** for business processes defined as a graph of nodes, **state machines** (plain and event-sourced),
+a durable **job system** for work that outlives a request, a **storage API** the job state persists through with
+MongoDB and SQL providers, and the **silo hosting tooling** that co-hosts Orleans next to your application.
 
 Without it, every Cratis service that co-hosts an Orleans silo - Chronicle's kernel, Direct, Studio - carries
 its own copy of the job engine, its own serializers, and its own hard-won knowledge about which parts of the
@@ -30,11 +31,11 @@ three.
 
 | Package | Holds |
 | --- | --- |
-| `Cratis.Orleans` | The job engine, Workers, state machines, workflows, typed grain keys, Orleans serializers, silo hosting |
-| `Cratis.Orleans.Storage` | The jobs storage API and the scope resolver |
-| `Cratis.Orleans.Storage.MongoDB` | MongoDB storage provider |
-| `Cratis.Orleans.Storage.Sql` | SQL storage provider (EF Core: SQL Server, PostgreSQL, SQLite) |
-| `Cratis.Orleans.Chronicle` | Event-sourced state machines driven by Chronicle events and read models, and workflows whose runs are kept as Chronicle events |
+| `Cratis.Choreography` | The job engine, Workers, state machines, workflows, typed grain keys, Orleans serializers, silo hosting |
+| `Cratis.Choreography.Storage` | The jobs storage API and the scope resolver |
+| `Cratis.Choreography.Storage.MongoDB` | MongoDB storage provider |
+| `Cratis.Choreography.Storage.Sql` | SQL storage provider (EF Core: SQL Server, PostgreSQL, SQLite) |
+| `Cratis.Choreography.Chronicle` | Event-sourced state machines driven by Chronicle events and read models, and workflows whose runs are kept as Chronicle events |
 
-Apart from `Cratis.Orleans.Chronicle`, the packages have no dependency on Chronicle; Chronicle is a consumer, like
+Apart from `Cratis.Choreography.Chronicle`, the packages have no dependency on Chronicle; Chronicle is a consumer, like
 every other Cratis service.
