@@ -2,7 +2,6 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Globalization;
-using System.Text.RegularExpressions;
 
 namespace Cratis.Choreography.Patching;
 
@@ -14,15 +13,12 @@ namespace Cratis.Choreography.Patching;
 /// <param name="Patch">Patch version number.</param>
 /// <param name="PreRelease">Optional pre-release identifier.</param>
 /// <param name="BuildMetadata">Optional build metadata.</param>
-public partial record SemanticVersion(int Major, int Minor, int Patch, string PreRelease = "", string BuildMetadata = "") : IComparable<SemanticVersion>, IComparable
+public record SemanticVersion(int Major, int Minor, int Patch, string PreRelease = "", string BuildMetadata = "") : IComparable<SemanticVersion>, IComparable
 {
     /// <summary>
     /// Gets an empty version (0.0.0).
     /// </summary>
     public static readonly SemanticVersion NotSet = new(0, 0, 0);
-
-    [GeneratedRegex(@"^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$", RegexOptions.None, 1000)]
-    private static partial Regex SemanticVersionRegex { get; }
 
     /// <summary>
     /// Implicit conversion from string to <see cref="SemanticVersion"/>.
@@ -74,19 +70,12 @@ public partial record SemanticVersion(int Major, int Minor, int Patch, string Pr
     /// <exception cref="ArgumentException">Thrown if the version string is invalid.</exception>
     public static SemanticVersion Parse(string version)
     {
-        var match = SemanticVersionRegex.Match(version);
-        if (!match.Success)
+        if (!TryReadVersion(version, out var parsed))
         {
             throw new ArgumentException($"Invalid semantic version: {version}", nameof(version));
         }
 
-        var major = int.Parse(match.Groups["major"].Value, CultureInfo.InvariantCulture);
-        var minor = int.Parse(match.Groups["minor"].Value, CultureInfo.InvariantCulture);
-        var patch = int.Parse(match.Groups["patch"].Value, CultureInfo.InvariantCulture);
-        var preRelease = match.Groups["prerelease"].Value;
-        var buildMetadata = match.Groups["buildmetadata"].Value;
-
-        return new SemanticVersion(major, minor, patch, preRelease, buildMetadata);
+        return parsed;
     }
 
     /// <summary>
@@ -206,4 +195,58 @@ public partial record SemanticVersion(int Major, int Minor, int Patch, string Pr
 
         return string.CompareOrdinal(left, right);
     }
+
+    static bool TryReadVersion(string version, out SemanticVersion result)
+    {
+        result = NotSet;
+
+        var rest = version;
+        var buildMetadata = string.Empty;
+        var plus = rest.IndexOf('+', StringComparison.Ordinal);
+        if (plus >= 0)
+        {
+            buildMetadata = rest[(plus + 1)..];
+            rest = rest[..plus];
+            if (!AllIdentifiers(buildMetadata, IsBuildIdentifier))
+            {
+                return false;
+            }
+        }
+
+        var preRelease = string.Empty;
+        var dash = rest.IndexOf('-', StringComparison.Ordinal);
+        if (dash >= 0)
+        {
+            preRelease = rest[(dash + 1)..];
+            rest = rest[..dash];
+            if (!AllIdentifiers(preRelease, IsPreReleaseIdentifier))
+            {
+                return false;
+            }
+        }
+
+        var numbers = rest.Split('.');
+        if (numbers.Length != 3 || !numbers.All(IsNumeric))
+        {
+            return false;
+        }
+
+        if (!int.TryParse(numbers[0], NumberStyles.None, CultureInfo.InvariantCulture, out var major) ||
+            !int.TryParse(numbers[1], NumberStyles.None, CultureInfo.InvariantCulture, out var minor) ||
+            !int.TryParse(numbers[2], NumberStyles.None, CultureInfo.InvariantCulture, out var patch))
+        {
+            return false;
+        }
+
+        result = new SemanticVersion(major, minor, patch, preRelease, buildMetadata);
+        return true;
+    }
+
+    static bool AllIdentifiers(string identifiers, Func<string, bool> isValid) => identifiers.Split('.').All(isValid);
+
+    static bool IsNumeric(string value) => value.Length > 0 && value.All(char.IsAsciiDigit) && (value.Length == 1 || value[0] != '0');
+
+    static bool IsBuildIdentifier(string value) => value.Length > 0 && value.All(character => char.IsAsciiLetterOrDigit(character) || character == '-');
+
+    static bool IsPreReleaseIdentifier(string value) => IsNumeric(value) || (value.Length > 0 && IsBuildIdentifier(value) && !value.All(char.IsAsciiDigit));
 }
