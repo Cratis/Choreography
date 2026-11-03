@@ -49,7 +49,7 @@ public class SqlPatchStorage(IOptions<SqlPatchStorageOptions> options) : IPatchS
         }
 
         entity.Version = patch.Version.ToString();
-        entity.AppliedAt = patch.AppliedAt;
+        entity.AppliedAt = patch.AppliedAt.ToUniversalTime();
         await context.SaveChangesAsync();
     }
 

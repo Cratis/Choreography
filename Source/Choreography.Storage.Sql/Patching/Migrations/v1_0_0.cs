@@ -27,8 +27,8 @@ public class v1_0_0 : Migration
             name: WellKnownTableNames.Patches,
             columns: table => new
             {
-                Name = table.StringColumn(migrationBuilder, maxLength: 256),
-                Version = table.StringColumn(migrationBuilder, maxLength: 256),
+                Name = table.StringColumn(migrationBuilder, maxLength: 256, nullable: false),
+                Version = table.StringColumn(migrationBuilder, maxLength: 256, nullable: false),
                 AppliedAt = table.Column<DateTimeOffset>(nullable: false),
             },
             constraints: table => table.PrimaryKey($"PK_{WellKnownTableNames.Patches}", x => x.Name));
@@ -37,8 +37,8 @@ public class v1_0_0 : Migration
             name: WellKnownTableNames.PatchVersions,
             columns: table => new
             {
-                Id = table.StringColumn(migrationBuilder, maxLength: 64),
-                Version = table.StringColumn(migrationBuilder, maxLength: 256),
+                Id = table.StringColumn(migrationBuilder, maxLength: 64, nullable: false),
+                Version = table.StringColumn(migrationBuilder, maxLength: 256, nullable: false),
             },
             constraints: table => table.PrimaryKey($"PK_{WellKnownTableNames.PatchVersions}", x => x.Id));
     }
