@@ -5,22 +5,19 @@ namespace Cratis.Choreography.Patching.for_HostVersion;
 
 public class when_parsing : Specification
 {
-    [Theory]
-    [InlineData("19.100.2", 19, 100, 2)]
-    [InlineData("19.100.2+abc1234", 19, 100, 2)]
-    [InlineData("19.100.2-rc.1+abc1234", 19, 100, 2)]
-    void should_read_the_version_without_build_metadata(string informational, int major, int minor, int patch)
+    [Fact] void should_read_a_plain_version() => ShouldReadWithoutMetadata("19.100.2");
+    [Fact] void should_read_a_version_with_build_metadata() => ShouldReadWithoutMetadata("19.100.2+abc1234");
+    [Fact] void should_read_a_pre_release_version_with_build_metadata() => ShouldReadWithoutMetadata("19.100.2-rc.1+abc1234");
+    [Fact] void should_not_set_an_empty_version() => HostVersion.Parse(string.Empty).ShouldEqual(SemanticVersion.NotSet);
+    [Fact] void should_not_set_text_that_is_not_a_version() => HostVersion.Parse("not-a-version").ShouldEqual(SemanticVersion.NotSet);
+    [Fact] void should_not_set_a_version_with_two_parts() => HostVersion.Parse("1.0").ShouldEqual(SemanticVersion.NotSet);
+
+    static void ShouldReadWithoutMetadata(string informational)
     {
         var result = HostVersion.Parse(informational);
-        result.Major.ShouldEqual(major);
-        result.Minor.ShouldEqual(minor);
-        result.Patch.ShouldEqual(patch);
+        result.Major.ShouldEqual(19);
+        result.Minor.ShouldEqual(100);
+        result.Patch.ShouldEqual(2);
         result.BuildMetadata.ShouldBeEmpty();
     }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("not-a-version")]
-    [InlineData("1.0")]
-    void should_not_set_a_version_that_cannot_be_parsed(string informational) => HostVersion.Parse(informational).ShouldEqual(SemanticVersion.NotSet);
 }

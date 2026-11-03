@@ -5,14 +5,16 @@ namespace Cratis.Choreography.Patching.for_SemanticVersion.when_comparing_versio
 
 public class and_versions_have_prerelease_identifiers : Specification
 {
-    [Theory]
-    [InlineData("2.0.0-rc.2", "2.0.0-rc.10")]
-    [InlineData("2.0.0-alpha", "2.0.0-alpha.1")]
-    [InlineData("1.0.0-rc.1", "1.0.0")]
-    [InlineData("2.0.0-2", "2.0.0-alpha")]
-    [InlineData("2.0.0-alpha", "2.0.0-beta")]
-    [InlineData("2.0.0-999999999999999999999999999999", "2.0.0-1000000000000000000000000000000")]
-    void should_order_versions_in_both_directions(string lower, string higher)
+    [Fact] void should_order_numeric_identifiers_numerically() => ShouldOrder("2.0.0-rc.2", "2.0.0-rc.10");
+    [Fact] void should_order_a_shorter_set_of_identifiers_first() => ShouldOrder("2.0.0-alpha", "2.0.0-alpha.1");
+    [Fact] void should_order_a_pre_release_before_its_release() => ShouldOrder("1.0.0-rc.1", "1.0.0");
+    [Fact] void should_order_numeric_identifiers_before_text() => ShouldOrder("2.0.0-2", "2.0.0-alpha");
+    [Fact] void should_order_text_identifiers_alphabetically() => ShouldOrder("2.0.0-alpha", "2.0.0-beta");
+    [Fact] void should_order_numeric_identifiers_too_large_for_a_long() => ShouldOrder("2.0.0-999999999999999999999999999999", "2.0.0-1000000000000000000000000000000");
+    [Fact] void should_ignore_build_metadata_after_a_pre_release() => ShouldBeEqual("2.0.0-rc.2+build.1", "2.0.0-rc.2+build.10");
+    [Fact] void should_ignore_build_metadata_on_a_release() => ShouldBeEqual("2.0.0+build.10", "2.0.0+build.2");
+
+    static void ShouldOrder(string lower, string higher)
     {
         var older = SemanticVersion.Parse(lower);
         var newer = SemanticVersion.Parse(higher);
@@ -24,10 +26,7 @@ public class and_versions_have_prerelease_identifiers : Specification
         (newer >= older).ShouldBeTrue();
     }
 
-    [Theory]
-    [InlineData("2.0.0-rc.2+build.1", "2.0.0-rc.2+build.10")]
-    [InlineData("2.0.0+build.10", "2.0.0+build.2")]
-    void should_ignore_build_metadata(string left, string right)
+    static void ShouldBeEqual(string left, string right)
     {
         var first = SemanticVersion.Parse(left);
         var second = SemanticVersion.Parse(right);
