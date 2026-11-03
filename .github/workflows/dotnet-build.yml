@@ -33,7 +33,7 @@ on:
       - ".github/scripts/run-specifications.test.mjs"
       - ".github/scripts/compare-specifications.mjs"
       - ".github/scripts/compare-specifications.test.mjs"
-      - "Orleans.slnx"
+      - "Choreography.slnx"
       - "global.json"
       - ".github/workflows/dotnet-build.yml"
       - ".github/workflows/grain-compatibility.yml"
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      CRATIS_ORLEANS_SPECS_POSTGRESQL: "Host=localhost;Port=5432;Username=postgres;Database=postgres"
+      CRATIS_CHOREOGRAPHY_SPECS_POSTGRESQL: "Host=localhost;Port=5432;Username=postgres;Database=postgres"
     # Integration specs use real MongoDB, PostgreSQL and SQL Server instances.
     services:
       mongodb:
@@ -91,7 +91,7 @@ jobs:
           password="$(openssl rand -hex 16)Aa1!"
           echo "::add-mask::$password"
           docker run -d --name mssql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD="$password" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
-          echo "CRATIS_ORLEANS_SPECS_SQLSERVER=Server=localhost,1433;User Id=sa;Password=$password;TrustServerCertificate=True;Encrypt=False" >> "$GITHUB_ENV"
+          echo "CRATIS_CHOREOGRAPHY_SPECS_SQLSERVER=Server=localhost,1433;User Id=sa;Password=$password;TrustServerCertificate=True;Encrypt=False" >> "$GITHUB_ENV"
 
       # Built once, in Release like publish (warnings as errors); every later step runs the built output.
       - name: Build

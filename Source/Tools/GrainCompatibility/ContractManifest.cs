@@ -4,7 +4,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace Cratis.Orleans.Tools.GrainCompatibility;
+namespace Cratis.Choreography.Tools.GrainCompatibility;
 
 /// <summary>
 /// The grain contracts of one build, read from the OrleansContracts.txt the Orleans contract analyzer maintains.

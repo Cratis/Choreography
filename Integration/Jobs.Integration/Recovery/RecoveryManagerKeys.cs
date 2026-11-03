@@ -3,7 +3,7 @@
 
 using Cratis.DependencyInjection;
 
-namespace Cratis.Orleans.Jobs.Integration.Recovery;
+namespace Cratis.Choreography.Jobs.Integration.Recovery;
 
 [Singleton]
 public sealed class RecoveryManagerKeys(RecoverySignals signals, ILocalSiloDetails local) : IJobsManagerKeys

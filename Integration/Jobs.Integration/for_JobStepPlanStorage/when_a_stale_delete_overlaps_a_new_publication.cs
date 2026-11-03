@@ -2,12 +2,12 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Reflection;
-using Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobStepPlanStorage;
+namespace Cratis.Choreography.Jobs.Integration.for_JobStepPlanStorage;
 
 [Collection(JobsClusterCollection.Name)]
 public class when_a_stale_delete_overlaps_a_new_publication : given.a_plan_store

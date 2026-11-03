@@ -2,11 +2,11 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Reflection;
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.Options;
 using Orleans.Concurrency;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
 
 [Reentrant]
 [GrainType("test-rehydrating-jobs-manager")]

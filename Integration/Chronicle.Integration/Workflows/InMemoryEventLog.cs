@@ -2,13 +2,13 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Collections.Immutable;
+using Cratis.Choreography.Chronicle.StateMachines;
 using Cratis.Chronicle;
 using Cratis.Chronicle.Events;
 using Cratis.Chronicle.EventSequences;
 using Cratis.Chronicle.EventSequences.Concurrency;
-using Cratis.Orleans.Chronicle.StateMachines;
 
-namespace Cratis.Orleans.Chronicle.Integration.Workflows;
+namespace Cratis.Choreography.Chronicle.Integration.Workflows;
 
 /// <summary>
 /// Stands in for Chronicle's event log - and for Chronicle surviving a silo - behind <see cref="IStateMachineEventStores"/>.

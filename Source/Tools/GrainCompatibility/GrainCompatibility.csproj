@@ -7,11 +7,11 @@
         <OutputType>Exe</OutputType>
         <IsPackable>false</IsPackable>
         <AssemblyName>GrainCompatibility</AssemblyName>
-        <RootNamespace>Cratis.Orleans.Tools.GrainCompatibility</RootNamespace>
+        <RootNamespace>Cratis.Choreography.Tools.GrainCompatibility</RootNamespace>
         <NoWarn>$(NoWarn);SA1600</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="Cratis.Orleans.Tools.GrainCompatibility.Specs" />
+        <InternalsVisibleTo Include="Cratis.Choreography.Tools.GrainCompatibility.Specs" />
     </ItemGroup>
 </Project>

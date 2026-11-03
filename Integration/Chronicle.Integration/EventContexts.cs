@@ -5,7 +5,7 @@ using Cratis.Chronicle;
 using Cratis.Chronicle.Events;
 using Cratis.Execution;
 
-namespace Cratis.Orleans.Chronicle.Integration;
+namespace Cratis.Choreography.Chronicle.Integration;
 
 public static class EventContexts
 {

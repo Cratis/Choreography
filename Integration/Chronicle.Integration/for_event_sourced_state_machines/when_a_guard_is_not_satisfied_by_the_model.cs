@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Chronicle.Integration.Documents;
-using Cratis.Orleans.Chronicle.StateMachines;
+using Cratis.Choreography.Chronicle.Integration.Documents;
+using Cratis.Choreography.Chronicle.StateMachines;
 
-namespace Cratis.Orleans.Chronicle.Integration.for_event_sourced_state_machines;
+namespace Cratis.Choreography.Chronicle.Integration.for_event_sourced_state_machines;
 
 [Collection(StateMachineClusterCollection.Name)]
 public class when_a_guard_is_not_satisfied_by_the_model : Specification

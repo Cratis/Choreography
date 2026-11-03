@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <AssemblyName>Cratis.Orleans.Chronicle.Integration</AssemblyName>
-        <RootNamespace>Cratis.Orleans.Chronicle.Integration</RootNamespace>
+        <AssemblyName>Cratis.Choreography.Chronicle.Integration</AssemblyName>
+        <RootNamespace>Cratis.Choreography.Chronicle.Integration</RootNamespace>
         <IsTestProject>true</IsTestProject>
         <IsPackable>false</IsPackable>
         <!-- xUnit v3 test projects are executables -->
@@ -21,6 +21,6 @@
         <PackageReference Include="Microsoft.Orleans.TestingHost" />
     </ItemGroup>
     <ItemGroup>
-        <ProjectReference Include="../../Source/Orleans.Chronicle/Orleans.Chronicle.csproj" />
+        <ProjectReference Include="../../Source/Choreography.Chronicle/Choreography.Chronicle.csproj" />
     </ItemGroup>
 </Project>

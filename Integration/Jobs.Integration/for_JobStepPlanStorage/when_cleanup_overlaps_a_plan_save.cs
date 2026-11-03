@@ -1,13 +1,13 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobStepPlanStorage;
+namespace Cratis.Choreography.Jobs.Integration.for_JobStepPlanStorage;
 
 [Collection(JobsClusterCollection.Name)]
 public class when_cleanup_overlaps_a_plan_save : given.a_plan_store

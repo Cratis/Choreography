@@ -5,7 +5,7 @@ description: Define a business process as a graph of nodes and run it as a durab
 
 A workflow is a business process that is defined as data and runs as a durable process: when an order is placed,
 wait for an approval, call a capability, wait a day, fan out over its lines and join the results. The engine in
-`Cratis.Orleans` runs it on grains, so a run survives a silo restart, a deactivation and a move between silos in the
+`Cratis.Choreography` runs it on grains, so a run survives a silo restart, a deactivation and a move between silos in the
 same way the [state machines](state-machines.md) do, and node work runs as [jobs](jobs.md), so it is retried,
 stoppable and recoverable like any other job.
 
@@ -122,7 +122,7 @@ a decision made from the same history, and anything that is repeated records not
 The facts are a contract. Their type names and JSON shapes are kept as they are, because stores already hold them: add a
 fact by adding a record, and never rename or reshape an existing one.
 
-`Cratis.Orleans` ships a journal on Orleans grain storage (`GrainStorageWorkflowRunJournal`, using the provider named
+`Cratis.Choreography` ships a journal on Orleans grain storage (`GrainStorageWorkflowRunJournal`, using the provider named
 `workflows`), so the engine works without Chronicle; the run is one grain-state document with an ETag. The
 [Chronicle adapter](#keep-the-journal-in-chronicle) keeps the facts as events in the event log instead.
 
@@ -163,17 +163,17 @@ scope `workflows` and a namespace that is the scope. To run node work as a parti
 
 ## Host the engine
 
-Add the engine to a silo, or switch it on in `AddCratisOrleans`:
+Add the engine to a silo, or switch it on in `AddCratisChoreography`:
 
 ```csharp
 // With the co-hosted silo
-builder.AddCratisOrleans(new CratisOrleansOptions { Workflows = true });
+builder.AddCratisChoreography(new CratisChoreographyOptions { Workflows = true });
 
 // Or on a silo you configure yourself
 builder.UseOrleans(silo =>
 {
     silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.Workflows);
-    silo.AddCratisOrleansWorkflows(options => options.Scopes.Add("tenant-1"));
+    silo.AddCratisChoreographyWorkflows(options => options.Scopes.Add("tenant-1"));
 });
 ```
 
@@ -188,12 +188,12 @@ var admission = await workflows.Start(scope, "orders.fulfil", new WorkflowTrigge
 ```
 
 To run a silo without a database - development, tests, or a runtime that hosts a single silo - use
-`CratisOrleansOptions.Local()`: localhost clustering with jobs, job steps and workflow runs in memory. Nothing survives the
+`CratisChoreographyOptions.Local()`: localhost clustering with jobs, job steps and workflow runs in memory. Nothing survives the
 process.
 
 ## Keep the journal in Chronicle
 
-The `Cratis.Orleans.Chronicle` package adds `AddEventSourcedWorkflows()`, which keeps a run's facts as events in
+The `Cratis.Choreography.Chronicle` package adds `AddEventSourcedWorkflows()`, which keeps a run's facts as events in
 Chronicle's event log with the run as event source, appended with a concurrency scope on the tail and replayed on
 activation.
 
@@ -225,7 +225,7 @@ can run the schedule and the runs still start once. A signal finds the waits in 
 before the wait it is meant for is visible there is not remembered.
 
 ```csharp
-using Cratis.Orleans.Chronicle.Workflows;
+using Cratis.Choreography.Chronicle.Workflows;
 
 public class Approved : State<OrderModel>
 {

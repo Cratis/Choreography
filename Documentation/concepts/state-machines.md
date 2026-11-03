@@ -8,7 +8,7 @@ observing or replaying - tends to grow a status field and a thicket of `if` stat
 has to remember which statuses it is valid in, what to clean up when the status changes, and what to do after a
 restart. Miss one check and the grain does work it should not do in the state it is in.
 
-`StateMachine<TStoredState>` in `Cratis.Orleans.StateMachines` replaces that with explicit states. Each state is an
+`StateMachine<TStoredState>` in `Cratis.Choreography.StateMachines` replaces that with explicit states. Each state is an
 object that says which states it can move to and what happens when the grain enters and leaves it. The state machine
 enforces the transitions, runs the enter and leave behavior in order, persists the grain state, and puts the grain
 back into the state it was in when it activates again.
@@ -20,7 +20,7 @@ states, and name the state it starts in:
 
 ```csharp
 using System.Collections.Immutable;
-using Cratis.Orleans.StateMachines;
+using Cratis.Choreography.StateMachines;
 using Orleans.Providers;
 
 public class DocumentState : StateMachineState
@@ -53,7 +53,7 @@ A state derives `State<TStoredState>` and lists the states it allows the grain t
 
 ```csharp
 using System.Collections.Immutable;
-using Cratis.Orleans.StateMachines;
+using Cratis.Choreography.StateMachines;
 
 public class Draft : State<DocumentState>
 {
@@ -184,7 +184,7 @@ storage.
 
 ```csharp
 using System.Collections.Immutable;
-using Cratis.Orleans.StateMachines;
+using Cratis.Choreography.StateMachines;
 using Orleans.Core;
 
 public interface IExternalDocument : IGrainWithGuidKey

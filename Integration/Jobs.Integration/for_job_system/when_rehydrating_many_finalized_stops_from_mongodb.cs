@@ -1,13 +1,13 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Storage.MongoDB;
-using Cratis.Orleans.Storage.MongoDB.Jobs;
+using Cratis.Choreography.Storage.MongoDB;
+using Cratis.Choreography.Storage.MongoDB.Jobs;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace Cratis.Orleans.Jobs.Integration.for_job_system;
+namespace Cratis.Choreography.Jobs.Integration.for_job_system;
 
 /// <summary>
 /// Shows, against a real MongoDB, that the rehydration read leaves finalized stops out in storage instead of reading

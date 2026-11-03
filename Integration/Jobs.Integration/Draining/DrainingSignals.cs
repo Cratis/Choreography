@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-namespace Cratis.Orleans.Jobs.Integration.Draining;
+namespace Cratis.Choreography.Jobs.Integration.Draining;
 
 /// <summary>
 /// Observes a draining step without timing-based waits: when it entered its work, saw cancellation and settled,

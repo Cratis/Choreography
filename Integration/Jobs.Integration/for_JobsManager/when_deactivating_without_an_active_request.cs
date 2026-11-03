@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager;
 
 public class when_deactivating_without_an_active_request : given.a_jobs_manager_with_lifecycle
 {

@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Chronicle.StateMachines;
+using Cratis.Choreography.Chronicle.StateMachines;
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Chronicle.Integration;
+namespace Cratis.Choreography.Chronicle.Integration;
 
 /// <summary>
 /// A real two-silo Orleans cluster hosting event-sourced state machines, with Chronicle's side - the read models and the

@@ -1,6 +1,6 @@
 ---
 title: Run your first job
-description: Add Cratis.Orleans to a service, define a job, and watch it survive a restart.
+description: Add Cratis.Choreography to a service, define a job, and watch it survive a restart.
 ---
 
 # Run your first job
@@ -15,8 +15,8 @@ You need the .NET 10 SDK and a MongoDB server running on `mongodb://localhost:27
 Create a minimal ASP.NET Core service and add the packages:
 
 ```bash
-dotnet add package Cratis.Orleans
-dotnet add package Cratis.Orleans.Storage.MongoDB
+dotnet add package Cratis.Choreography
+dotnet add package Cratis.Choreography.Storage.MongoDB
 ```
 
 ## 2. Host the silo and its storage
@@ -24,26 +24,26 @@ dotnet add package Cratis.Orleans.Storage.MongoDB
 In `Program.cs`, co-host the silo and give the job system its MongoDB storage:
 
 ```csharp
-using Cratis.Orleans.Hosting;
-using Cratis.Orleans.Setup;
+using Cratis.Choreography.Hosting;
+using Cratis.Choreography.Setup;
 using MongoDB.Driver;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.AddCratisOrleans(new CratisOrleansOptions
+builder.AddCratisChoreography(new CratisChoreographyOptions
 {
     ClusterId = "my-service",
     ServiceId = "my-service"
 });
 
-builder.Services.AddCratisOrleansMongoDBJobsStorage(
+builder.Services.AddCratisChoreographyMongoDBJobsStorage(
     new MongoClient("mongodb://localhost:27017"));
 
 var app = builder.Build();
 app.Run();
 ```
 
-`AddCratisOrleans` configures localhost clustering by default and keeps reminders on the in-memory 10.x
+`AddCratisChoreography` configures localhost clustering by default and keeps reminders on the in-memory 10.x
 reminder service - the safe arrangement for the current Orleans package graph. When you run more than one
 instance, switch to `ClusteringMode.MongoDB` for durable membership; see
 [Host the silo](../how-to/host-the-silo.md).
@@ -55,7 +55,7 @@ and a hanging step cannot stall the job's bookkeeping. Define a step for provisi
 
 ```csharp
 using Cratis.Monads;
-using Cratis.Orleans.Jobs;
+using Cratis.Choreography.Jobs;
 
 public record FeatureStepState : JobStepState;
 
@@ -86,7 +86,7 @@ it happens, which is what lets somebody watch progress rather than a spinner:
 
 ```csharp
 using System.Collections.Immutable;
-using Cratis.Orleans.Jobs;
+using Cratis.Choreography.Jobs;
 
 public record ProvisionTenant(string TenantId, string[] Features) : IJobRequest;
 

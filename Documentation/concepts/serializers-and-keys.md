@@ -7,7 +7,7 @@ description: The Orleans codecs for Cratis types, the JSON fallback, and typed c
 
 ## Serializers
 
-Orleans generates codecs for types it knows about. Cratis types — concepts (`ConceptAs<T>`), OneOf values, expando objects, LINQ iterator internals — need their own, and `AddCratisOrleans` registers them all through `AddCratisOrleansSerializers`:
+Orleans generates codecs for types it knows about. Cratis types — concepts (`ConceptAs<T>`), OneOf values, expando objects, LINQ iterator internals — need their own, and `AddCratisChoreography` registers them all through `AddCratisChoreographySerializers`:
 
 | Serializer | Owns |
 | --- | --- |

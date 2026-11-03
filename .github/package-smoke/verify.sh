@@ -10,16 +10,16 @@ version="0.0.0-packagecheck.$(date +%s).$$"
 mkdir -p "$work/packages" "$work/consumer"
 cp "$repo/.github/package-smoke/Consumer.csproj" "$repo/.github/package-smoke/Directory.Build.props" "$work/consumer/"
 
-for project in Orleans.Storage Orleans; do
+for project in Choreography.Storage Choreography; do
     dotnet pack "$repo/Source/$project/$project.csproj" -c Release -p:IsPackaging=true -p:Version="$version" --output "$work/packages"
 done
 
 for tfm in net8.0 net9.0 net10.0; do
-    echo "Checking packed Cratis.Orleans consumer for $tfm"
+    echo "Checking packed Cratis.Choreography consumer for $tfm"
     dotnet restore "$work/consumer/Consumer.csproj" \
         --packages "$work/nuget" \
         --source "$work/packages" --source https://api.nuget.org/v3/index.json \
-        -p:TargetFramework="$tfm" -p:CratisOrleansVersion="$version" --force
+        -p:TargetFramework="$tfm" -p:CratisChoreographyVersion="$version" --force
     python3 - "$work/consumer/obj/project.assets.json" "$tfm" <<'PY'
 import json
 import sys
@@ -37,5 +37,5 @@ assert all(version == packages['Microsoft.Orleans.Server'] for version in packag
 print(f"{sys.argv[2]}: {len(packages)} Microsoft.Orleans packages at {packages['Microsoft.Orleans.Server']}")
 PY
     dotnet build "$work/consumer/Consumer.csproj" --no-restore -c Release \
-        -p:TargetFramework="$tfm" -p:CratisOrleansVersion="$version"
+        -p:TargetFramework="$tfm" -p:CratisChoreographyVersion="$version"
 done

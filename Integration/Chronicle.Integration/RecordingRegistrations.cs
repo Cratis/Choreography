@@ -1,13 +1,13 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using Cratis.Choreography.Chronicle.StateMachines;
 using Cratis.Chronicle.Events;
 using Cratis.Chronicle.EventSequences;
 using Cratis.Chronicle.Projections;
 using Cratis.Chronicle.Reactors;
-using Cratis.Orleans.Chronicle.StateMachines;
 
-namespace Cratis.Orleans.Chronicle.Integration;
+namespace Cratis.Choreography.Chronicle.Integration;
 
 /// <summary>
 /// Records what the integration registers with Chronicle, and plays the part of Chronicle delivering events to the

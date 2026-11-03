@@ -1,9 +1,9 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Chronicle.StateMachines;
+using Cratis.Choreography.Chronicle.StateMachines;
 
-namespace Cratis.Orleans.Chronicle.Integration.Documents;
+namespace Cratis.Choreography.Chronicle.Integration.Documents;
 
 public interface IDocumentLifecycle : IEventSourcedStateMachine
 {

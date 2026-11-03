@@ -4,10 +4,10 @@
 #pragma warning disable IDE0005 // Using directive is unnecessary.
 
 global using System.Collections.Immutable;
+global using Cratis.Choreography.Storage.Jobs;
 global using Cratis.Concepts;
 global using Cratis.Execution;
 global using Cratis.Monads;
-global using Cratis.Orleans.Storage.Jobs;
 global using Cratis.Specifications;
 global using Cratis.Types;
 global using Microsoft.Extensions.Logging;

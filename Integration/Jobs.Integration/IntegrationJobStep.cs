@@ -1,9 +1,9 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Workers;
+using Cratis.Choreography.Workers;
 
-namespace Cratis.Orleans.Jobs.Integration;
+namespace Cratis.Choreography.Jobs.Integration;
 
 /// <summary>
 /// A step that performs short real work for one item.

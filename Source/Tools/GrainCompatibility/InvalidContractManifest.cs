@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-namespace Cratis.Orleans.Tools.GrainCompatibility;
+namespace Cratis.Choreography.Tools.GrainCompatibility;
 
 /// <summary>
 /// The exception that is thrown when an OrleansContracts.txt cannot be read as a contract manifest.

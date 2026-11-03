@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <AssemblyName>Cratis.Orleans.Tools.GrainCompatibility.Specs</AssemblyName>
-        <RootNamespace>Cratis.Orleans.Tools.GrainCompatibility</RootNamespace>
+        <AssemblyName>Cratis.Choreography.Tools.GrainCompatibility.Specs</AssemblyName>
+        <RootNamespace>Cratis.Choreography.Tools.GrainCompatibility</RootNamespace>
         <IsTestProject>true</IsTestProject>
         <IsPackable>false</IsPackable>
         <!-- xUnit v3 test projects are executables -->

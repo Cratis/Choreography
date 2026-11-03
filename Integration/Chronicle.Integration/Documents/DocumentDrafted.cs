@@ -3,7 +3,7 @@
 
 using Cratis.Chronicle.Events;
 
-namespace Cratis.Orleans.Chronicle.Integration.Documents;
+namespace Cratis.Choreography.Chronicle.Integration.Documents;
 
 [EventType]
 public record DocumentDrafted(string Title);

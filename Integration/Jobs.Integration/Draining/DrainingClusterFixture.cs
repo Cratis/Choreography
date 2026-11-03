@@ -1,12 +1,12 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.Recovery;
+using Cratis.Choreography.Jobs.Integration.Recovery;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Jobs.Integration.Draining;
+namespace Cratis.Choreography.Jobs.Integration.Draining;
 
 /// <summary>
 /// A two-silo cluster with a draining job and its step placed on the secondary silo.
@@ -81,8 +81,8 @@ public sealed class DrainingClusterFixture : IDisposable
     /// </summary>
     public IJobsManager Manager => Cluster.GrainFactory.GetJobsManager(Signals.Key.Scope, Signals.Key.Namespace);
 
-    Cratis.Orleans.Storage.JobsStorage Storage => ((InProcessSiloHandle)Cluster.Primary).SiloHost.Services
-        .GetRequiredService<Cratis.Orleans.Storage.IJobsStorage>()
+    Cratis.Choreography.Storage.JobsStorage Storage => ((InProcessSiloHandle)Cluster.Primary).SiloHost.Services
+        .GetRequiredService<Cratis.Choreography.Storage.IJobsStorage>()
         .GetFor(Signals.Key.Scope, Signals.Key.Namespace);
 
     /// <summary>

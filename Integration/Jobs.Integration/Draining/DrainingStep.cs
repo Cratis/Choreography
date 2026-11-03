@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.Recovery;
-using Cratis.Orleans.Workers;
+using Cratis.Choreography.Jobs.Integration.Recovery;
+using Cratis.Choreography.Workers;
 
-namespace Cratis.Orleans.Jobs.Integration.Draining;
+namespace Cratis.Choreography.Jobs.Integration.Draining;
 
 /// <summary>
 /// A step that keeps working until it is cancelled, placed on the silo a spec chooses.

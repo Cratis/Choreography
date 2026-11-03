@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-namespace Cratis.Orleans.Tools.GrainCompatibility.for_ContractComparison.when_comparing;
+namespace Cratis.Choreography.Tools.GrainCompatibility.for_ContractComparison.when_comparing;
 
 /// <summary>
 /// The change that broke rolling upgrades from 19.70 to 19.106 (Cratis/Chronicle#5272): Register gained an optional parameter,

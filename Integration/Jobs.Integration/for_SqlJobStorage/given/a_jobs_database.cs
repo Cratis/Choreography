@@ -3,14 +3,14 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Cratis.Choreography.Storage.Sql.Jobs;
 using Cratis.Json;
-using Cratis.Orleans.Storage.Sql.Jobs;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 
-namespace Cratis.Orleans.Jobs.Integration.for_SqlJobStorage.given;
+namespace Cratis.Choreography.Jobs.Integration.for_SqlJobStorage.given;
 
 public abstract class a_jobs_database : Specification, IDisposable
 {

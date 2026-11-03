@@ -1,0 +1,85 @@
+// Copyright (c) Cratis. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+using System.Collections.Concurrent;
+using Cratis.Choreography.Jobs;
+using Cratis.Choreography.Storage.MongoDB.Serialization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using MongoDB.Driver;
+
+namespace Cratis.Choreography.Storage.MongoDB;
+
+/// <summary>
+/// Represents a <see cref="IJobsStorage"/> implementation for MongoDB.
+/// </summary>
+/// <remarks>
+/// Initializes a new instance of the <see cref="MongoDBJobsStorage"/> class.
+/// </remarks>
+/// <param name="client">The <see cref="IMongoClient"/> to resolve databases from.</param>
+/// <param name="jobTypes"><see cref="IJobTypes"/> that knows about the job type associations.</param>
+/// <param name="customSerializers"><see cref="ICustomSerializers"/> that registers the BSON serializers job state relies on.</param>
+/// <param name="options"><see cref="MongoDBJobsStorageOptions"/> to use.</param>
+public class MongoDBJobsStorage(
+    IMongoClient client,
+    IJobTypes jobTypes,
+    ICustomSerializers customSerializers,
+    IOptions<MongoDBJobsStorageOptions> options) : IJobsStorage
+{
+    readonly ConcurrentDictionary<string, JobsStorage> _storageByScopeAndNamespace = new();
+    readonly ILoggerFactory _loggerFactory = NullLoggerFactory.Instance;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MongoDBJobsStorage"/> class with logging.
+    /// </summary>
+    /// <param name="client">The MongoDB client.</param>
+    /// <param name="jobTypes">The registered job types.</param>
+    /// <param name="customSerializers">The custom BSON serializers.</param>
+    /// <param name="options">The storage options.</param>
+    /// <param name="loggerFactory">The logger factory.</param>
+    public MongoDBJobsStorage(
+        IMongoClient client,
+        IJobTypes jobTypes,
+        ICustomSerializers customSerializers,
+        IOptions<MongoDBJobsStorageOptions> options,
+        ILoggerFactory loggerFactory)
+        : this(client, jobTypes, customSerializers, options) => _loggerFactory = loggerFactory;
+
+    /// <inheritdoc/>
+    public JobsStorage GetFor(string scope, string @namespace)
+    {
+        var key = KeyHelper.Combine(scope, @namespace);
+        if (_storageByScopeAndNamespace.TryGetValue(key, out var storage))
+        {
+            return storage;
+        }
+
+        // Conventions first: they decide the element names the class maps are built with, and the filters
+        // this storage uses assume those names. Registering after a class map has been built is too late.
+        ConventionPacks.EnsureRegistered();
+        customSerializers.Register();
+        var databaseName = options.Value.DatabaseNameResolver?.Invoke(scope, @namespace)
+            ?? DatabaseNames.ForJobs(scope, @namespace);
+        var database = client.GetDatabase(databaseName);
+        var retry = new TransientRetry(
+            options.Value.TransientRetryCount,
+            options.Value.TransientRetryBaseDelay,
+            TimeProvider.System,
+            _loggerFactory.CreateLogger<TransientRetry>());
+        storage = new JobsStorage(
+            new Jobs.JobStorage(database, jobTypes, _loggerFactory.CreateLogger<Jobs.JobStorage>(), retry),
+            new Jobs.JobStepStorage(database, retry))
+        {
+            StepPlans = new Jobs.JobStepPlanStorage(database, retry)
+        };
+        _storageByScopeAndNamespace.TryAdd(key, storage);
+        return storage;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Here the collections are recreated implicitly, so this only drops the cached handles.
+    /// </remarks>
+    public void Reset() => _storageByScopeAndNamespace.Clear();
+}

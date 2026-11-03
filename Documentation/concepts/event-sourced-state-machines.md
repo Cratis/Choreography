@@ -9,7 +9,7 @@ subscribes to the events that should change it, and hopes the two never disagree
 the grain storage is restored from a different point in time than the event log, they do disagree, and nothing tells
 you which one is right.
 
-`EventSourcedStateMachine<TModel>` in the `Cratis.Orleans.Chronicle` package removes the copy. The events in Chronicle
+`EventSourcedStateMachine<TModel>` in the `Cratis.Choreography.Chronicle` package removes the copy. The events in Chronicle
 are the only source of truth. The model is a Chronicle read model projected from them, the grain only ever reads it,
 and the state machine's current state is derived from the model every time the grain activates. Events the state
 machine is interested in are delivered to it, the model is re-read, and the transitions you declare for the event
@@ -71,7 +71,7 @@ the stored state:
 
 ```csharp
 using System.Collections.Immutable;
-using Cratis.Orleans.StateMachines;
+using Cratis.Choreography.StateMachines;
 
 public class Placed : State<Order>
 {
@@ -91,8 +91,8 @@ is a string-keyed grain interface:
 
 ```csharp
 using System.Collections.Immutable;
-using Cratis.Orleans.Chronicle.StateMachines;
-using Cratis.Orleans.StateMachines;
+using Cratis.Choreography.Chronicle.StateMachines;
+using Cratis.Choreography.StateMachines;
 
 public interface IOrderProcess : IEventSourcedStateMachine
 {
@@ -128,7 +128,7 @@ Chronicle and never writes anything.
 Call `AddEventSourcedStateMachines()` on the silo builder or the service collection, next to `AddCratisChronicle()`:
 
 ```csharp
-using Cratis.Orleans.Chronicle.Hosting;
+using Cratis.Choreography.Chronicle.Hosting;
 
 builder.AddCratisChronicle();
 builder.Host.UseOrleans(silo => silo.AddEventSourcedStateMachines());
@@ -209,7 +209,7 @@ Get a state machine from application code with the `IGrainFactory` extensions:
 
 ```csharp
 using Cratis.Chronicle;
-using Cratis.Orleans.Chronicle.StateMachines;
+using Cratis.Choreography.Chronicle.StateMachines;
 
 public class OrderShipping(IGrainFactory grainFactory, IEventStore eventStore)
 {

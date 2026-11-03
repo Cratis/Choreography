@@ -12,9 +12,9 @@ everything the engine needs.
 ## MongoDB
 
 ```csharp
-using Cratis.Orleans.Setup;
+using Cratis.Choreography.Setup;
 
-builder.Services.AddCratisOrleansMongoDBJobsStorage(
+builder.Services.AddCratisChoreographyMongoDBJobsStorage(
     new MongoClient("mongodb://localhost:27017"));
 ```
 
@@ -23,7 +23,7 @@ existing naming scheme - Chronicle, for instance, maps its event store and names
 names its own storage has always used - pass a resolver:
 
 ```csharp
-builder.Services.AddCratisOrleansMongoDBJobsStorage(
+builder.Services.AddCratisChoreographyMongoDBJobsStorage(
     new MongoClient("mongodb://localhost:27017"),
     options => options.DatabaseNameResolver =
         (scope, @namespace) => $"{scope}+es+{@namespace}");
@@ -38,11 +38,11 @@ The SQL provider is provider-agnostic: you decide, per scope and namespace, whic
 connection serve the jobs - SQL Server, PostgreSQL or SQLite:
 
 ```csharp
-using Cratis.Orleans.Setup;
-using Cratis.Orleans.Storage.Sql;
+using Cratis.Choreography.Setup;
+using Cratis.Choreography.Storage.Sql;
 using Microsoft.EntityFrameworkCore;
 
-builder.Services.AddCratisOrleansSqlJobsStorage(options =>
+builder.Services.AddCratisChoreographySqlJobsStorage(options =>
     options.OptionsResolver = (scope, @namespace) =>
         new DbContextOptionsBuilder<JobsDbContext>()
             .UseSqlServer($"Server=.;Database={scope}_jobs;Trusted_Connection=True;TrustServerCertificate=true")
@@ -58,9 +58,9 @@ your resolver is enough to get going; manage migrations yourself for production.
 For specs and for hosts that do not need jobs to survive a restart:
 
 ```csharp
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Storage;
 
-builder.Services.AddCratisOrleansInMemoryJobsStorage();
+builder.Services.AddCratisChoreographyInMemoryJobsStorage();
 ```
 
 ## What the engine does with the choice

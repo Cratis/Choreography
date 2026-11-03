@@ -19,14 +19,14 @@ import { parseArgs } from 'node:util';
 
 // The one canonical inventory: [project path, executable AssemblyName, scope].
 export const PROJECTS = [
-    ['Source/Orleans.Specs/Orleans.Specs.csproj', 'Cratis.Orleans.Specs', 'ordinary'],
-    ['Source/Orleans.Storage.Specs/Orleans.Storage.Specs.csproj', 'Cratis.Orleans.Storage.Specs', 'ordinary'],
-    ['Source/Orleans.Storage.MongoDB.Specs/Orleans.Storage.MongoDB.Specs.csproj', 'Cratis.Orleans.Storage.MongoDB.Specs', 'ordinary'],
-    ['Source/Orleans.Storage.Sql.Specs/Orleans.Storage.Sql.Specs.csproj', 'Cratis.Orleans.Storage.Sql.Specs', 'ordinary'],
-    ['Source/Orleans.Chronicle.Specs/Orleans.Chronicle.Specs.csproj', 'Cratis.Orleans.Chronicle.Specs', 'ordinary'],
-    ['Source/Tools/GrainCompatibility.Specs/GrainCompatibility.Specs.csproj', 'Cratis.Orleans.Tools.GrainCompatibility.Specs', 'ordinary'],
-    ['Integration/Jobs.Integration/Jobs.Integration.csproj', 'Cratis.Orleans.Jobs.Integration', 'integration'],
-    ['Integration/Chronicle.Integration/Chronicle.Integration.csproj', 'Cratis.Orleans.Chronicle.Integration', 'integration']
+    ['Source/Choreography.Specs/Choreography.Specs.csproj', 'Cratis.Choreography.Specs', 'ordinary'],
+    ['Source/Choreography.Storage.Specs/Choreography.Storage.Specs.csproj', 'Cratis.Choreography.Storage.Specs', 'ordinary'],
+    ['Source/Choreography.Storage.MongoDB.Specs/Choreography.Storage.MongoDB.Specs.csproj', 'Cratis.Choreography.Storage.MongoDB.Specs', 'ordinary'],
+    ['Source/Choreography.Storage.Sql.Specs/Choreography.Storage.Sql.Specs.csproj', 'Cratis.Choreography.Storage.Sql.Specs', 'ordinary'],
+    ['Source/Choreography.Chronicle.Specs/Choreography.Chronicle.Specs.csproj', 'Cratis.Choreography.Chronicle.Specs', 'ordinary'],
+    ['Source/Tools/GrainCompatibility.Specs/GrainCompatibility.Specs.csproj', 'Cratis.Choreography.Tools.GrainCompatibility.Specs', 'ordinary'],
+    ['Integration/Jobs.Integration/Jobs.Integration.csproj', 'Cratis.Choreography.Jobs.Integration', 'integration'],
+    ['Integration/Chronicle.Integration/Chronicle.Integration.csproj', 'Cratis.Choreography.Chronicle.Integration', 'integration']
 ];
 export const SCOPES = ['ordinary', 'integration', 'all'];
 const EXCLUDED_DIRECTORIES = new Set(['bin', 'obj', 'node_modules', '.git', '.ai-work', 'TestResults']);
@@ -71,10 +71,10 @@ export function checkInventory(root) {
     if (missing.length || unknown.length) {
         throw new ParityError(`Specification project inventory mismatch: missing=${JSON.stringify(missing)} unknown=${JSON.stringify(unknown)}`);
     }
-    const solution = join(root, 'Orleans.slnx');
+    const solution = join(root, 'Choreography.slnx');
     const members = new Set(existsSync(solution) ? [...readText(solution).matchAll(/Path="([^"]+)"/g)].map(m => m[1]) : []);
     const absent = sorted([...expected].filter(p => !members.has(p)));
-    if (absent.length) throw new ParityError(`Projects missing from Orleans.slnx: ${JSON.stringify(absent)}`);
+    if (absent.length) throw new ParityError(`Projects missing from Choreography.slnx: ${JSON.stringify(absent)}`);
 }
 
 /** Return the multiset (Map name -> count) of test names listed by `dotnet test --list-tests`. */

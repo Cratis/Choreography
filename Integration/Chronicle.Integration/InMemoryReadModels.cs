@@ -2,11 +2,11 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Collections.Concurrent;
+using Cratis.Choreography.Chronicle.StateMachines;
 using Cratis.Chronicle;
 using Cratis.Chronicle.ReadModels;
-using Cratis.Orleans.Chronicle.StateMachines;
 
-namespace Cratis.Orleans.Chronicle.Integration;
+namespace Cratis.Choreography.Chronicle.Integration;
 
 /// <summary>
 /// Stands in for the read models Chronicle projects, per event store namespace - what a projection has made of the

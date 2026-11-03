@@ -1,9 +1,9 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.Recovery;
+using Cratis.Choreography.Jobs.Integration.Recovery;
 
-namespace Cratis.Orleans.Jobs.Integration.for_Jobs;
+namespace Cratis.Choreography.Jobs.Integration.for_Jobs;
 
 [Collection(JobsClusterCollection.Name)]
 public class when_the_starting_silo_loses_the_job_host : Specification

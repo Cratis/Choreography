@@ -12,7 +12,7 @@ A **worker** is an Orleans grain that keeps a piece of work running in the backg
 Derive `GrainWithBackgroundTask<TWork, TResult>`, implement `PerformWork()`, and call `StartWork()`/`GetResult()`:
 
 ```csharp
-using Cratis.Orleans.Workers;
+using Cratis.Choreography.Workers;
 
 public interface IEternalWatch : IGrainWithGuidKey;
 

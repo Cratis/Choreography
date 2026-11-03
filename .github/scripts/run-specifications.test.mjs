@@ -12,16 +12,16 @@ const scripts = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scripts, '../..');
 
 const ordinary = [
-    ['Source/Orleans.Specs/Orleans.Specs.csproj', 'Cratis.Orleans.Specs'],
-    ['Source/Orleans.Storage.Specs/Orleans.Storage.Specs.csproj', 'Cratis.Orleans.Storage.Specs'],
-    ['Source/Orleans.Storage.MongoDB.Specs/Orleans.Storage.MongoDB.Specs.csproj', 'Cratis.Orleans.Storage.MongoDB.Specs'],
-    ['Source/Orleans.Storage.Sql.Specs/Orleans.Storage.Sql.Specs.csproj', 'Cratis.Orleans.Storage.Sql.Specs'],
-    ['Source/Orleans.Chronicle.Specs/Orleans.Chronicle.Specs.csproj', 'Cratis.Orleans.Chronicle.Specs'],
-    ['Source/Tools/GrainCompatibility.Specs/GrainCompatibility.Specs.csproj', 'Cratis.Orleans.Tools.GrainCompatibility.Specs']
+    ['Source/Choreography.Specs/Choreography.Specs.csproj', 'Cratis.Choreography.Specs'],
+    ['Source/Choreography.Storage.Specs/Choreography.Storage.Specs.csproj', 'Cratis.Choreography.Storage.Specs'],
+    ['Source/Choreography.Storage.MongoDB.Specs/Choreography.Storage.MongoDB.Specs.csproj', 'Cratis.Choreography.Storage.MongoDB.Specs'],
+    ['Source/Choreography.Storage.Sql.Specs/Choreography.Storage.Sql.Specs.csproj', 'Cratis.Choreography.Storage.Sql.Specs'],
+    ['Source/Choreography.Chronicle.Specs/Choreography.Chronicle.Specs.csproj', 'Cratis.Choreography.Chronicle.Specs'],
+    ['Source/Tools/GrainCompatibility.Specs/GrainCompatibility.Specs.csproj', 'Cratis.Choreography.Tools.GrainCompatibility.Specs']
 ];
 const integration = [
-    ['Integration/Jobs.Integration/Jobs.Integration.csproj', 'Cratis.Orleans.Jobs.Integration'],
-    ['Integration/Chronicle.Integration/Chronicle.Integration.csproj', 'Cratis.Orleans.Chronicle.Integration']
+    ['Integration/Jobs.Integration/Jobs.Integration.csproj', 'Cratis.Choreography.Jobs.Integration'],
+    ['Integration/Chronicle.Integration/Chronicle.Integration.csproj', 'Cratis.Choreography.Chronicle.Integration']
 ];
 const all = [...ordinary, ...integration];
 const ns = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010';
@@ -58,7 +58,7 @@ for ((i = 0; i < count; i++)); do echo "    $name$i"; done
     mkdirSync(join(directory, 'discovered'));
     const rows = all.filter(([path]) => path !== omitProject);
     const solution = all.filter(([path]) => path !== omitSolution).map(([path]) => `<Project Path="${path}" />`);
-    writeFileSync(join(directory, 'Orleans.slnx'), `<Solution>${solution.join('')}</Solution>`);
+    writeFileSync(join(directory, 'Choreography.slnx'), `<Solution>${solution.join('')}</Solution>`);
     const projectFiles = [...rows.map(([path]) => path), ...(extraProject ? [extraProject] : [])];
     for (const path of projectFiles) {
         mkdirSync(dirname(join(directory, path)), { recursive: true });
@@ -86,8 +86,8 @@ exit ${exits[name] ?? 0}
     }
     const results = join(directory, 'results');
     if (preexisting) {
-        mkdirSync(join(results, 'Orleans.Specs'), { recursive: true });
-        writeFileSync(join(results, 'Orleans.Specs/Orleans.Specs.trx'), trx(1, 'Stale'));
+        mkdirSync(join(results, 'Choreography.Specs'), { recursive: true });
+        writeFileSync(join(results, 'Choreography.Specs/Choreography.Specs.trx'), trx(1, 'Stale'));
     }
     const run = spawnSync('bash', [join(target, 'run-specifications.sh'), ...args.map(a => a === '@results' ? results : a)], {
         encoding: 'utf8',
@@ -109,7 +109,7 @@ test('all scope runs six ordinary and two integration projects sequentially', t 
     assert.equal(executed(result), 8);
     assert.equal(result.started.split('\n').filter(l => l.startsWith('start')).length, 8);
     assert.doesNotMatch(result.output, /CONCURRENT/);
-    assert.equal(readdirSync(join(result.results, 'Orleans.Specs')).filter(n => n.endsWith('.trx')).length, 1);
+    assert.equal(readdirSync(join(result.results, 'Choreography.Specs')).filter(n => n.endsWith('.trx')).length, 1);
 });
 
 test('ordinary scope never runs integration projects', t => {
@@ -137,8 +137,8 @@ test('runs exactly one selected project', t => {
 test('rejects an unknown project and one outside the scope before running anything', async t => {
     for (const [args, message] of [
         [['Debug', '--project', 'Source/Other.Specs/Other.Specs.csproj'], /Unknown specification project/],
-        [['Debug', '--project', 'Source/Orleans.Specs'], /Unknown specification project/],
-        [['Debug', '--project', 'Orleans.Specs/Orleans.Specs.csproj'], /Unknown specification project/],
+        [['Debug', '--project', 'Source/Choreography.Specs'], /Unknown specification project/],
+        [['Debug', '--project', 'Choreography.Specs/Choreography.Specs.csproj'], /Unknown specification project/],
         [['Debug', '--scope', 'ordinary', '--project', 'Integration/Jobs.Integration/Jobs.Integration.csproj'], /outside scope 'ordinary'/]
     ]) {
         await t.test(args.join(' '), child => {
@@ -167,14 +167,14 @@ test('rejects an extra discovered specification project', t => {
 test('rejects a project missing from the solution', t => {
     const result = fixture(t, { omitSolution: 'Integration/Jobs.Integration/Jobs.Integration.csproj' });
     assert.equal(result.status, 2, result.output);
-    assert.match(result.output, /missing from Orleans.slnx/);
+    assert.match(result.output, /missing from Choreography.slnx/);
     assert.equal(executed(result), 0);
 });
 
 test('checks every executable before starting any project', t => {
-    const result = fixture(t, { missing: 'Cratis.Orleans.Chronicle.Integration' });
+    const result = fixture(t, { missing: 'Cratis.Choreography.Chronicle.Integration' });
     assert.equal(result.status, 2, result.output);
-    assert.match(result.output, /Missing specification executable: .*Cratis.Orleans.Chronicle.Integration/);
+    assert.match(result.output, /Missing specification executable: .*Cratis.Choreography.Chronicle.Integration/);
     assert.equal(executed(result), 0);
 });
 
@@ -185,56 +185,56 @@ test('rejects a scope with no projects and an unknown scope', t => {
 });
 
 test('finishes every project and preserves the first nonzero child status, even with a positive TRX', t => {
-    const result = fixture(t, { exits: { 'Orleans.Storage.Specs': 7, 'Orleans.Specs': 3 } });
+    const result = fixture(t, { exits: { 'Choreography.Storage.Specs': 7, 'Choreography.Specs': 3 } });
     assert.equal(result.status, 3, result.output);
-    assert.match(result.output, /::error::Orleans.Specs exited with 3/);
-    assert.match(result.output, /::error::Orleans.Storage.Specs exited with 7/);
+    assert.match(result.output, /::error::Choreography.Specs exited with 3/);
+    assert.match(result.output, /::error::Choreography.Storage.Specs exited with 7/);
     assert.equal(executed(result), 8);
     assert.doesNotMatch(result.output, /Validated/);
 });
 
 test('rejects zero tests even when the executable succeeds', t => {
-    const result = fixture(t, { documents: { 'Orleans.Storage.Specs': trx(0, 'Zero') }, counts: {} });
+    const result = fixture(t, { documents: { 'Choreography.Storage.Specs': trx(0, 'Zero') }, counts: {} });
     assert.equal(result.status, 1, result.output);
-    assert.match(result.output, /::error::.*Orleans.Storage.Specs/);
+    assert.match(result.output, /::error::.*Choreography.Storage.Specs/);
     assert.doesNotMatch(result.output, /Validated/);
 });
 
 test('rejects a missing TRX', t => {
-    const result = fixture(t, { noTrx: 'Orleans.Chronicle.Specs' });
+    const result = fixture(t, { noTrx: 'Choreography.Chronicle.Specs' });
     assert.equal(result.status, 1, result.output);
-    assert.match(result.output, /Orleans.Chronicle.Specs produced no valid TRX/);
+    assert.match(result.output, /Choreography.Chronicle.Specs produced no valid TRX/);
 });
 
 test('rejects a malformed TRX', t => {
-    const result = fixture(t, { documents: { 'Orleans.Specs': '<TestRun' } });
+    const result = fixture(t, { documents: { 'Choreography.Specs': '<TestRun' } });
     assert.equal(result.status, 1, result.output);
-    assert.match(result.output, /Orleans.Specs: invalid TRX/);
+    assert.match(result.output, /Choreography.Specs: invalid TRX/);
 });
 
 test('rejects zero discovery', t => {
-    const result = fixture(t, { discovered: { 'Orleans.Specs': 0 } });
+    const result = fixture(t, { discovered: { 'Choreography.Specs': 0 } });
     assert.equal(result.status, 1, result.output);
     assert.match(result.output, /No discovered tests/);
 });
 
 test('rejects a discovery and execution mismatch', t => {
-    const result = fixture(t, { discovered: { 'Orleans.Specs': 3 } });
+    const result = fixture(t, { discovered: { 'Choreography.Specs': 3 } });
     assert.equal(result.status, 1, result.output);
     assert.match(result.output, /discovery listed 3 tests but the TRX holds 1/);
 });
 
 test('a failing discovery fails the project without running it', t => {
-    const result = fixture(t, { discoveryExit: { 'Orleans.Specs': 5 } });
+    const result = fixture(t, { discoveryExit: { 'Choreography.Specs': 5 } });
     assert.equal(result.status, 5, result.output);
-    assert.match(result.output, /Orleans.Specs discovery exited with 5/);
+    assert.match(result.output, /Choreography.Specs discovery exited with 5/);
     assert.equal(executed(result), 7);
 });
 
 test('does not reuse stale results for a project', t => {
-    const result = fixture(t, { args: ['Debug', '--results', '@results'], preexisting: true, noTrx: 'Orleans.Specs' });
+    const result = fixture(t, { args: ['Debug', '--results', '@results'], preexisting: true, noTrx: 'Choreography.Specs' });
     assert.equal(result.status, 1, result.output);
-    assert.match(result.output, /Orleans.Specs produced no valid TRX/);
+    assert.match(result.output, /Choreography.Specs produced no valid TRX/);
 });
 
 test('accepts the Windows executable suffix', t => {

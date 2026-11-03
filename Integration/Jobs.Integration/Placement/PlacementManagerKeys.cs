@@ -3,7 +3,7 @@
 
 using Cratis.DependencyInjection;
 
-namespace Cratis.Orleans.Jobs.Integration.Placement;
+namespace Cratis.Choreography.Jobs.Integration.Placement;
 
 [Singleton]
 public sealed class PlacementManagerKeys(PlacementSignals signals) : IJobsManagerKeys

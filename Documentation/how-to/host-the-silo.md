@@ -16,31 +16,31 @@ with it.
 ## Host the silo
 
 ```csharp
-using Cratis.Orleans.Hosting;
+using Cratis.Choreography.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.AddCratisOrleans(new CratisOrleansOptions
+builder.AddCratisChoreography(new CratisChoreographyOptions
 {
     ClusterId = "my-service",
     ServiceId = "my-service"
 });
 
-builder.Services.AddCratisOrleansMongoDBJobsStorage(
+builder.Services.AddCratisChoreographyMongoDBJobsStorage(
     new MongoClient("mongodb://localhost:27017"));
 
 var app = builder.Build();
 app.Run();
 ```
 
-`AddCratisOrleans` brings the whole job system: the job, job step and jobs manager grains, their storage
+`AddCratisChoreography` brings the whole job system: the job, job step and jobs manager grains, their storage
 providers, the Cratis serializers, and the silo configuration below. All options are listed in
 [Options](../reference/options.md).
 
-`AddCratisOrleans` already enables Orleans activity propagation, so trace context follows grain calls. You do
+`AddCratisChoreography` already enables Orleans activity propagation, so trace context follows grain calls. You do
 not need to call `AddActivityPropagation()` in your own `UseOrleans` delegate. If you keep an explicit call,
-call it **before** `AddCratisOrleans`; Cratis then keeps the existing propagation filters without adding duplicates.
-Do not call `AddActivityPropagation()` **after** `AddCratisOrleans`: Orleans 10.3.1 registers both propagation
+call it **before** `AddCratisChoreography`; Cratis then keeps the existing propagation filters without adding duplicates.
+Do not call `AddActivityPropagation()` **after** `AddCratisChoreography`: Orleans 10.3.1 registers both propagation
 filters again, producing duplicate spans. Tenant context stays in Orleans request context, not in activity baggage.
 
 ## Clustering
@@ -49,7 +49,7 @@ Locally the silo uses localhost clustering - one instance, no membership table. 
 instance, switch to durable MongoDB membership:
 
 ```csharp
-builder.AddCratisOrleans(new CratisOrleansOptions
+builder.AddCratisChoreography(new CratisChoreographyOptions
 {
     ClusterId = "my-service",
     ServiceId = "my-service",
@@ -65,11 +65,11 @@ A silo for development, tests, or a runtime that hosts one silo does not need Mo
 cluster on localhost:
 
 ```csharp
-builder.AddCratisOrleans(CratisOrleansOptions.Local());
+builder.AddCratisChoreography(CratisChoreographyOptions.Local());
 ```
 
 Jobs, job steps and, with `Workflows = true`, workflow runs live in the silo's memory and nothing survives the process.
-The in-memory jobs storage is registered for you, so do not call `AddCratisOrleansMongoDBJobsStorage`.
+The in-memory jobs storage is registered for you, so do not call `AddCratisChoreographyMongoDBJobsStorage`.
 
 ## Host the workflow engine
 
@@ -77,7 +77,7 @@ Set `Workflows = true` to host the [workflow engine](../concepts/workflows.md) w
 grain storage provider, the journal, the sweep and node execution:
 
 ```csharp
-builder.AddCratisOrleans(new CratisOrleansOptions
+builder.AddCratisChoreography(new CratisChoreographyOptions
 {
     Workflows = true,
     ConfigureWorkflows = options => options.Scopes.Add("tenant-1")
@@ -104,7 +104,7 @@ with your own `IPlacementDirector`. Directors choose among the compatible silos;
 metadata published with `UseSiloMetadata`:
 
 ```csharp
-using Cratis.Orleans.Jobs.Placement;
+using Cratis.Choreography.Jobs.Placement;
 using Orleans.Runtime.MembershipService.SiloMetadata;
 using Orleans.Runtime.Placement;
 
@@ -131,22 +131,22 @@ Enable the job or job-step placement strategy only once every silo in the cluste
 
 `UseJobStepParallelismFromSiloMetadata()` makes each silo read its step limit from the silo metadata key
 `cratis.jobs.max-parallel-steps` (pass another key as the argument). A missing, unparseable or non-positive value
-falls back to the `JobsOptions` limit. Call it after `AddCratisOrleans`, which registers the default throttle.
+falls back to the `JobsOptions` limit. Call it after `AddCratisChoreography`, which registers the default throttle.
 
 ## Reminders stay in-memory - deliberately
 
 `Orleans.Providers.MongoDB` has no Orleans 10 release; 9.5.0 is a 9.x binary. Only its cluster membership and
 grain storage are safe on the 10.x runtime. Pointing the 10.x reminder service at its 9.x reminder table
-hangs the first `RegisterOrUpdateReminder` and times out the calling grain - so `AddCratisOrleans` keeps
+hangs the first `RegisterOrUpdateReminder` and times out the calling grain - so `AddCratisChoreography` keeps
 reminders on Orleans' own in-memory service in both clustering modes. The job system does not use reminders.
-`AddCratisOrleans` requests recovery after the silo becomes Active and when cluster membership reports a dead silo.
+`AddCratisChoreography` requests recovery after the silo becomes Active and when cluster membership reports a dead silo.
 Supply a singleton `IJobsManagerKeys` provider on every silo with all your storage scopes and namespaces: the default
 knows only managers activated on that silo and warns at startup when no host provider is present. Follow the
 [event-store × tenant-namespace example](../concepts/jobs.md#tell-recovery-which-namespaces-exist) for complete
 recovery, including namespaces a surviving silo has never served.
 
 If you configure Orleans directly instead, register the jobs collaborators and storage, then call
-`siloBuilder.AddCratisOrleansJobsRecovery()` from `Cratis.Orleans.Hosting`. Interrupted steps may execute again;
+`siloBuilder.AddCratisChoreographyJobsRecovery()` from `Cratis.Choreography.Hosting`. Interrupted steps may execute again;
 automatic recovery preserves durable stops rather than treating them as interrupted work.
 
 ## Disabling the silo
@@ -156,7 +156,7 @@ want the registrations without a silo.
 
 ## The alignment guard
 
-Every project referencing `Cratis.Orleans` gets a Release-build check that fails the moment
+Every project referencing `Cratis.Choreography` gets a Release-build check that fails the moment
 `Microsoft.Orleans.Reminders` resolves to a different version than `Microsoft.Orleans.Server` - the exact
 mismatch that ships silently in Debug and throws `MissingMethodException` in production. Keep the Orleans
 package versions pinned together in `Directory.Packages.props`.

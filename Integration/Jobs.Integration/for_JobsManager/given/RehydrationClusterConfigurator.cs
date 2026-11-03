@@ -2,7 +2,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Reactive.Subjects;
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -11,15 +11,15 @@ using Orleans.TestingHost;
 
 using Catch = Cratis.Monads.Catch;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
 
 public class RehydrationClusterConfigurator : ISiloConfigurator, IClientBuilderConfigurator
 {
-    public void Configure(IConfiguration configuration, IClientBuilder clientBuilder) => clientBuilder.Services.AddCratisOrleansSerializers();
+    public void Configure(IConfiguration configuration, IClientBuilder clientBuilder) => clientBuilder.Services.AddCratisChoreographySerializers();
 
     public void Configure(ISiloBuilder siloBuilder)
     {
-        siloBuilder.Services.AddCratisOrleansSerializers();
+        siloBuilder.Services.AddCratisChoreographySerializers();
         var lifecycle = new RehydrationLifecycle();
         var jobs = Enumerable.Range(0, 7)
             .Select(index => new JobState { Id = JobId.New(), Type = new JobType("RemovedJob"), Status = JobStatus.Running, Created = DateTimeOffset.UtcNow.AddSeconds(index) })

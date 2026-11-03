@@ -2,9 +2,9 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Collections.Concurrent;
-using Cratis.Orleans.Workers;
+using Cratis.Choreography.Workers;
 
-namespace Cratis.Orleans.Jobs.Integration;
+namespace Cratis.Choreography.Jobs.Integration;
 
 /// <summary>
 /// Holds one job's work before PerformStep and observes its stop callback without timing-based waits.

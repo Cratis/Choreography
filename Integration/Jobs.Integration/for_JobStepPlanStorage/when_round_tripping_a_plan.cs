@@ -4,7 +4,7 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobStepPlanStorage;
+namespace Cratis.Choreography.Jobs.Integration.for_JobStepPlanStorage;
 
 [Collection(JobsClusterCollection.Name)]
 public class when_round_tripping_a_plan : given.a_plan_store

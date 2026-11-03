@@ -1,9 +1,9 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.Placement;
+using Cratis.Choreography.Jobs.Integration.Placement;
 
-namespace Cratis.Orleans.Jobs.Integration.for_Placement;
+namespace Cratis.Choreography.Jobs.Integration.for_Placement;
 
 [Collection(JobsClusterCollection.Name)]
 public class placing_controllers_and_workers_separately : Specification

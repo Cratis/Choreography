@@ -1,12 +1,12 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Storage.MongoDB;
-using Cratis.Orleans.Storage.MongoDB.Jobs;
+using Cratis.Choreography.Storage.MongoDB;
+using Cratis.Choreography.Storage.MongoDB.Jobs;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobStepPlanStorage.given;
+namespace Cratis.Choreography.Jobs.Integration.for_JobStepPlanStorage.given;
 
 public class a_plan_store : Specification
 {

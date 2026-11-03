@@ -80,7 +80,7 @@ starting catch-up again; deleting a job alone does not reset observer-owned stat
 **Known limitation.** A lost acknowledgement of a `Running` write can still leave a job idle after step-delivery retries
 are exhausted. The retained plan prevents data loss, but does not schedule another activation. Explicit rehydration, a
 silo restart or a membership change can recover it. Durable reconciliation is tracked in
-[Cratis/Orleans#177](https://github.com/Cratis/Orleans/issues/177).
+[Cratis/Orleans#177](https://github.com/Cratis/Choreography/issues/177).
 
 ## Initialize before dispatch on start and resume
 
@@ -206,8 +206,8 @@ waiting state for a job that has no worker.
 
 During a rolling upgrade, a shared jobs manager may still run on the older release. Calling its generic
 `Start<TJob, TRequest>` or `GetJobsOfType<TJob, TRequest>` sends those types to that silo, which cannot decode a
-job or request introduced by the newer release. Use the singleton `IJobs` from `Cratis.Orleans.Jobs` for
-starting, stopping and deleting instead. `AddCratisOrleans` registers it with the host.
+job or request introduced by the newer release. Use the singleton `IJobs` from `Cratis.Choreography.Jobs` for
+starting, stopping and deleting instead. `AddCratisChoreography` registers it with the host.
 
 `IJobs` is a local service, not a grain. It addresses the job grain directly from the caller's release;
 Orleans places that grain on a silo that hosts its type. No generic job or request type passes through the
@@ -220,7 +220,7 @@ serializable `RebuildIndexRequest : IJobRequest` and `IRebuildTenantIndex : IJob
 ```csharp
 using System.Threading.Tasks;
 using Cratis.Monads;
-using Cratis.Orleans.Jobs;
+using Cratis.Choreography.Jobs;
 
 public class TenantJobs(IJobs jobs)
 {
@@ -709,7 +709,7 @@ this is not a standalone job implementation.
 ```csharp
 using System.Threading.Tasks;
 using Cratis.Monads;
-using Cratis.Orleans.Jobs;
+using Cratis.Choreography.Jobs;
 
 public interface IWorkerJob : IJob<WorkerRequest>
 {
@@ -831,7 +831,7 @@ was. `IJobsManager.Stop` returns that result instead of discarding it.
 
 ## Rehydration
 
-A crashed silo leaves durable `Running` state behind, not a live performer. `AddCratisOrleans` installs a recovery
+A crashed silo leaves durable `Running` state behind, not a live performer. `AddCratisChoreography` installs a recovery
 participant that asks the jobs managers to rehydrate after the silo becomes Active. When Orleans declares a
 cluster member Dead, the oldest Active silo requests another recovery pass when you provide a host key catalog.
 The election uses the silo's generation and breaks ties by address. Without a host catalog, every surviving silo
@@ -952,7 +952,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Cratis.Orleans.Jobs;
+using Cratis.Choreography.Jobs;
 
 public sealed record JobRecoveryCatalog(
     IReadOnlyDictionary<string, IReadOnlyList<string>> TenantNamespacesByEventStore);
@@ -983,5 +983,5 @@ builder.Services.AddSingleton<StudioJobsManagerKeys>();
 
 These are the actual scope/namespace pairs passed to `GetJobsManager`, not database names. Include a default
 namespace explicitly if your application uses one. For a separately configured silo, call
-`ISiloBuilder.AddCratisOrleansJobsRecovery()` from `Cratis.Orleans.Hosting` after registering the job system and
-storage; `AddCratisOrleans` already does this (see [Host the silo](../how-to/host-the-silo.md)).
+`ISiloBuilder.AddCratisChoreographyJobsRecovery()` from `Cratis.Choreography.Hosting` after registering the job system and
+storage; `AddCratisChoreography` already does this (see [Host the silo](../how-to/host-the-silo.md)).

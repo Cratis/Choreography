@@ -1,11 +1,11 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.Stages;
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Jobs.Integration.Stages;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Cratis.Orleans.Jobs.Integration.for_job_system.when_running_a_job_in_stages.given;
+namespace Cratis.Choreography.Jobs.Integration.for_job_system.when_running_a_job_in_stages.given;
 
 /// <summary>
 /// Runs a <see cref="StagedIntegrationJob"/> to completion against a real co-hosted silo and a real MongoDB.

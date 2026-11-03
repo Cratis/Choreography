@@ -1,15 +1,15 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Chronicle.Integration.Workflows;
-using Cratis.Orleans.Workflows;
-using Cratis.Orleans.Workflows.Contracts;
-using Cratis.Orleans.Workflows.Definitions;
-using Cratis.Orleans.Workflows.Graphs;
-using Cratis.Orleans.Workflows.Runs;
-using Cratis.Orleans.Workflows.Triggers;
+using Cratis.Choreography.Chronicle.Integration.Workflows;
+using Cratis.Choreography.Workflows;
+using Cratis.Choreography.Workflows.Contracts;
+using Cratis.Choreography.Workflows.Definitions;
+using Cratis.Choreography.Workflows.Graphs;
+using Cratis.Choreography.Workflows.Runs;
+using Cratis.Choreography.Workflows.Triggers;
 
-namespace Cratis.Orleans.Chronicle.Integration.for_event_sourced_workflows;
+namespace Cratis.Choreography.Chronicle.Integration.for_event_sourced_workflows;
 
 /// <summary>
 /// A run waits on a timer. The silo that holds some of the runs goes away; the runs it held are rebuilt from the facts in the

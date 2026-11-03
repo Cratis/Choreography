@@ -90,7 +90,7 @@ jobs:
         with:
           message: |
             NuGet packages for this PR, e.g. Cratis:
-            https://github.com/cratis/Orleans/packages/1655206?version=${{ needs.release.outputs.version }}
+            https://github.com/cratis/Choreography/packages/1655206?version=${{ needs.release.outputs.version }}
           allow-repeats: false
 
   publish-npm-packages:

@@ -1,0 +1,22 @@
+<Solution>
+    <Folder Name="/Source/">
+        <Project Path="Source/Choreography/Choreography.csproj" />
+        <Project Path="Source/Choreography.Specs/Choreography.Specs.csproj" />
+        <Project Path="Source/Choreography.Storage/Choreography.Storage.csproj" />
+        <Project Path="Source/Choreography.Storage.MongoDB/Choreography.Storage.MongoDB.csproj" />
+        <Project Path="Source/Choreography.Storage.Sql/Choreography.Storage.Sql.csproj" />
+        <Project Path="Source/Choreography.Storage.Specs/Choreography.Storage.Specs.csproj" />
+        <Project Path="Source/Choreography.Storage.MongoDB.Specs/Choreography.Storage.MongoDB.Specs.csproj" />
+        <Project Path="Source/Choreography.Storage.Sql.Specs/Choreography.Storage.Sql.Specs.csproj" />
+        <Project Path="Source/Choreography.Chronicle/Choreography.Chronicle.csproj" />
+        <Project Path="Source/Choreography.Chronicle.Specs/Choreography.Chronicle.Specs.csproj" />
+    </Folder>
+    <Folder Name="/Source/Tools/">
+        <Project Path="Source/Tools/GrainCompatibility/GrainCompatibility.csproj" />
+        <Project Path="Source/Tools/GrainCompatibility.Specs/GrainCompatibility.Specs.csproj" />
+    </Folder>
+    <Folder Name="/Integration/">
+        <Project Path="Integration/Chronicle.Integration/Chronicle.Integration.csproj" />
+        <Project Path="Integration/Jobs.Integration/Jobs.Integration.csproj" />
+    </Folder>
+</Solution>
