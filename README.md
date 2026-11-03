@@ -88,6 +88,15 @@ It is consolidated here from [Chronicle](https://github.com/Cratis/Chronicle) (t
 | **Reminder Safety** | The 9.x MongoDB provider's reminder table hangs the 10.x reminder service — the hosting keeps reminders on the in-memory service and the knowledge lives here once |
 | **Alignment Guard** | `Cratis.Choreography` depends directly on Orleans 10 Reminders for .NET 8, 9 and 10, so the MongoDB provider's Orleans 9 dependency cannot split a consumer's graph. The `buildTransitive` target also fails Release builds if Reminders drifts from Server. |
 
+### 🩹 Startup Patching
+
+| | |
+|---|---|
+| **Patches by Convention** | Implement `ICanApplyPatch` and the patch is discovered — it runs once per store, oldest first, with your services injected |
+| **Safe on Rolling Upgrades** | Only the newest host applies patches; an older host applies nothing, and the patch manager moves to a newer host's silo before it patches |
+| **Recorded After They Run** | A patch that fails stops the host from starting and is attempted again on the next start |
+| **Pluggable Records** | The record of applied patches lives in MongoDB, SQL or memory, once per store |
+
 ### 🔧 Building Blocks
 
 | | |
@@ -102,9 +111,9 @@ It is consolidated here from [Chronicle](https://github.com/Cratis/Chronicle) (t
 | Package | What it holds |
 |---|---|
 | [`Cratis.Choreography`](http://nuget.org/packages/cratis.choreography) | The workflow engine, state machines, the job engine, Workers, typed grain keys, serializers, silo hosting |
-| [`Cratis.Choreography.Storage`](http://nuget.org/packages/cratis.choreography.storage) | The jobs storage API, the scope resolver, the in-memory provider |
-| [`Cratis.Choreography.Storage.MongoDB`](http://nuget.org/packages/cratis.choreography.storage.mongodb) | The MongoDB storage provider |
-| [`Cratis.Choreography.Storage.Sql`](http://nuget.org/packages/cratis.choreography.storage.sql) | The SQL storage provider (EF Core; net10, matching EF Core 10) |
+| [`Cratis.Choreography.Storage`](http://nuget.org/packages/cratis.choreography.storage) | The jobs and patch storage APIs, the scope resolver, the in-memory providers |
+| [`Cratis.Choreography.Storage.MongoDB`](http://nuget.org/packages/cratis.choreography.storage.mongodb) | The MongoDB jobs and patch storage provider |
+| [`Cratis.Choreography.Storage.Sql`](http://nuget.org/packages/cratis.choreography.storage.sql) | The SQL jobs and patch storage provider (EF Core; net10, matching EF Core 10) |
 | [`Cratis.Choreography.Chronicle`](http://nuget.org/packages/cratis.choreography.chronicle) | Event-sourced state machines and workflows driven by Chronicle events |
 
 ## 🚀 Getting Started
