@@ -22,11 +22,20 @@ public class a_plan_store : Specification
     protected Func<Task>? _beforeDelete;
     protected Func<int, Task>? _afterInsert;
 
+    /// <summary>
+    /// Gets the database holding the plans. Plans saved without a job state are orphans that the cluster's running
+    /// <see cref="JobsManager"/> grains legitimately reap, so by default they live in a database the cluster never reads.
+    /// Specs that exercise the cluster's own manager override this to share the cluster database.
+    /// </summary>
+    protected virtual string PlanDatabaseName => JobsClusterFixture.DatabaseName + "-plan-store";
+
     void Establish()
     {
         _ = JobsClusterFixture.Shared;
         JobsClusterFixture.ResetStorage();
-        var database = new MongoClient(JobsClusterFixture.ConnectionString).GetDatabase(JobsClusterFixture.DatabaseName);
+        var client = new MongoClient(JobsClusterFixture.ConnectionString);
+        client.DropDatabase(PlanDatabaseName);
+        var database = client.GetDatabase(PlanDatabaseName);
         _collection = database.GetCollection<BsonDocument>(WellKnownCollectionNames.JobStepPlans);
         var retry = new TransientRetry(1, TimeSpan.Zero);
         _store = new(database, retry);

@@ -12,6 +12,8 @@ namespace Cratis.Orleans.Jobs.Integration.for_JobStepPlanStorage;
 [Collection(JobsClusterCollection.Name)]
 public class when_cleanup_overlaps_a_plan_save : given.a_plan_store
 {
+    protected override string PlanDatabaseName => JobsClusterFixture.DatabaseName;
+
     TaskCompletionSource _published = new(TaskCreationOptions.RunContinuationsAsynchronously);
     TaskCompletionSource _continue = new(TaskCreationOptions.RunContinuationsAsynchronously);
     long _retainedDuringSave;

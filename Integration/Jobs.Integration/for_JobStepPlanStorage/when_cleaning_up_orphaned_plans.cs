@@ -10,6 +10,8 @@ namespace Cratis.Orleans.Jobs.Integration.for_JobStepPlanStorage;
 [Collection(JobsClusterCollection.Name)]
 public class when_cleaning_up_orphaned_plans : given.a_plan_store
 {
+    protected override string PlanDatabaseName => JobsClusterFixture.DatabaseName;
+
     JobId _running = JobId.New();
     JobId _terminal = JobId.New();
 
