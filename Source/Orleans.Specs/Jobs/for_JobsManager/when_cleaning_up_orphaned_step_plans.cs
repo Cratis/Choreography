@@ -8,22 +8,36 @@ namespace Cratis.Orleans.Jobs.for_JobsManager;
 
 public class when_cleaning_up_orphaned_step_plans : given.the_manager
 {
-    static readonly JobId _missingJobId = Guid.Parse("0e6a1e0b-3c0c-4d0b-8f6f-7d9e2b5a1c01");
-    static readonly JobId _runningJobId = Guid.Parse("0e6a1e0b-3c0c-4d0b-8f6f-7d9e2b5a1c02");
-    static readonly JobId _failedJobId = Guid.Parse("0e6a1e0b-3c0c-4d0b-8f6f-7d9e2b5a1c03");
-    static readonly JobId _preparingJobId = Guid.Parse("0e6a1e0b-3c0c-4d0b-8f6f-7d9e2b5a1c04");
+    JobId _missingJobId = JobId.New();
+    List<JobId> _liveJobs = [];
+    List<JobId> _terminalJobs = [];
     JobStepPlanStorage _plans = new();
 
     protected override IJobStepPlanStorage? CreatePlanStore() => _plans;
 
     async Task Establish()
     {
-        AddJob<INullJobWithSomeRequest>(_runningJobId);
-        AddJob<INullJobWithSomeRequest>(_failedJobId);
-        AddJob<INullJobWithSomeRequest>(_preparingJobId);
-        _storedJobs.Single(job => job.Id == _failedJobId).Status = JobStatus.Failed;
-        _storedJobs.Single(job => job.Id == _preparingJobId).Status = JobStatus.PreparingSteps;
-        foreach (var id in new[] { _missingJobId, _runningJobId, _failedJobId, _preparingJobId })
+        foreach (var status in Enum.GetValues<JobStatus>())
+        {
+            var id = JobId.New();
+            AddJob<INullJobWithSomeRequest>(id);
+            _storedJobs.Single(job => job.Id == id).Status = status;
+            if (status is JobStatus.CompletedSuccessfully or JobStatus.CompletedWithFailures or JobStatus.Failed)
+            {
+                _terminalJobs.Add(id);
+            }
+            else
+            {
+                _liveJobs.Add(id);
+            }
+        }
+        var finalStop = JobId.New();
+        AddJob<INullJobWithSomeRequest>(finalStop);
+        var stopped = _storedJobs.Single(job => job.Id == finalStop);
+        stopped.Status = JobStatus.Stopped;
+        stopped.StopFinalized = true;
+        _terminalJobs.Add(finalStop);
+        foreach (var id in _liveJobs.Concat(_terminalJobs).Append(_missingJobId))
         {
             await _plans.Save(id, [new(JobStepId.New(), new JobStepType("step"), new(0), "type", "{}")]);
         }
@@ -32,7 +46,20 @@ public class when_cleaning_up_orphaned_step_plans : given.the_manager
     Task Because() => _manager.CleanupDeadJobs();
 
     [Fact] async Task should_remove_the_plan_of_a_missing_job() => (await _plans.GetForJob(_missingJobId)).AsT0.ShouldBeEmpty();
-    [Fact] async Task should_remove_the_plan_of_a_running_job() => (await _plans.GetForJob(_runningJobId)).AsT0.ShouldBeEmpty();
-    [Fact] async Task should_remove_the_plan_of_a_terminal_job() => (await _plans.GetForJob(_failedJobId)).AsT0.ShouldBeEmpty();
-    [Fact] async Task should_keep_the_plan_of_a_preparing_job() => (await _plans.GetForJob(_preparingJobId)).AsT0.Count.ShouldEqual(1);
+    [Fact]
+    async Task should_remove_the_plans_of_terminal_jobs()
+    {
+        foreach (var id in _terminalJobs)
+        {
+            (await _plans.GetForJob(id)).AsT0.ShouldBeEmpty();
+        }
+    }
+    [Fact]
+    async Task should_keep_the_plan_in_every_non_terminal_status()
+    {
+        foreach (var id in _liveJobs)
+        {
+            (await _plans.GetForJob(id)).AsT0.Count.ShouldEqual(1);
+        }
+    }
 }

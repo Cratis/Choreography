@@ -68,7 +68,7 @@ public abstract partial class Job<TRequest, TJobState>
     }
 
     /// <summary>
-    /// Removes the stored step plan, which is only safe once the job is durably running or terminal.
+    /// Removes the stored step plan, which is only safe once the job is durably terminal or removed.
     /// </summary>
     /// <returns>Awaitable task.</returns>
     async Task RemoveStoredStepPlan()
@@ -78,20 +78,26 @@ public abstract partial class Job<TRequest, TJobState>
             return;
         }
 
-        var removed = await store.RemoveForJob(JobId);
-        if (removed.TryGetException(out var exception))
+        try
+        {
+            var removed = await store.RemoveForJob(JobId);
+            if (removed.TryGetException(out var exception))
+            {
+                _logger.FailedRemovingStoredStepPlan(exception);
+            }
+        }
+        catch (Exception exception)
         {
             _logger.FailedRemovingStoredStepPlan(exception);
         }
     }
 
     /// <summary>
-    /// Writes Running and drops the plan reference. A failed or unacknowledged write retires the activation.
+    /// Writes Running and drops the plan reference, restoring memory when the write fails.
     /// </summary>
     /// <returns>True when Running is durable.</returns>
     /// <remarks>
-    /// The write may have committed, and then cleanup may delete the plan. The memory is restored, but the activation persists
-    /// nothing more and the next one recovers from what is durable.
+    /// The stored plan is retained until a durable terminal state, including when a Running acknowledgement is lost.
     /// </remarks>
     async Task<bool> TryEnterRunning()
     {
@@ -101,15 +107,10 @@ public abstract partial class Job<TRequest, TJobState>
         State.HasStoredStepPlan = false;
         if (await TryWriteStatusChanged(JobStatus.Running))
         {
-            if (stored)
-            {
-                await RemoveStoredStepPlan();
-            }
             return true;
         }
         State.StepPlan = plan;
         State.HasStoredStepPlan = stored;
-        RetireActivation();
         return false;
     }
 
@@ -141,6 +142,8 @@ public abstract partial class Job<TRequest, TJobState>
             return;
         }
 
+        // Publish the live job before its plan so orphan cleanup cannot mistake preparation for a missing job.
+        await WriteStateAsync();
         var saved = await store.Save(JobId, plan);
         saved.RethrowError();
         State.StepPlan = null;

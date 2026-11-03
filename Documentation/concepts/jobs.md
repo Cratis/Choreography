@@ -32,7 +32,7 @@ when none are registered), because the plan retains each request's concrete type
 validates that each request can be read back without changing its JSON representation; an invalid request
 returns `StartJobError.InvalidStepPlan` before any step is prepared. This validation does not guarantee
 semantic equivalence for arbitrary polymorphic members; configure converters for those request types.
-The plan is removed in the write that makes `Running` durable, so later progress writes and job listings
+The inline plan is removed in the write that makes `Running` durable, so later progress writes and job listings
 do not retain all preparation requests. Saved plans, including empty plans, are excluded from dead-job
 preparation cleanup even after a long outage.
 
@@ -42,9 +42,15 @@ A plan whose whole serialized form (requests, identities, types and stages) is l
 make the job document too large for some stores. Where the storage provider can keep a plan separately
 (`JobsStorage.StepPlans`, which the MongoDB and in-memory providers set) the job saves it there instead, one small
 document per step, and its own document only says `HasStoredStepPlan`. Providers without a limit, such as SQL, keep
-the plan inline. The stored plan is written before the job document says it exists and removed only after the job
-has durably reached `Running` or a terminal state, so a crash never leaves a job that refers to missing plans. What a crash
-leaves behind is an orphan, which `CleanupDeadJobs` removes: a plan whose job is gone, running or terminal.
+the plan inline. A non-terminal job document is persisted before the stored plan, then the job records its reference.
+At `Running` the reference is cleared, but the stored plan is retained until a durable terminal state (including a finalized
+stop) or job removal. This also applies to terminal jobs kept for inspection. A failed plan deletion is logged and does not
+fail completion. `CleanupDeadJobs` reaps plans only when their jobs are missing or durably terminal; it keeps plans for
+preparing, starting, running, resumable and removing jobs.
+
+MongoDB inserts large plans in bounded batches and retries a partial or unacknowledged save by deleting the previous
+attempt before reinserting. The `{jobId:1, index:1}` index supports ordered plan reads. It is created idempotently; an
+existing jobId-only index is left in place harmlessly.
 
 A job whose start or plan persistence fails is written as `Failed`, with the reason and without its plan, instead of
 staying in preparation. If that write also fails the job deactivates and keeps its stored plan for recovery.
@@ -53,12 +59,19 @@ staying in preparation. If that write also fails the job deactivates and keeps i
 externalizes its plan only when every silo that hosts the job class advertises it. While a release without the
 capability is still in the cluster the plan stays inline whatever its size, and a plan too large for the job document fails
 the job cleanly with a recorded reason. Nothing needs configuring: once the last older
-silo has left, new jobs externalize large plans. A job started before that keeps its inline plan. An externalized job
-refers to its plan until it reaches `Running` (or finishes). Let such jobs get there before rolling back to an older
-silo: an older silo does not know the reference, drops it when it rewrites the job, and cannot find the plan, so the
-job cannot be recovered from preparation.
+silo has left, new jobs externalize large plans. A job started before that keeps its inline plan. Before rollback,
+drain jobs using externalized preparation and let them finish. Older silos cannot resume externalized preparation:
+they do not understand the reference and may drop it when rewriting the job.
 
-When a job activation retires itself after a write of unknown outcome, it asks the jobs manager to recover it with a one-way, best-effort call; if that request is lost, for example while an older silo hosts the manager, the job is brought back by the normal recovery paths: the next step report, startup rehydration, or member-death rehydration.
+**Repairing an already-stuck installation.** After upgrading, inspect the affected job. A zombie `PreparingJob` without a
+saved plan cannot safely replan: remove it through the application's job-management API, or wait for configured dead-job
+cleanup. Release the affected observer's catching-up partitions through the host application's recovery procedure before
+starting catch-up again; deleting a job alone does not reset observer-owned state. Do not delete a live job with a saved plan.
+
+**Known limitation.** A lost acknowledgement of a `Running` write can still leave a job idle after step-delivery retries
+are exhausted. The retained plan prevents data loss, but does not schedule another activation. Explicit rehydration, a
+silo restart or a membership change can recover it. Durable reconciliation is tracked in
+[Cratis/Orleans#177](https://github.com/Cratis/Orleans/issues/177).
 
 ## Initialize before dispatch on start and resume
 

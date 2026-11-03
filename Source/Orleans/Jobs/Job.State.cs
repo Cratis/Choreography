@@ -7,7 +7,6 @@ namespace Cratis.Orleans.Jobs;
 public abstract partial class Job<TRequest, TJobState>
 {
     bool _stateMayBeUnsaved;
-    bool _retired;
 
     /// <summary>
     /// Writes persisted state.
@@ -15,17 +14,16 @@ public abstract partial class Job<TRequest, TJobState>
     /// <returns>A task returning <see cref="Catch"/>.</returns>
     protected async Task<Catch> WriteState()
     {
-        if (_retired)
-        {
-            _stateMayBeUnsaved = true;
-            return new InvalidOperationException("The job activation is retiring and persists nothing more");
-        }
-
         _logger.BeginJobScope(JobId, JobKey);
         try
         {
             await WriteStateAsync();
             _stateMayBeUnsaved = false;
+            if (State.Status is JobStatus.CompletedSuccessfully or JobStatus.CompletedWithFailures or JobStatus.Failed ||
+                (State.Status is JobStatus.Stopped && State.StopFinalized))
+            {
+                await RemoveStoredStepPlan();
+            }
             if (State.Status is not (JobStatus.Stopped or JobStatus.Removing))
             {
                 ClearStepNotificationRetries();
@@ -42,40 +40,6 @@ public abstract partial class Job<TRequest, TJobState>
             _stateMayBeUnsaved = true;
             _logger.FailedWritingState(e);
             return e;
-        }
-    }
-
-    /// <summary>
-    /// Ends this activation after a write whose outcome is unknown: it persists nothing more, and deactivates so the next
-    /// activation recovers from the durable state. Callers whose write is refused retry against that activation.
-    /// </summary>
-    void RetireActivation()
-    {
-        _retired = true;
-        DeactivateOnIdleDuringShutdown();
-        RequestRecoveryFromTheJobsManager();
-    }
-
-    /// <summary>
-    /// Asks the jobs manager to bring the job back. The watchdog dies with this activation, and a storage outage - the usual cause of
-    /// the failed write - would also make the next step report fail to activate a replacement. The call is one-way and best-effort: it
-    /// touches no job storage, and a remote dispatch failure cannot be observed here. A request that never arrives leaves the job to
-    /// the normal recovery paths: the next step report, startup rehydration, or member-death rehydration.
-    /// </summary>
-    void RequestRecoveryFromTheJobsManager()
-    {
-        try
-        {
-            GrainFactory.GetJobsManager(JobKey.Scope, JobKey.Namespace).RecoverRetiredJob(JobId)
-                .ContinueWith(
-                    task => _logger.FailedRequestingRecovery(task.Exception!),
-                    CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-                    TaskScheduler.Default);
-        }
-        catch (Exception exception)
-        {
-            _logger.FailedRequestingRecovery(exception);
         }
     }
 

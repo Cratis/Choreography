@@ -49,13 +49,12 @@ interface [GrainInterfaceType("Cratis.Orleans.Jobs.IJobStepDrain")] Cratis.Orlea
 interface [GrainInterfaceType("Cratis.Orleans.Jobs.IJobStopFinalization")] Cratis.Orleans.Jobs.IJobStopFinalization [Version(0)]
   C3F6AC81: FinalizeStop() -> Task
 
-interface [GrainInterfaceType("Cratis.Orleans.Jobs.IJobsManager")] Cratis.Orleans.Jobs.IJobsManager [Version(2)]
+interface [GrainInterfaceType("Cratis.Orleans.Jobs.IJobsManager")] Cratis.Orleans.Jobs.IJobsManager [Version(1)]
   E4F940C5: CleanupDeadJobs() -> Task
   256EF80D: Delete(Cratis.Orleans.Jobs.JobId) -> Task
   C8943C1C: GetAllJobs() -> Task<System.Collections.Immutable.IImmutableList<Cratis.Orleans.Storage.Jobs.JobState>>
   3DCE549E: GetJobs(Cratis.Orleans.Storage.Jobs.JobQuery) -> Task<System.Collections.Immutable.IImmutableList<Cratis.Orleans.Storage.Jobs.JobState>>
   B257DC97: GetJobsOfType`2() -> Task<System.Collections.Immutable.IImmutableList<Cratis.Orleans.Storage.Jobs.JobState>>
-  BBC07FDF: RecoverRetiredJob(Cratis.Orleans.Jobs.JobId) -> Task
   15B76772: Rehydrate() -> Task
   D11AB28A: Resume(Cratis.Orleans.Jobs.JobId) -> Task<bool>
   719FFEE5: ResumeIfRunning(Cratis.Orleans.Jobs.JobId) -> Task<Cratis.Monads.Result<Cratis.Orleans.Jobs.ResumeJobSuccess, Cratis.Orleans.Jobs.ResumeJobError>>

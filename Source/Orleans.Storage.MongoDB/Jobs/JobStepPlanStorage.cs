@@ -36,7 +36,10 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
                 await Collection.DeleteManyAsync(JobFilter(jobId)).ConfigureAwait(false);
                 if (plan.Count > 0)
                 {
-                    await Collection.InsertManyAsync(plan.Select((step, index) => ToDocument(jobId, index, step)), new InsertManyOptions { IsOrdered = false }).ConfigureAwait(false);
+                    foreach (var batch in Batches(jobId, plan))
+                    {
+                        await Collection.InsertManyAsync(batch, new InsertManyOptions { IsOrdered = false }).ConfigureAwait(false);
+                    }
                 }
                 return true;
             }).ConfigureAwait(false);
@@ -104,6 +107,31 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
     static FilterDefinition<BsonDocument> JobFilter(JobId jobId) =>
         Builders<BsonDocument>.Filter.Eq(JobIdField, new BsonBinaryData(jobId.Value, GuidRepresentation.Standard));
 
+    static IEnumerable<List<BsonDocument>> Batches(JobId jobId, IReadOnlyList<PlannedJobStep> plan)
+    {
+        // Leave room for command overhead; individual documents remain subject to MongoDB's 16 MiB limit.
+        const int maxBytes = 15 * 1024 * 1024;
+        var batch = new List<BsonDocument>();
+        var bytes = 0;
+        for (var index = 0; index < plan.Count; index++)
+        {
+            var document = ToDocument(jobId, index, plan[index]);
+            var size = document.ToBson().Length;
+            if (batch.Count > 0 && bytes + size > maxBytes)
+            {
+                yield return batch;
+                batch = [];
+                bytes = 0;
+            }
+            batch.Add(document);
+            bytes += size;
+        }
+        if (batch.Count > 0)
+        {
+            yield return batch;
+        }
+    }
+
     static BsonDocument ToDocument(JobId jobId, int index, PlannedJobStep step) => new()
     {
         { "_id", $"{jobId.Value:N}-{index:D10}" },
@@ -123,8 +151,14 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
         document["requestType"].AsString,
         document["requestJson"].AsString);
 
+    /// <summary>
+    /// Ensures the compound index idempotently, leaving any legacy jobId-only index in place.
+    /// </summary>
+    /// <returns>Awaitable task.</returns>
     async Task EnsureIndexes() =>
         await Collection.EnsureIndexesOnceAsync(
             _ensuredIndexes,
-            new CreateIndexModel<BsonDocument>(Builders<BsonDocument>.IndexKeys.Ascending(JobIdField), new CreateIndexOptions { Name = JobIdField, Background = true })).ConfigureAwait(false);
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending(JobIdField).Ascending(IndexField),
+                new CreateIndexOptions { Name = "jobId_index", Background = true })).ConfigureAwait(false);
 }

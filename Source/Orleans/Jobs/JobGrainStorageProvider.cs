@@ -4,6 +4,8 @@
 using Cratis.Monads;
 using Cratis.Orleans.Storage;
 using Cratis.Orleans.Storage.Jobs;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OneOf.Types;
 using Orleans.Storage;
 
@@ -16,8 +18,20 @@ namespace Cratis.Orleans.Jobs;
 /// Initializes a new instance of the <see cref="JobGrainStorageProvider"/> class.
 /// </remarks>
 /// <param name="jobsStorage"><see cref="IJobsStorage"/> for resolving underlying storage.</param>
-public class JobGrainStorageProvider(IJobsStorage jobsStorage) : IGrainStorage
+public partial class JobGrainStorageProvider(IJobsStorage jobsStorage) : IGrainStorage
 {
+    readonly ILogger<JobGrainStorageProvider> _logger = NullLogger<JobGrainStorageProvider>.Instance;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JobGrainStorageProvider"/> class with logging.
+    /// </summary>
+    /// <param name="jobsStorage">The jobs storage.</param>
+    /// <param name="logger">The logger.</param>
+    public JobGrainStorageProvider(IJobsStorage jobsStorage, ILogger<JobGrainStorageProvider> logger) : this(jobsStorage)
+    {
+        _logger = logger;
+    }
+
     /// <inheritdoc/>
     public async Task ClearStateAsync<T>(string stateName, GrainId grainId, IGrainState<T> grainState)
     {
@@ -37,7 +51,14 @@ public class JobGrainStorageProvider(IJobsStorage jobsStorage) : IGrainStorage
             // Only once the job is gone: until then a job document that still says it has a plan needs it.
             if (storage.StepPlans is { } stepPlans)
             {
-                await HandleCatch(stepPlans.RemoveForJob(jobId), type, nameof(ClearStateAsync));
+                try
+                {
+                    await HandleCatch(stepPlans.RemoveForJob(jobId), type, nameof(ClearStateAsync));
+                }
+                catch (Exception exception)
+                {
+                    FailedRemovingStoredStepPlan(_logger, exception);
+                }
             }
         }
     }
@@ -80,6 +101,9 @@ public class JobGrainStorageProvider(IJobsStorage jobsStorage) : IGrainStorage
             await HandleCatchNone(jobStorage.Save(jobId, grainState.State), type, nameof(WriteStateAsync));
         }
     }
+
+    [LoggerMessage(LogLevel.Warning, "Could not remove the stored step plan of the removed job; it is left for the cleanup of orphaned step plans")]
+    static partial void FailedRemovingStoredStepPlan(ILogger<JobGrainStorageProvider> logger, Exception exception);
 
     static void ThrowIfInvalidJobStateType(Type type, string operationName) => JobStateType
         .Verify(type)

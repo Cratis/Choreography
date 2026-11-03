@@ -23,5 +23,5 @@ public class and_the_job_recovers_from_a_stored_plan : given.a_job_with_a_plan_s
     [Fact] void should_resume() => _result.IsSuccess.ShouldBeTrue();
     [Fact] void should_not_replan() => _job.PrepareStepsCount.ShouldEqual(0);
     [Fact] void should_dispatch_only_the_first_stage() => _dispatched.ShouldEqual(new[] { _firstId, _secondId });
-    [Fact] async Task should_remove_the_plan_once_running() => (await _planStore.GetJobsWithPlans()).AsT0.ShouldBeEmpty();
+    [Fact] async Task should_retain_the_plan_once_running() => (await PlanIsStored()).ShouldBeTrue();
 }

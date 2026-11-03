@@ -1,54 +1,33 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.for_Job.given;
 using Cratis.Orleans.Jobs.Stages;
 using Moq;
-using Orleans.TestKit;
 
 namespace Cratis.Orleans.Jobs.for_Job.when_externalizing;
 
 /// <summary>
-/// A resume from StartingSteps, with a step that already completed and deleted its state, has its Running write rejected without persisting.
-/// The activation retires and persists nothing more, and the next activation recovers from the durable state and counts the completed step.
+/// A rejected Running write restores the stored plan reference; the next activation can recover from StartingSteps.
 /// </summary>
 public class and_the_running_write_is_not_committed : given.a_job_with_a_plan_store
 {
-    SomeJobState _durable;
-    SomeJob _retired;
-    TestKitSilo _retiredSilo;
-    int _writesAfterFailure;
-    int _successesAfterFailure;
-    JobError? _lateError;
+    bool _restoredStoredPlan;
 
     async Task Establish()
     {
-        _planRemovalFails = true;
         await _job.Start(new());
         _storedJobStepStates.Remove(StoredJobStep(_firstId));
-        _durable = _job.WrittenStates.Last(state => state.Status is JobStatus.StartingSteps);
-        await ActivateFrom(_durable);
-        _retired = _job;
-        _retiredSilo = _silo;
-        _retired.RejectWrite = state => state.Status is JobStatus.Running;
-        (await _retired.Resume()).IsSuccess.ShouldBeFalse();
-        _writesAfterFailure = _retired.WriteAttempts;
-        _successesAfterFailure = _retired.CurrentState.Progress.SuccessfulSteps;
-
-        // A report that reaches the retiring activation.
-        var lateReport = await _retired.OnStepSucceeded(_secondId, JobStepResult.Succeeded());
-        _lateError = lateReport.TryGetError(out var error) ? error : null;
-        _retired.WriteAttempts.ShouldEqual(_writesAfterFailure);
-        await ActivateFrom(_durable);
+        var durable = _job.WrittenStates.Last(state => state.Status is JobStatus.StartingSteps);
+        await ActivateFrom(durable);
+        _job.RejectWrite = state => state.Status is JobStatus.Running;
+        (await _job.Resume()).IsSuccess.ShouldBeFalse();
+        _restoredStoredPlan = _job.CurrentState.HasStoredStepPlan;
+        await ActivateFrom(durable);
     }
 
     async Task Because() => _result = await _job.Resume();
 
-    [Fact] void should_retire_the_activation() => _retiredSilo.GrainRuntime.Mock.Verify(runtime => runtime.DeactivateOnIdle(It.IsAny<IGrainContext>()), Times.Once);
-    [Fact] void should_reject_a_report_in_the_retired_activation_as_a_persist_error() => _lateError.ShouldEqual(JobError.PersistStateError);
-    [Fact] void should_not_count_or_advance_in_the_retired_activation() => _retired.CurrentState.Progress.SuccessfulSteps.ShouldEqual(_successesAfterFailure);
-    [Fact] void should_persist_nothing_in_the_retired_activation() => _retired.WrittenStates.ShouldBeEmpty();
-    [Fact] void should_not_attempt_a_write_after_the_failure() => _retired.WriteAttempts.ShouldEqual(_writesAfterFailure);
+    [Fact] void should_restore_the_plan_reference() => _restoredStoredPlan.ShouldBeTrue();
     [Fact] async Task should_keep_the_plan_for_the_next_activation() => (await PlanIsStored()).ShouldBeTrue();
     [Fact] void should_recover_in_the_next_activation() => _result.IsSuccess.ShouldBeTrue();
     [Fact] void should_count_the_completed_step() => _job.CurrentState.Progress.SuccessfulSteps.ShouldEqual(1);

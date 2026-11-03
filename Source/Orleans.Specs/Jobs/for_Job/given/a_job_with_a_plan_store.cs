@@ -16,6 +16,8 @@ public class a_job_with_a_plan_store : a_job_with_a_durable_plan
 {
     protected JobStepPlanStorage _planStore = new();
     protected bool _planRemovalFails;
+    protected bool _planRemovalThrows;
+    protected bool _stateWasDurableBeforePlanSave;
     protected int _planRemovals;
     protected bool _supportedByEverySilo = true;
     protected Result<StartJobError> _start;
@@ -35,7 +37,11 @@ public class a_job_with_a_plan_store : a_job_with_a_durable_plan
 
     sealed class PlanStoreProbe(a_job_with_a_plan_store owner) : IJobStepPlanStorage
     {
-        public Task<Catch> Save(JobId jobId, IReadOnlyList<PlannedJobStep> plan) => owner._planStore.Save(jobId, plan);
+        public Task<Catch> Save(JobId jobId, IReadOnlyList<PlannedJobStep> plan)
+        {
+            owner._stateWasDurableBeforePlanSave = owner._job.WrittenStates.LastOrDefault()?.Status is JobStatus.PreparingJob or JobStatus.PreparingSteps;
+            return owner._planStore.Save(jobId, plan);
+        }
 
         public Task<Catch<IReadOnlyList<PlannedJobStep>>> GetForJob(JobId jobId) => owner._planStore.GetForJob(jobId);
 
@@ -44,6 +50,10 @@ public class a_job_with_a_plan_store : a_job_with_a_durable_plan
         public Task<Catch> RemoveForJob(JobId jobId)
         {
             owner._planRemovals++;
+            if (owner._planRemovalThrows)
+            {
+                throw new InvalidOperationException("The plan removal threw");
+            }
             return owner._planRemovalFails
                 ? Task.FromResult<Catch>(new InvalidOperationException("The plan removal failed"))
                 : owner._planStore.RemoveForJob(jobId);

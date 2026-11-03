@@ -146,9 +146,6 @@ public static partial class JobsManagerLogMessages
     [LoggerMessage(LogLevel.Warning, "Early grain deactivation notifications are unavailable; job rehydration will cancel on host shutdown or OnDeactivateAsync")]
     internal static partial void EarlyDeactivationNotificationsUnavailable(this ILogger<JobsManager> logger, Exception exception);
 
-    [LoggerMessage(LogLevel.Warning, "Retired job {JobId} could not be recovered yet; trying again in {Delay}")]
-    internal static partial void RetiredJobNotRecovered(this ILogger<JobsManager> logger, JobId jobId, TimeSpan delay);
-
     [LoggerMessage(LogLevel.Debug, "The jobs manager activation is already invalid; its rehydration keep-alive no longer needs releasing")]
     internal static partial void RehydrationKeepAliveAlreadyReleased(this ILogger<JobsManager> logger, Exception exception);
 }

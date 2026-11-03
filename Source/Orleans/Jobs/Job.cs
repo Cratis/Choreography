@@ -213,12 +213,6 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
     {
         using var scope = _logger.BeginJobScope(JobId, JobKey);
 
-        // A retired activation persists nothing, so it can take nothing forward; the next activation recovers.
-        if (_retired)
-        {
-            return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.Unknown);
-        }
-
         // Stopped is written before workers report their stops. Only an already accounted execution may be
         // restored if the hook rejects this resume; stage preparation must not change this entry-time decision.
         var stoppedProgress = State.Status is JobStatus.Stopped && !State.DrainPending && State.Progress.IsStopped

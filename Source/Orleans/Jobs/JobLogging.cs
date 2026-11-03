@@ -280,9 +280,6 @@ public static partial class JobLogMessages
 
     [LoggerMessage(LogLevel.Warning, "Job could not finish its removal; it will try again in {Delay}")]
     internal static partial void SchedulingRemovalFinalizationRetry(this ILogger<IJob> logger, TimeSpan delay);
-
-    [LoggerMessage(LogLevel.Warning, "Asking the jobs manager to recover the retired job activation failed locally; the request is best-effort and the job is left to the next step report or rehydration")]
-    internal static partial void FailedRequestingRecovery(this ILogger<IJob> logger, Exception exception);
 }
 
 public static class JobScopes

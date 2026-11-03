@@ -4,7 +4,7 @@
 namespace Cratis.Orleans.Jobs.for_Job.when_externalizing;
 
 /// <summary>
-/// Crash window (c): Running is durable, the plan removal never happens.
+/// Crash window (c): Running is durable and the plan is retained even if removal would fail.
 /// </summary>
 public class and_the_plan_removal_fails_after_running : given.a_job_with_a_plan_store
 {
@@ -12,8 +12,9 @@ public class and_the_plan_removal_fails_after_running : given.a_job_with_a_plan_
 
     async Task Because() => _start = await _job.Start(new());
 
+    [Fact] void should_not_attempt_removal_at_running() => _planRemovals.ShouldEqual(0);
     [Fact] void should_still_start() => _start.IsSuccess.ShouldBeTrue();
     [Fact] void should_be_running() => _job.WrittenStates[^1].Status.ShouldEqual(JobStatus.Running);
     [Fact] void should_not_refer_to_the_plan_any_more() => _job.WrittenStates[^1].HasStoredStepPlan.ShouldBeFalse();
-    [Fact] async Task should_leave_the_orphan_plan_for_cleanup() => (await PlanIsStored()).ShouldBeTrue();
+    [Fact] async Task should_retain_the_plan_until_terminal() => (await PlanIsStored()).ShouldBeTrue();
 }

@@ -52,6 +52,18 @@ setup registers the defaults.
 | `StepDeliveryRetryDelay` | 1 second | The delay before a step delivers its outcome a second time; every further delivery doubles it |
 | `MaxStepDeliveryRetryDelay` | 30 seconds | The longest delay between two deliveries of a step's outcome |
 
+`MaxInlineStepPlanSize` measures the whole serialized plan, not summed request lengths. Externalization requires storage
+support and every hosting silo's capability advertisement; during upgrades, oversized inline plans fail cleanly until the
+last older silo leaves. Stored plans survive `Running` and are deleted only after a durable terminal state or job removal;
+cleanup retains non-terminal plans. MongoDB creates the ordered `{jobId:1, index:1}` index idempotently and leaves any
+legacy jobId-only index in place.
+
+Before rollback, drain externalized jobs and let them finish: older silos cannot resume their preparation. For an existing
+zombie `PreparingJob` without a plan, remove it or wait for dead-job cleanup, then release observer-owned catching-up
+partitions through the host's recovery procedure. See [upgrade and repair guidance](../concepts/jobs.md#a-very-large-plan-is-kept-outside-the-job-document).
+A lost Running acknowledgement can still stall progress until rehydration; see
+[Cratis/Orleans#177](https://github.com/Cratis/Orleans/issues/177).
+
 Rehydration and cleanup isolate each job, so one job that fails to resume or delete never stops the others.
 Cleanup reads an oldest-first, storage-filtered page; it does not materialize the entire job collection. Terminal cleanup only conditionally removes immutable terminal states, so it cannot remove preparing, running, stopped, or removing jobs. It removes regular and failed job steps before the terminal job record; a failed removal is safe to retry on the next bounded pass.
 

@@ -5,14 +5,13 @@ using System.Collections.Immutable;
 using Cratis.Monads;
 using Cratis.Orleans.Storage.Jobs;
 using Orleans.CodeGeneration;
-using Orleans.Concurrency;
 
 namespace Cratis.Orleans.Jobs;
 
 /// <summary>
 /// Defines a system that manages jobs.
 /// </summary>
-[Version(2)]
+[Version(1)]
 public interface IJobsManager : IGrainWithIntegerCompoundKey
 {
     /// <summary>
@@ -73,19 +72,6 @@ public interface IJobsManager : IGrainWithIntegerCompoundKey
     /// will never report back. A caller that treats that as success waits forever for something that is not coming.
     /// </remarks>
     Task<bool> Resume(JobId jobId);
-
-    /// <summary>
-    /// Asks the manager to keep trying to bring a job back whose activation retired itself after a write whose outcome is unknown.
-    /// </summary>
-    /// <param name="jobId"><see cref="JobId"/> of the job.</param>
-    /// <returns>A task that completes when the request is accepted; the recovery runs in the background.</returns>
-    /// <remarks>
-    /// Sent by the retiring activation, which cannot recover itself: its watchdog ends with it, and the storage trouble that made the
-    /// write fail can keep a replacement from activating. The manager resumes the job with a bounded backoff until it is taken
-    /// forward or settled, and keeps its activation alive meanwhile. Repeated requests for the same job share one recovery.
-    /// </remarks>
-    [OneWay]
-    Task RecoverRetiredJob(JobId jobId);
 
     /// <summary>
     /// Resume a job only if it is running.
