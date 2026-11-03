@@ -1,6 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using Cratis.Choreography.Patching;
 using Cratis.Choreography.Workflows;
 
 namespace Cratis.Choreography.Hosting;
@@ -58,6 +59,21 @@ public class CratisChoreographyOptions
     /// Gets how the workflow engine is configured when <see cref="Workflows"/> is on.
     /// </summary>
     public Action<WorkflowsOptions>? ConfigureWorkflows { get; init; }
+
+    /// <summary>
+    /// Gets whether patches are applied when the silo starts. Defaults to false.
+    /// </summary>
+    /// <remarks>
+    /// With <see cref="GrainStorageMode.InMemory"/> the record of applied patches lives in memory too, so nothing survives the process.
+    /// Otherwise the host registers the storage it wants - <c lang="csharp">AddCratisChoreographyMongoDBPatchStorage</c> or
+    /// <c lang="csharp">AddCratisChoreographySqlPatchStorage</c> - and starting without one fails.
+    /// </remarks>
+    public bool Patching { get; init; }
+
+    /// <summary>
+    /// Gets how patching is configured when <see cref="Patching"/> is on.
+    /// </summary>
+    public Action<PatchingOptions>? ConfigurePatching { get; init; }
 
     /// <summary>
     /// Gets a <see cref="CratisChoreographyOptions"/> for running a single silo locally: localhost clustering and in-memory grain storage.

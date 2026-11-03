@@ -3,6 +3,7 @@
 
 using Cratis.Choreography.Jobs;
 using Cratis.Choreography.Storage;
+using Cratis.Choreography.Storage.Patching;
 using Cratis.Types;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -142,6 +143,15 @@ public static class CratisChoreographySiloBuilderExtensions
             if (options.Workflows)
             {
                 silo.AddCratisChoreographyWorkflows(options.ConfigureWorkflows);
+            }
+
+            if (options.Patching)
+            {
+                silo.AddCratisChoreographyPatching(options.ConfigurePatching);
+                if (options.Storage == GrainStorageMode.InMemory)
+                {
+                    silo.Services.TryAddSingleton<IPatchStorage, InMemoryPatchStorage>();
+                }
             }
         });
 

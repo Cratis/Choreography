@@ -27,4 +27,14 @@ public static class WellKnownCollectionNames
     /// The name of the collection holding the step plans that are too large to live inside the job document.
     /// </summary>
     public const string JobStepPlans = "job-step-plans";
+
+    /// <summary>
+    /// The name of the collection holding the records of applied patches.
+    /// </summary>
+    public const string Patches = "patches";
+
+    /// <summary>
+    /// The name of the collection holding the versions patching keeps - how far patches have come and which host last patched.
+    /// </summary>
+    public const string PatchVersions = "patch-versions";
 }

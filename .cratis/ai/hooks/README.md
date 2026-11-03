@@ -12,7 +12,7 @@ Three layers:
 | Pattern pass | `PostToolUse` on a write | `scripts/cratis-pattern-scan.sh` | zero tokens until a match | appends a one-line reminder to context, never blocks |
 | Hard block | `PreToolUse` on a write | `scripts/cratis-guard-writes.sh` | zero | exits **2** — the write does not happen |
 | Hard block | `PreToolUse` on `Bash` | `scripts/cratis-guard-store-mutations.sh` | zero; parses only commands that mention `cratis` | exits **2** — the store-changing `cratis chronicle` command does not run |
-| Hard block | `PreToolUse` on `Bash` | `scripts/cratis-guard-secrets.sh` | zero; parses only commands that mention a credential-bearing tool or file | exits **2** — a command that prints credentials (full `kubectl` specs and secrets, `env`/`printenv`, `docker inspect`, secret-manager reads, `.env`/kubeconfig/key files; also behind `/usr/bin/env`, `command`, attached options such as `-ePATTERN`, a bare `{.}` projection) does not run unless it projects a field; piped shells and recursive searches with no named file stay uncovered; see [`secrets.md`](../rules/secrets.md) |
+| Hard block | `PreToolUse` on `Bash` | `scripts/cratis-guard-secrets.sh` | zero; parses only commands that mention a credential-bearing tool or file | exits **2** — a command that prints credentials (full `kubectl` specs and secrets, `env`/`printenv`, `docker inspect`, secret-manager reads, `cratis config get --show-secret`, `.env`/kubeconfig/key files; also behind `/usr/bin/env`, `command`, attached options such as `-ePATTERN`, a bare `{.}` projection) does not run unless it projects a field; piped shells and recursive searches with no named file stay uncovered; see [`secrets.md`](../rules/secrets.md) |
 | Hard block | `PreToolUse` on `Bash` | `scripts/cratis-guard-pr-body.sh` | fetches shared rules only for `gh pr create/edit` | exits **2** for inline bodies, invalid notes or conflicting release labels; warns and allows when offline with no cache |
 | Cleanup of delivered work | `PostToolUse` on `Bash` (`gh pr merge`, `git pull/merge/worktree`) and `SessionStart` (Pi: `tool_result` and `session_start`) | `scripts/cratis-cleanup-worktrees.sh --hook` | zero when the command is unrelated | never blocks; removes delivered worktrees and branches, reports what it kept |
 | Quality gate (Claude) | `Stop` | `scripts/cratis-quality-gate.sh` | one build/test run, only when relevant files changed | exits **2** — the turn does not end |
@@ -637,17 +637,29 @@ the script stops the command's process group (TERM, then KILL after one second),
 reports **NOT VERIFIED**, the gate, its directory, log tail, and `timeoutHint` (advice, never executed).
 Commands that create separate sessions/process groups can escape this cleanup; this is not a sandbox.
 
-For a large solution, replace the placeholder below with the affected test project and repeat for
-its affected dependents. Override `command` with that narrower argv array (or a repository-owned
-runner covering all affected projects), rather than raising the timeout without diagnosing the delay:
+The default runs `cratis-run-specs.sh` through the absolute `CRATIS_HOOKS_SCRIPTS_DIR`
+exported by the gate, including nested solutions and bundled Pi installations. The runner
+requires Node, Bash and Git, the same prerequisites as the hooks (not an additional runtime). It evaluates
+MSBuild metadata without building, runs supported built xUnit v3/TUnit/native executables
+(or `dotnet <TargetPath.dll>` without apphost), and uses project-scoped `dotnet test --no-build`
+only for identified VSTest projects. Restore/build matching Debug outputs first. Missing or
+ambiguous metadata/output, custom application entrypoints, failed suites and zero-selected
+suites are not passes; unsupported runners need a repository-owned invocation override.
+
+For a large solution, replace the placeholder below with the affected project directory,
+TFM and AssemblyName and repeat for affected dependents. Use that executable's filter/report
+flags (see [running-specs](../skills/cratis-specifications-csharp/references/running-specs.md)),
+not VSTest logger switches. Override `command` rather than raising a timeout without diagnosis:
 
 ```json
-{ "gates": [{ "id": "backend-specs", "command": ["dotnet", "test", "<affected.Specs.csproj>", "--configuration", "Debug", "--no-build"], "timeoutSeconds": 120, "timeoutHint": "Run dotnet test for each affected Specs/Tests project separately." }] }
+{ "gates": [{ "id": "backend-specs", "command": ["./<project-dir>/bin/Debug/<TFM>/<AssemblyName>"], "timeoutSeconds": 120, "timeoutHint": "Run each affected project's built spec executable separately; dotnet test <project> --configuration Debug --no-build only for VSTest." }] }
 ```
 
 This is not automatic affected-project selection: imported/conditional MSBuild references and
 linked or shared sources require evaluation to establish coverage safely. The default retains
-solution-wide tests rather than silently missing dependents, and a timeout is never a pass.
+all solution projects, executing each test project independently rather than silently missing
+dependents. Non-test projects are explicitly skipped; a solution with none reports no verified
+specifications. A timeout is never a pass. Reports are local under `.ai-work/spec-runs/`.
 
 **Profile note.** The C# patterns are application-profile and scoped to `Source/**/*.cs`, which is
 the application source root [`../rules/general.md`](../rules/general.md) documents. A
