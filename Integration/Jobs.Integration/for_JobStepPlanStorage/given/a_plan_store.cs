@@ -35,6 +35,10 @@ public class a_plan_store : Specification
         var collection = Substitute.For<IMongoCollection<BsonDocument>>();
         collection.CollectionNamespace.Returns(_collection.CollectionNamespace);
         collection.Indexes.Returns(_collection.Indexes);
+        collection.FindAsync(Arg.Any<FilterDefinition<BsonDocument>>(), Arg.Any<FindOptions<BsonDocument, BsonDocument>>(), Arg.Any<CancellationToken>())
+            .Returns(call => _collection.FindAsync(call.Arg<FilterDefinition<BsonDocument>>(), call.Arg<FindOptions<BsonDocument, BsonDocument>>(), call.Arg<CancellationToken>()));
+        collection.AggregateAsync(Arg.Any<PipelineDefinition<BsonDocument, BsonDocument>>(), Arg.Any<AggregateOptions>(), Arg.Any<CancellationToken>())
+            .Returns(call => _collection.AggregateAsync(call.Arg<PipelineDefinition<BsonDocument, BsonDocument>>(), call.Arg<AggregateOptions>(), call.Arg<CancellationToken>()));
         collection.DeleteManyAsync(Arg.Any<FilterDefinition<BsonDocument>>(), Arg.Any<CancellationToken>()).Returns(async call =>
         {
             _deletes++;

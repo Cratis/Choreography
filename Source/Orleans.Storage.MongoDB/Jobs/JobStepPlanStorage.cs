@@ -80,13 +80,16 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
             var ids = await retry.Execute("getting the jobs that have a step plan", async () =>
             {
                 // Read identities from the orphan documents, never from a possibly replaced job state.
-                using var cursor = await Collection.FindAsync(
-                    Builders<BsonDocument>.Filter.Exists(IncarnationField),
-                    new FindOptions<BsonDocument> { Projection = Builders<BsonDocument>.Projection.Include(JobIdField).Include(IncarnationField).Exclude("_id") }).ConfigureAwait(false);
+                var pipeline = new[]
+                {
+                    new BsonDocument("$match", new BsonDocument(IncarnationField, new BsonDocument("$exists", true))),
+                    new BsonDocument("$group", new BsonDocument("_id", new BsonDocument { { JobIdField, "$" + JobIdField }, { IncarnationField, "$" + IncarnationField } }))
+                };
+                using var cursor = await Collection.AggregateAsync<BsonDocument>(pipeline).ConfigureAwait(false);
                 return await cursor.ToListAsync().ConfigureAwait(false);
             }).ConfigureAwait(false);
             return Catch<IReadOnlyList<JobStepPlanKey>>.Success([.. ids.Select(document => new JobStepPlanKey(
-                new JobId(document[JobIdField].AsBsonBinaryData.ToGuid()), document[IncarnationField].AsBsonBinaryData.ToGuid())).Distinct()]);
+                new JobId(document["_id"][JobIdField].AsBsonBinaryData.ToGuid()), document["_id"][IncarnationField].AsBsonBinaryData.ToGuid())).Distinct()]);
         }
         catch (Exception ex)
         {
