@@ -17,30 +17,33 @@ namespace Cratis.Orleans.Storage.Jobs;
 public interface IJobStepPlanStorage
 {
     /// <summary>
-    /// Saves the plan of a job, replacing any plan already saved for it.
+    /// Saves one incarnation of a job's plan, replacing a previous attempt of that incarnation.
     /// </summary>
     /// <param name="jobId"><see cref="JobId"/> the plan belongs to.</param>
+    /// <param name="incarnation">A fresh identity persisted in job state before this save; retained across storage retries.</param>
     /// <param name="plan">The planned steps, in order.</param>
     /// <returns>Awaitable task.</returns>
-    Task<Catch> Save(JobId jobId, IReadOnlyList<PlannedJobStep> plan);
+    Task<Catch> Save(JobId jobId, Guid incarnation, IReadOnlyList<PlannedJobStep> plan);
 
     /// <summary>
     /// Gets the plan of a job.
     /// </summary>
     /// <param name="jobId"><see cref="JobId"/> to get the plan for.</param>
+    /// <param name="incarnation">The incarnation from the job's own state.</param>
     /// <returns>The planned steps in the order they were saved; empty when the job has no saved plan.</returns>
-    Task<Catch<IReadOnlyList<PlannedJobStep>>> GetForJob(JobId jobId);
+    Task<Catch<IReadOnlyList<PlannedJobStep>>> GetForJob(JobId jobId, Guid incarnation);
 
     /// <summary>
-    /// Gets the jobs that have a saved plan.
+    /// Gets the job and incarnation of each saved plan, from the plan documents themselves.
     /// </summary>
-    /// <returns>The ids of the jobs that have a saved plan.</returns>
-    Task<Catch<IReadOnlyList<JobId>>> GetJobsWithPlans();
+    /// <returns>The identities of the saved plans.</returns>
+    Task<Catch<IReadOnlyList<JobStepPlanKey>>> GetJobsWithPlans();
 
     /// <summary>
     /// Removes the plan of a job.
     /// </summary>
     /// <param name="jobId"><see cref="JobId"/> to remove the plan for.</param>
+    /// <param name="incarnation">The incarnation from the job state or orphan plan documents.</param>
     /// <returns>Awaitable task.</returns>
-    Task<Catch> RemoveForJob(JobId jobId);
+    Task<Catch> RemoveForJob(JobId jobId, Guid incarnation);
 }

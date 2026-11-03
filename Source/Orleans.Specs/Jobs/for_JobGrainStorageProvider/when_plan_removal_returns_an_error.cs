@@ -5,7 +5,7 @@ namespace Cratis.Orleans.Jobs.for_JobGrainStorageProvider;
 
 public class when_plan_removal_returns_an_error : given.a_job_storage_provider
 {
-    void Establish() => _plans.RemoveForJob(_jobId).Returns(_ =>
+    void Establish() => _plans.RemoveForJob(_jobId, _incarnation!.Value).Returns(_ =>
     {
         _removals.Add("plan");
         return Task.FromResult<Monads.Catch>(new InvalidOperationException("Removal failed"));

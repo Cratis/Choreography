@@ -19,8 +19,9 @@ public abstract partial class Job<TRequest, TJobState>
         {
             await WriteStateAsync();
             _stateMayBeUnsaved = false;
-            if (State.Status is JobStatus.CompletedSuccessfully or JobStatus.CompletedWithFailures or JobStatus.Failed ||
-                (State.Status is JobStatus.Stopped && State.StopFinalized))
+            if (State.StoredStepPlanIncarnation is not null &&
+                (State.Status is JobStatus.CompletedSuccessfully or JobStatus.CompletedWithFailures or JobStatus.Failed ||
+                (State.Status is JobStatus.Stopped && State.StopFinalized)))
             {
                 await RemoveStoredStepPlan();
             }

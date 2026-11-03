@@ -12,6 +12,7 @@ public class when_cleaning_up_orphaned_step_plans : given.the_manager
     List<JobId> _liveJobs = [];
     List<JobId> _terminalJobs = [];
     JobStepPlanStorage _plans = new();
+    Guid _incarnation = Guid.NewGuid();
 
     protected override IJobStepPlanStorage? CreatePlanStore() => _plans;
 
@@ -39,19 +40,19 @@ public class when_cleaning_up_orphaned_step_plans : given.the_manager
         _terminalJobs.Add(finalStop);
         foreach (var id in _liveJobs.Concat(_terminalJobs).Append(_missingJobId))
         {
-            await _plans.Save(id, [new(JobStepId.New(), new JobStepType("step"), new(0), "type", "{}")]);
+            await _plans.Save(id, _incarnation, [new(JobStepId.New(), new JobStepType("step"), new(0), "type", "{}")]);
         }
     }
 
     Task Because() => _manager.CleanupDeadJobs();
 
-    [Fact] async Task should_remove_the_plan_of_a_missing_job() => (await _plans.GetForJob(_missingJobId)).AsT0.ShouldBeEmpty();
+    [Fact] async Task should_remove_the_plan_of_a_missing_job() => (await _plans.GetForJob(_missingJobId, _incarnation)).AsT0.ShouldBeEmpty();
     [Fact]
     async Task should_remove_the_plans_of_terminal_jobs()
     {
         foreach (var id in _terminalJobs)
         {
-            (await _plans.GetForJob(id)).AsT0.ShouldBeEmpty();
+            (await _plans.GetForJob(id, _incarnation)).AsT0.ShouldBeEmpty();
         }
     }
     [Fact]
@@ -59,7 +60,7 @@ public class when_cleaning_up_orphaned_step_plans : given.the_manager
     {
         foreach (var id in _liveJobs)
         {
-            (await _plans.GetForJob(id)).AsT0.Count.ShouldEqual(1);
+            (await _plans.GetForJob(id, _incarnation)).AsT0.Count.ShouldEqual(1);
         }
     }
 }

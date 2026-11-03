@@ -144,6 +144,7 @@ public class SomeJob : Job<SomeRequest, SomeJobState>, IGrainType
                 CompletedStepsCounted = State.CompletedStepsCounted.ToList(),
                 StepPlan = State.StepPlan?.ToList(),
                 HasStoredStepPlan = State.HasStoredStepPlan,
+                StoredStepPlanIncarnation = State.StoredStepPlanIncarnation,
                 Progress = State.Progress with { Stages = State.Progress.Stages.Select(stage => stage with { }).ToList() }
             };
             WrittenStates.Add(written);
@@ -179,6 +180,7 @@ public class SomeJob : Job<SomeRequest, SomeJobState>, IGrainType
         State.CompletedStepsCounted = _durable.CompletedStepsCounted.ToList();
         State.StepPlan = _durable.StepPlan?.ToList();
         State.HasStoredStepPlan = _durable.HasStoredStepPlan;
+        State.StoredStepPlanIncarnation = _durable.StoredStepPlanIncarnation;
         State.Progress = _durable.Progress with { Stages = _durable.Progress.Stages.Select(stage => stage with { }).ToList() };
     }
 

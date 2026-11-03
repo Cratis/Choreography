@@ -102,6 +102,15 @@ public class JobState
     public bool HasStoredStepPlan { get; set; }
 
     /// <summary>
+    /// Gets or sets the incarnation of the external plan this job published, retained through running and completion.
+    /// </summary>
+    /// <remarks>
+    /// Persisted before saving the plan. Null means this job has not published an external plan.
+    /// Storage providers must preserve this member to fence loading and cleanup against reuse of the job id.
+    /// </remarks>
+    public Guid? StoredStepPlanIncarnation { get; set; }
+
+    /// <summary>
     /// Gets or sets the request associated with the job.
     /// </summary>
     public IJobRequest Request { get; set; } = default!;

@@ -11,6 +11,7 @@ namespace Cratis.Orleans.Jobs.Integration.for_JobStepPlanStorage.given;
 public class a_plan_store : Specification
 {
     protected JobId _jobId = JobId.New();
+    protected Guid _incarnation = Guid.NewGuid();
     protected JobStepPlanStorage _store;
     protected JobStepPlanStorage _faultingStore;
     protected IMongoCollection<BsonDocument> _collection;
@@ -18,6 +19,7 @@ public class a_plan_store : Specification
     protected int _inserts;
     protected int _deletes;
     protected Func<int, Task>? _beforeInsert;
+    protected Func<Task>? _beforeDelete;
     protected Func<int, Task>? _afterInsert;
 
     void Establish()
@@ -36,6 +38,10 @@ public class a_plan_store : Specification
         collection.DeleteManyAsync(Arg.Any<FilterDefinition<BsonDocument>>(), Arg.Any<CancellationToken>()).Returns(async call =>
         {
             _deletes++;
+            if (_beforeDelete is not null)
+            {
+                await _beforeDelete();
+            }
             return await _collection.DeleteManyAsync(call.Arg<FilterDefinition<BsonDocument>>(), call.Arg<CancellationToken>());
         });
         collection.InsertManyAsync(Arg.Any<IEnumerable<BsonDocument>>(), Arg.Any<InsertManyOptions>(), Arg.Any<CancellationToken>()).Returns(async call =>
@@ -62,7 +68,7 @@ public class a_plan_store : Specification
 
     protected async Task AssertStoredPlan()
     {
-        var read = await _store.GetForJob(_jobId);
+        var read = await _store.GetForJob(_jobId, _incarnation);
         read.AsT0.ShouldEqual(_plan);
         (await _collection.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty)).ShouldEqual(_plan.Count);
     }

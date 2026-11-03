@@ -13,27 +13,27 @@ namespace Cratis.Orleans.Storage.InMemory;
 /// </summary>
 public sealed class JobStepPlanStorage : IJobStepPlanStorage
 {
-    readonly ConcurrentDictionary<JobId, IReadOnlyList<PlannedJobStep>> _plans = new();
+    readonly ConcurrentDictionary<JobStepPlanKey, IReadOnlyList<PlannedJobStep>> _plans = new();
 
     /// <inheritdoc/>
-    public Task<Catch> Save(JobId jobId, IReadOnlyList<PlannedJobStep> plan)
+    public Task<Catch> Save(JobId jobId, Guid incarnation, IReadOnlyList<PlannedJobStep> plan)
     {
-        _plans[jobId] = [.. plan];
+        _plans[new(jobId, incarnation)] = [.. plan];
         return Task.FromResult(Catch.Success());
     }
 
     /// <inheritdoc/>
-    public Task<Catch<IReadOnlyList<PlannedJobStep>>> GetForJob(JobId jobId) =>
-        Task.FromResult(Catch<IReadOnlyList<PlannedJobStep>>.Success(_plans.TryGetValue(jobId, out var plan) ? plan : []));
+    public Task<Catch<IReadOnlyList<PlannedJobStep>>> GetForJob(JobId jobId, Guid incarnation) =>
+        Task.FromResult(Catch<IReadOnlyList<PlannedJobStep>>.Success(_plans.TryGetValue(new(jobId, incarnation), out var plan) ? plan : []));
 
     /// <inheritdoc/>
-    public Task<Catch<IReadOnlyList<JobId>>> GetJobsWithPlans() =>
-        Task.FromResult(Catch<IReadOnlyList<JobId>>.Success([.. _plans.Keys]));
+    public Task<Catch<IReadOnlyList<JobStepPlanKey>>> GetJobsWithPlans() =>
+        Task.FromResult(Catch<IReadOnlyList<JobStepPlanKey>>.Success([.. _plans.Keys]));
 
     /// <inheritdoc/>
-    public Task<Catch> RemoveForJob(JobId jobId)
+    public Task<Catch> RemoveForJob(JobId jobId, Guid incarnation)
     {
-        _plans.TryRemove(jobId, out _);
+        _plans.TryRemove(new(jobId, incarnation), out _);
         return Task.FromResult(Catch.Success());
     }
 }

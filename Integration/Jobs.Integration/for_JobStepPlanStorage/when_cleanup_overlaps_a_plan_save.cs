@@ -26,6 +26,7 @@ public class when_cleanup_overlaps_a_plan_save : given.a_plan_store
             Id = _jobId,
             Type = typeof(JobWithSingleStep),
             Status = JobStatus.PreparingJob,
+            StoredStepPlanIncarnation = _incarnation,
             Created = DateTimeOffset.UtcNow
         })).RethrowError();
         _afterInsert = async attempt =>
@@ -40,7 +41,7 @@ public class when_cleanup_overlaps_a_plan_save : given.a_plan_store
 
     async Task Because()
     {
-        var save = _faultingStore.Save(_jobId, _plan);
+        var save = _faultingStore.Save(_jobId, _incarnation, _plan);
         try
         {
             await _published.Task.WaitAsync(TimeSpan.FromSeconds(10));

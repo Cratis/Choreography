@@ -11,6 +11,7 @@ public class a_job_storage_provider : Specification
     protected JobGrainStorageProvider _provider;
     protected IJobStepPlanStorage _plans;
     protected JobId _jobId = JobId.New();
+    protected Guid? _incarnation = Guid.NewGuid();
     protected GrainId _grainId;
     protected List<string> _removals = [];
 
@@ -36,5 +37,10 @@ public class a_job_storage_provider : Specification
         _provider = new(storage);
     }
 
-    protected Task Clear() => _provider.ClearStateAsync("state", _grainId, Substitute.For<IGrainState<JobState>>());
+    protected Task Clear()
+    {
+        var state = Substitute.For<IGrainState<JobState>>();
+        state.State.Returns(new JobState { StoredStepPlanIncarnation = _incarnation });
+        return _provider.ClearStateAsync("state", _grainId, state);
+    }
 }

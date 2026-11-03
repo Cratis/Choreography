@@ -23,13 +23,13 @@ public class when_cleaning_up_orphaned_plans : given.a_plan_store
         }
         foreach (var id in new[] { _jobId, _running, _terminal })
         {
-            (await _store.Save(id, [new PlannedJobStep(JobStepId.New(), new JobStepType("step"), new(0), "request", "{}")])).RethrowError();
+            (await _store.Save(id, _incarnation, [new PlannedJobStep(JobStepId.New(), new JobStepType("step"), new(0), "request", "{}")])).RethrowError();
         }
     }
 
     Task Because() => JobsClusterFixture.Shared.GrainFactory.GetJobsManager(JobsClusterFixture.Scope, string.Empty).CleanupDeadJobs();
 
-    [Fact] async Task should_remove_a_missing_jobs_plan() => (await _store.GetForJob(_jobId)).AsT0.ShouldBeEmpty();
-    [Fact] async Task should_remove_a_terminal_jobs_plan() => (await _store.GetForJob(_terminal)).AsT0.ShouldBeEmpty();
-    [Fact] async Task should_retain_a_running_jobs_plan() => (await _store.GetForJob(_running)).AsT0.Count.ShouldEqual(1);
+    [Fact] async Task should_remove_a_missing_jobs_plan() => (await _store.GetForJob(_jobId, _incarnation)).AsT0.ShouldBeEmpty();
+    [Fact] async Task should_remove_a_terminal_jobs_plan() => (await _store.GetForJob(_terminal, _incarnation)).AsT0.ShouldBeEmpty();
+    [Fact] async Task should_retain_a_running_jobs_plan() => (await _store.GetForJob(_running, _incarnation)).AsT0.Count.ShouldEqual(1);
 }

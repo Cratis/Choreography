@@ -11,7 +11,7 @@ public class with_an_oversized_plan_and_every_silo_capable : given.a_job_with_a_
     {
         if (_job.CurrentState.Status is JobStatus.PreparingSteps)
         {
-            _planWhenPreparingWasDurable = (await _planStore.GetForJob(_jobId)).AsT0.Select(step => step.Id).ToList();
+            _planWhenPreparingWasDurable = (await _planStore.GetForJob(_jobId, _incarnation)).AsT0.Select(step => step.Id).ToList();
         }
     };
 

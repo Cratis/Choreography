@@ -491,9 +491,10 @@ public class JobsManager(
     /// Removes the stored step plans that no job needs any more.
     /// </summary>
     /// <remarks>
-    /// JobIds are single-use GUIDs, and a non-terminal job state is persisted before its plan is saved.
-    /// Recheck a candidate immediately before deletion: only a missing or durably terminal job can lose its plan.
-    /// An unreadable job keeps its plan.
+    /// A fresh plan incarnation is persisted in non-terminal job state before any plan documents are saved.
+    /// Recheck a candidate immediately before deletion, then delete only the incarnation read from those documents.
+    /// Reusing a job id cannot publish that incarnation, even between the final read and deletion.
+    /// An unreadable or non-terminal job keeps its plans.
     /// </remarks>
     /// <returns>Awaitable task.</returns>
     async Task CleanupOrphanedStepPlans()
@@ -507,8 +508,9 @@ public class JobsManager(
         {
             var withPlans = await stepPlans.GetJobsWithPlans();
             withPlans.RethrowError();
-            foreach (var jobId in withPlans.AsT0)
+            foreach (var plan in withPlans.AsT0)
             {
+                var jobId = plan.JobId;
                 try
                 {
                     if (!await IsOrphanedPlan(jobId) || !await IsOrphanedPlan(jobId))
@@ -516,7 +518,7 @@ public class JobsManager(
                         continue;
                     }
 
-                    var removed = await stepPlans.RemoveForJob(jobId);
+                    var removed = await stepPlans.RemoveForJob(jobId, plan.Incarnation);
                     if (removed.TryGetException(out var exception))
                     {
                         logger.FailedToRemoveStoredStepPlan(jobId, exception);

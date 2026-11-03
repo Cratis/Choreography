@@ -41,15 +41,21 @@ preparation cleanup even after a long outage.
 A plan whose whole serialized form (requests, identities, types and stages) is larger than `JobsOptions.MaxInlineStepPlanSize` (1 MiB by default) would
 make the job document too large for some stores. Where the storage provider can keep a plan separately
 (`JobsStorage.StepPlans`, which the MongoDB and in-memory providers set) the job saves it there instead, one small
-document per step, and its own document only says `HasStoredStepPlan`. Providers without a limit, such as SQL, keep
-the plan inline. A non-terminal job document is persisted before the stored plan, then the job records its reference.
+document per step. Its own document records `HasStoredStepPlan` and `StoredStepPlanIncarnation`. Providers without a limit,
+such as SQL, keep the plan inline. Each external publication gets a fresh incarnation, persisted in non-terminal job state
+before any plan documents are saved. The reference is set after the save succeeds. Reads use the job's own incarnation;
+reuse of a supplied job id cannot load another publication's plan.
 At `Running` the reference is cleared, but the stored plan is retained until a durable terminal state (including a finalized
-stop) or job removal. This also applies to terminal jobs kept for inspection. A failed plan deletion is logged and does not
-fail completion. `CleanupDeadJobs` reaps plans only when their jobs are missing or durably terminal; it keeps plans for
-preparing, starting, running, resumable and removing jobs.
+stop) or job removal. The incarnation remains in job state after `Running` so terminal cleanup deletes only that publication.
+Jobs that never externalized a plan do not contact plan storage on completion or removal. This also applies to terminal jobs
+kept for inspection. A failed plan deletion is logged and does not fail completion. `CleanupDeadJobs` reaps plans only when
+their jobs are missing or durably terminal; it keeps plans for preparing, starting, running, resumable and removing jobs.
+Orphan enumeration reads the incarnation from the plan documents. Deletion matches both job id and that incarnation,
+so a new publication after the last eligibility read is not deleted.
 
-MongoDB inserts large plans in bounded batches and retries a partial or unacknowledged save by deleting the previous
-attempt before reinserting. The `{jobId:1, index:1}` index supports ordered plan reads. It is created idempotently; an
+MongoDB inserts large plans in bounded batches and retries a partial or unacknowledged save by deleting only that
+incarnation's previous attempt before reinserting. Document ids include the incarnation. The `{jobId:1, incarnation:1, index:1}`
+index supports fenced, ordered plan reads without changing the older index. It is created idempotently; an
 existing jobId-only index is left in place harmlessly.
 
 A job whose start or plan persistence fails is written as `Failed`, with the reason and without its plan, instead of
@@ -61,7 +67,10 @@ capability is still in the cluster the plan stays inline whatever its size, and 
 the job cleanly with a recorded reason. Nothing needs configuring: once the last older
 silo has left, new jobs externalize large plans. A job started before that keeps its inline plan. Before rollback,
 drain jobs using externalized preparation and let them finish. Older silos cannot resume externalized preparation:
-they do not understand the reference and may drop it when rewriting the job.
+they do not understand the reference and may drop it when rewriting the job. The incarnation is additive; mixed versions
+must preserve it. Drain externalized jobs before upgrading from an earlier external-plan format without an incarnation, or
+before rollback to it. Plans without an incarnation are not loaded or automatically reaped by this release: inspect and drain
+or repair those jobs through the application's recovery procedure rather than assigning a new fence to old documents.
 
 **Repairing an already-stuck installation.** After upgrading, inspect the affected job. A zombie `PreparingJob` without a
 saved plan cannot safely replan: remove it through the application's job-management API, or wait for configured dead-job

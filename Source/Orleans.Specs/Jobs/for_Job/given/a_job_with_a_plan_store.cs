@@ -15,16 +15,18 @@ namespace Cratis.Orleans.Jobs.for_Job.given;
 public class a_job_with_a_plan_store : a_job_with_a_durable_plan
 {
     protected JobStepPlanStorage _planStore = new();
+    protected Guid _incarnation;
     protected bool _planRemovalFails;
     protected bool _planRemovalThrows;
     protected bool _stateWasDurableBeforePlanSave;
     protected int _planRemovals;
+    protected List<Guid> _removedIncarnations = [];
     protected bool _supportedByEverySilo = true;
     protected Result<StartJobError> _start;
 
     protected override JobsOptions CreateOptions() => new() { MaxConcurrentStepStarts = 1, MaxInlineStepPlanSize = 0 };
 
-    protected async Task<bool> PlanIsStored() => (await _planStore.GetForJob(_jobId)).AsT0.Count == 3;
+    protected async Task<bool> PlanIsStored() => (await _planStore.GetForJob(_jobId, _incarnation)).AsT0.Count == 3;
 
     protected override IJobStepPlanStorage? CreatePlanStore() => new PlanStoreProbe(this);
 
@@ -37,26 +39,28 @@ public class a_job_with_a_plan_store : a_job_with_a_durable_plan
 
     sealed class PlanStoreProbe(a_job_with_a_plan_store owner) : IJobStepPlanStorage
     {
-        public Task<Catch> Save(JobId jobId, IReadOnlyList<PlannedJobStep> plan)
+        public Task<Catch> Save(JobId jobId, Guid incarnation, IReadOnlyList<PlannedJobStep> plan)
         {
-            owner._stateWasDurableBeforePlanSave = owner._job.WrittenStates.LastOrDefault()?.Status is JobStatus.PreparingJob or JobStatus.PreparingSteps;
-            return owner._planStore.Save(jobId, plan);
+            owner._incarnation = incarnation;
+            owner._stateWasDurableBeforePlanSave = owner._job.WrittenStates.LastOrDefault() is { Status: JobStatus.PreparingJob or JobStatus.PreparingSteps } state && state.StoredStepPlanIncarnation == incarnation;
+            return owner._planStore.Save(jobId, incarnation, plan);
         }
 
-        public Task<Catch<IReadOnlyList<PlannedJobStep>>> GetForJob(JobId jobId) => owner._planStore.GetForJob(jobId);
+        public Task<Catch<IReadOnlyList<PlannedJobStep>>> GetForJob(JobId jobId, Guid incarnation) => owner._planStore.GetForJob(jobId, incarnation);
 
-        public Task<Catch<IReadOnlyList<JobId>>> GetJobsWithPlans() => owner._planStore.GetJobsWithPlans();
+        public Task<Catch<IReadOnlyList<JobStepPlanKey>>> GetJobsWithPlans() => owner._planStore.GetJobsWithPlans();
 
-        public Task<Catch> RemoveForJob(JobId jobId)
+        public Task<Catch> RemoveForJob(JobId jobId, Guid incarnation)
         {
             owner._planRemovals++;
+            owner._removedIncarnations.Add(incarnation);
             if (owner._planRemovalThrows)
             {
                 throw new InvalidOperationException("The plan removal threw");
             }
             return owner._planRemovalFails
                 ? Task.FromResult<Catch>(new InvalidOperationException("The plan removal failed"))
-                : owner._planStore.RemoveForJob(jobId);
+                : owner._planStore.RemoveForJob(jobId, incarnation);
         }
     }
 }

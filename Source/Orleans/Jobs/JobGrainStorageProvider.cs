@@ -49,11 +49,11 @@ public partial class JobGrainStorageProvider(IJobsStorage jobsStorage) : IGrainS
             await HandleCatch(jobStorage.Remove(jobId), type, nameof(ClearStateAsync));
 
             // Only once the job is gone: until then a job document that still says it has a plan needs it.
-            if (storage.StepPlans is { } stepPlans)
+            if (grainState.State is JobState { StoredStepPlanIncarnation: { } incarnation } && storage.StepPlans is { } stepPlans)
             {
                 try
                 {
-                    await HandleCatch(stepPlans.RemoveForJob(jobId), type, nameof(ClearStateAsync));
+                    await HandleCatch(stepPlans.RemoveForJob(jobId, incarnation), type, nameof(ClearStateAsync));
                 }
                 catch (Exception exception)
                 {

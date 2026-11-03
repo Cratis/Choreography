@@ -55,12 +55,12 @@ public abstract partial class Job<TRequest, TJobState>
         {
             return plan;
         }
-        if (!State.HasStoredStepPlan)
+        if (!State.HasStoredStepPlan || State.StoredStepPlanIncarnation is not { } incarnation)
         {
             return null;
         }
 
-        var stored = await (Storage.StepPlans ?? throw new InvalidOperationException("The job has a stored step plan, but its storage has no step plan store")).GetForJob(JobId);
+        var stored = await (Storage.StepPlans ?? throw new InvalidOperationException("The job has a stored step plan, but its storage has no step plan store")).GetForJob(JobId, incarnation);
         stored.RethrowError();
 
         // A stored plan is never empty: an empty answer means it is gone, and a job must not run or finish on that.
@@ -73,14 +73,14 @@ public abstract partial class Job<TRequest, TJobState>
     /// <returns>Awaitable task.</returns>
     async Task RemoveStoredStepPlan()
     {
-        if (Storage.StepPlans is not { } store)
+        if (State.StoredStepPlanIncarnation is not { } incarnation || Storage.StepPlans is not { } store)
         {
             return;
         }
 
         try
         {
-            var removed = await store.RemoveForJob(JobId);
+            var removed = await store.RemoveForJob(JobId, incarnation);
             if (removed.TryGetException(out var exception))
             {
                 _logger.FailedRemovingStoredStepPlan(exception);
@@ -120,8 +120,8 @@ public abstract partial class Job<TRequest, TJobState>
     /// <param name="plan">The plan.</param>
     /// <returns>Awaitable task.</returns>
     /// <remarks>
-    /// The plan documents are written before the job document says it has them, so a crash in between leaves
-    /// documents that no job refers to, never a job that refers to missing ones.
+    /// A fresh incarnation is persisted before publishing any documents. The plan reference is set only after
+    /// publication succeeds; cleanup and loading are fenced against any other publication using the same job id.
     /// </remarks>
     async Task PlaceStepPlan(List<PlannedJobStep> plan)
     {
@@ -142,9 +142,11 @@ public abstract partial class Job<TRequest, TJobState>
             return;
         }
 
-        // Publish the live job before its plan so orphan cleanup cannot mistake preparation for a missing job.
+        // Each publication gets a fresh fence, durable before Save, including when a supplied JobId is reused.
+        var incarnation = Guid.NewGuid();
+        State.StoredStepPlanIncarnation = incarnation;
         await WriteStateAsync();
-        var saved = await store.Save(JobId, plan);
+        var saved = await store.Save(JobId, incarnation, plan);
         saved.RethrowError();
         State.StepPlan = null;
         State.HasStoredStepPlan = true;

@@ -24,7 +24,7 @@ public class when_a_later_batch_fails : given.a_plan_store
         };
     }
 
-    async Task Because() => (await _faultingStore.Save(_jobId, _plan)).RethrowError();
+    async Task Because() => (await _faultingStore.Save(_jobId, _incarnation, _plan)).RethrowError();
 
     [Fact] void should_have_committed_the_earlier_batch() => (_committedBeforeFailure > 0 && _committedBeforeFailure < _plan.Count).ShouldBeTrue();
     [Fact] void should_delete_the_partial_plan_before_retrying() => _deletes.ShouldEqual(2);

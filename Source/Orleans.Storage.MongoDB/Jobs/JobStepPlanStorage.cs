@@ -20,23 +20,24 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
 {
     const string JobIdField = "jobId";
     const string IndexField = "index";
+    const string IncarnationField = "incarnation";
 
     readonly ConcurrentDictionary<string, byte> _ensuredIndexes = new();
 
     IMongoCollection<BsonDocument> Collection => database.GetCollection<BsonDocument>(WellKnownCollectionNames.JobStepPlans);
 
     /// <inheritdoc/>
-    public async Task<Catch> Save(JobId jobId, IReadOnlyList<PlannedJobStep> plan)
+    public async Task<Catch> Save(JobId jobId, Guid incarnation, IReadOnlyList<PlannedJobStep> plan)
     {
         try
         {
             await EnsureIndexes().ConfigureAwait(false);
             await retry.Execute($"saving the step plan of job {jobId}", async () =>
             {
-                await Collection.DeleteManyAsync(JobFilter(jobId)).ConfigureAwait(false);
+                await Collection.DeleteManyAsync(PlanFilter(jobId, incarnation)).ConfigureAwait(false);
                 if (plan.Count > 0)
                 {
-                    foreach (var batch in Batches(jobId, plan))
+                    foreach (var batch in Batches(jobId, incarnation, plan))
                     {
                         await Collection.InsertManyAsync(batch, new InsertManyOptions { IsOrdered = false }).ConfigureAwait(false);
                     }
@@ -52,14 +53,14 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
     }
 
     /// <inheritdoc/>
-    public async Task<Catch<IReadOnlyList<PlannedJobStep>>> GetForJob(JobId jobId)
+    public async Task<Catch<IReadOnlyList<PlannedJobStep>>> GetForJob(JobId jobId, Guid incarnation)
     {
         try
         {
             await EnsureIndexes().ConfigureAwait(false);
             var documents = await retry.Execute($"getting the step plan of job {jobId}", async () =>
             {
-                using var cursor = await Collection.FindAsync(JobFilter(jobId), new FindOptions<BsonDocument> { Sort = Builders<BsonDocument>.Sort.Ascending(IndexField) }).ConfigureAwait(false);
+                using var cursor = await Collection.FindAsync(PlanFilter(jobId, incarnation), new FindOptions<BsonDocument> { Sort = Builders<BsonDocument>.Sort.Ascending(IndexField) }).ConfigureAwait(false);
                 return await cursor.ToListAsync().ConfigureAwait(false);
             }).ConfigureAwait(false);
             return Catch<IReadOnlyList<PlannedJobStep>>.Success([.. documents.Select(FromDocument)]);
@@ -71,17 +72,21 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
     }
 
     /// <inheritdoc/>
-    public async Task<Catch<IReadOnlyList<JobId>>> GetJobsWithPlans()
+    public async Task<Catch<IReadOnlyList<JobStepPlanKey>>> GetJobsWithPlans()
     {
         try
         {
             await EnsureIndexes().ConfigureAwait(false);
             var ids = await retry.Execute("getting the jobs that have a step plan", async () =>
             {
-                using var cursor = await Collection.DistinctAsync<BsonBinaryData>(JobIdField, FilterDefinition<BsonDocument>.Empty).ConfigureAwait(false);
+                // Read identities from the orphan documents, never from a possibly replaced job state.
+                using var cursor = await Collection.FindAsync(
+                    Builders<BsonDocument>.Filter.Exists(IncarnationField),
+                    new FindOptions<BsonDocument> { Projection = Builders<BsonDocument>.Projection.Include(JobIdField).Include(IncarnationField).Exclude("_id") }).ConfigureAwait(false);
                 return await cursor.ToListAsync().ConfigureAwait(false);
             }).ConfigureAwait(false);
-            return Catch<IReadOnlyList<JobId>>.Success([.. ids.Select(id => new JobId(id.AsGuid))]);
+            return Catch<IReadOnlyList<JobStepPlanKey>>.Success([.. ids.Select(document => new JobStepPlanKey(
+                new JobId(document[JobIdField].AsBsonBinaryData.ToGuid()), document[IncarnationField].AsBsonBinaryData.ToGuid())).Distinct()]);
         }
         catch (Exception ex)
         {
@@ -90,12 +95,12 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
     }
 
     /// <inheritdoc/>
-    public async Task<Catch> RemoveForJob(JobId jobId)
+    public async Task<Catch> RemoveForJob(JobId jobId, Guid incarnation)
     {
         try
         {
             await EnsureIndexes().ConfigureAwait(false);
-            await Collection.DeleteManyAsync(JobFilter(jobId)).ConfigureAwait(false);
+            await Collection.DeleteManyAsync(PlanFilter(jobId, incarnation)).ConfigureAwait(false);
             return Catch.Success();
         }
         catch (Exception ex)
@@ -104,10 +109,11 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
         }
     }
 
-    static FilterDefinition<BsonDocument> JobFilter(JobId jobId) =>
-        Builders<BsonDocument>.Filter.Eq(JobIdField, new BsonBinaryData(jobId.Value, GuidRepresentation.Standard));
+    static FilterDefinition<BsonDocument> PlanFilter(JobId jobId, Guid incarnation) =>
+        Builders<BsonDocument>.Filter.Eq(JobIdField, new BsonBinaryData(jobId.Value, GuidRepresentation.Standard)) &
+        Builders<BsonDocument>.Filter.Eq(IncarnationField, new BsonBinaryData(incarnation, GuidRepresentation.Standard));
 
-    static IEnumerable<List<BsonDocument>> Batches(JobId jobId, IReadOnlyList<PlannedJobStep> plan)
+    static IEnumerable<List<BsonDocument>> Batches(JobId jobId, Guid incarnation, IReadOnlyList<PlannedJobStep> plan)
     {
         // Leave room for command overhead; individual documents remain subject to MongoDB's 16 MiB limit.
         const int maxBytes = 15 * 1024 * 1024;
@@ -115,7 +121,7 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
         var bytes = 0;
         for (var index = 0; index < plan.Count; index++)
         {
-            var document = ToDocument(jobId, index, plan[index]);
+            var document = ToDocument(jobId, incarnation, index, plan[index]);
             var size = document.ToBson().Length;
             if (batch.Count > 0 && bytes + size > maxBytes)
             {
@@ -132,9 +138,10 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
         }
     }
 
-    static BsonDocument ToDocument(JobId jobId, int index, PlannedJobStep step) => new()
+    static BsonDocument ToDocument(JobId jobId, Guid incarnation, int index, PlannedJobStep step) => new()
     {
-        { "_id", $"{jobId.Value:N}-{index:D10}" },
+        { "_id", $"{jobId.Value:N}-{incarnation:N}-{index:D10}" },
+        { IncarnationField, new BsonBinaryData(incarnation, GuidRepresentation.Standard) },
         { JobIdField, new BsonBinaryData(jobId.Value, GuidRepresentation.Standard) },
         { IndexField, index },
         { "jobStepId", new BsonBinaryData(step.Id.Value, GuidRepresentation.Standard) },
@@ -159,6 +166,6 @@ public class JobStepPlanStorage(IMongoDatabase database, TransientRetry retry) :
         await Collection.EnsureIndexesOnceAsync(
             _ensuredIndexes,
             new CreateIndexModel<BsonDocument>(
-                Builders<BsonDocument>.IndexKeys.Ascending(JobIdField).Ascending(IndexField),
-                new CreateIndexOptions { Name = "jobId_index", Background = true })).ConfigureAwait(false);
+                Builders<BsonDocument>.IndexKeys.Ascending(JobIdField).Ascending(IncarnationField).Ascending(IndexField),
+                new CreateIndexOptions { Name = "jobId_incarnation_index", Background = true })).ConfigureAwait(false);
 }

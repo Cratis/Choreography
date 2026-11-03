@@ -18,7 +18,7 @@ public class and_the_stored_plan_is_gone : given.a_job_with_a_plan_store
             .ThrowsAsync(new InvalidOperationException("The silo stopped"));
         await _job.Start(new());
         await ActivateFrom(JobStatus.PreparingSteps);
-        await _planStore.RemoveForJob(_jobId);
+        await _planStore.RemoveForJob(_jobId, _incarnation);
     }
 
     async Task Because() => _result = await _job.Resume();
