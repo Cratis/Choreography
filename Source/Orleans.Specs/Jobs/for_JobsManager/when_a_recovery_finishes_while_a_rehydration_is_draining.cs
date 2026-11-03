@@ -12,7 +12,7 @@ public class when_a_recovery_finishes_while_a_rehydration_is_draining : given.a_
     async Task Because()
     {
         CompleteTheRecovery();
-        await Task.Delay(200);
+        await WaitForKeepAliveHolders(1);
         _releasesWhileTheDrainWasPending = Releases;
         CompleteResumes();
         await WaitForRehydration();

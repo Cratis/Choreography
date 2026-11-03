@@ -13,7 +13,7 @@ public class when_a_rehydration_finishes_while_a_recovery_is_running : given.a_r
     {
         CompleteResumes();
         await WaitForRehydration();
-        await Task.Delay(200);
+        await WaitForKeepAliveHolders(1);
         _releasesWhileTheRecoveryWasRunning = Releases;
         CompleteTheRecovery();
         await WaitForARelease();

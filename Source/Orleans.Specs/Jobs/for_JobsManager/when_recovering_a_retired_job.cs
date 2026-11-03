@@ -47,18 +47,10 @@ public class when_recovering_a_retired_job : given.the_manager
         await _manager.RecoverRetiredJob(_jobId);
         await _manager.RecoverRetiredJob(_jobId);
         await _recovered.Task.WaitAsync(TimeSpan.FromSeconds(5), TimeProvider.System);
-        await WaitForTheKeepAliveToBeReleased();
-        _attemptsWhenRecovered = _attempts;
-        await Task.Delay(100);
-    }
+        await _keepAliveReleased.Task.WaitAsync(TimeSpan.FromSeconds(5), TimeProvider.System);
 
-    async Task WaitForTheKeepAliveToBeReleased()
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (DateTime.UtcNow < deadline && !_silo.GrainRuntime.Mock.Invocations.Any(_ => _.Method.Name == nameof(IGrainRuntime.DelayDeactivation) && Equals(_.Arguments[1], TimeSpan.Zero)))
-        {
-            await Task.Delay(5);
-        }
+        // The release is the last thing the recovery does, so no further attempt can follow it.
+        _attemptsWhenRecovered = _attempts;
     }
 
     [Fact] void should_keep_trying_while_the_job_cannot_activate() => _attemptsWhenRecovered.ShouldEqual(FailingAttempts + 1);

@@ -34,14 +34,7 @@ public class a_recovery_alongside_a_rehydration : a_controlled_backlog
         await _manager.RecoverRetiredJob(_storedJobs[^1].Id);
     }
 
-    protected async Task WaitForARelease()
-    {
-        var deadline = DateTime.UtcNow.Add(Deadline);
-        while (DateTime.UtcNow < deadline && Releases == 0)
-        {
-            await Task.Delay(5);
-        }
-    }
+    protected Task WaitForARelease() => _keepAliveReleased.Task.WaitAsync(Deadline, TimeProvider.System);
 
     protected void CompleteTheRecovery() => _recoveryCompletion.TrySetResult(Result<ResumeJobSuccess, ResumeJobError>.Success(ResumeJobSuccess.Success));
 }

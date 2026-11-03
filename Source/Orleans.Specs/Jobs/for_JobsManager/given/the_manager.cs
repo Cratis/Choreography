@@ -33,6 +33,16 @@ public class the_manager : Specification
     protected Task Rehydration => (Task)typeof(JobsManager).GetField("_rehydration", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(_manager)!;
     protected bool _deactivated;
 
+    /// <summary>
+    /// Completes when the manager lets go of its activation, so specs can wait on the release itself rather than on the clock.
+    /// </summary>
+    protected TaskCompletionSource _keepAliveReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// Gets how many holders (the drain, each recovery) currently keep the manager activation alive.
+    /// </summary>
+    protected int KeepAliveHolders => (int)typeof(JobsManager).GetField("_keepAliveHolders", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(_manager)!;
+
     protected List<JobState> _storedJobs;
 
     async Task Establish()
@@ -83,6 +93,9 @@ public class the_manager : Specification
         var loggerFactory = Substitute.For<ILoggerFactory>();
         _silo.AddService(loggerFactory);
         _managerKey = new("event-store", "namespace");
+        _silo.GrainRuntime.Mock
+            .Setup(runtime => runtime.DelayDeactivation(It.IsAny<IGrainContext>(), TimeSpan.Zero))
+            .Callback(() => _keepAliveReleased.TrySetResult());
         _manager = await _silo.CreateGrainAsync<JobsManager>(0, _managerKey);
     }
 
@@ -117,6 +130,21 @@ public class the_manager : Specification
     protected virtual IJobStepPlanStorage? CreatePlanStore() => null;
 
     protected virtual ILogger<JobsManager> CreateLogger() => NullLogger<JobsManager>.Instance;
+
+    /// <summary>
+    /// Waits until the given number of holders remain, i.e. until a holder has actually let go - not for any period of time.
+    /// </summary>
+    /// <param name="holders">The number of holders expected to remain.</param>
+    /// <returns>Awaitable task.</returns>
+    protected async Task WaitForKeepAliveHolders(int holders)
+    {
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (KeepAliveHolders != holders)
+        {
+            cancellation.Token.ThrowIfCancellationRequested();
+            await Task.Yield();
+        }
+    }
 
     protected Task WaitForRehydration() => Rehydration.WaitAsync(TimeSpan.FromSeconds(5), TimeProvider.System);
 
