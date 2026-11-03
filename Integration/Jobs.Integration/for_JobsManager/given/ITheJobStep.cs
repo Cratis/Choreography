@@ -3,7 +3,7 @@
 
 using Orleans.Concurrency;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
 
 internal interface ITheJobStep : IJobStep<TheJobStepRequest, TheJobStepResult, TheJobStepState>
 {

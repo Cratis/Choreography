@@ -6,7 +6,7 @@ paths:
 
 ## Grain interfaces only grow within a major
 
-Every product built on Cratis.Orleans (Chronicle first) runs a rolling upgrade by letting silos of two releases share
+Every product built on Cratis.Choreography (Chronicle first) runs a rolling upgrade by letting silos of two releases share
 one cluster. Both releases then carry *this* package, at two different versions, and call each other's job, job-step,
 worker and state-machine grains. Orleans identifies a grain method on the wire by a hash of its declaring interface,
 its name and its **parameter types**, so a change that every caller still compiles against - an extra optional
@@ -15,8 +15,8 @@ parameter, a widened type - is a different method. The older silo cannot decode 
 (Cratis/Chronicle#5272).
 
 The grain interfaces this rule covers are every interface deriving from `IGrainWith...Key` or `IGrainObserver`,
-including the generic ones consumers derive from. `Source/Orleans/OrleansContracts.txt` and
-`Source/Orleans.Chronicle/OrleansContracts.txt` list them all, with each one's current version.
+including the generic ones consumers derive from. `Source/Choreography/OrleansContracts.txt` and
+`Source/Choreography.Chronicle/OrleansContracts.txt` list them all, with each one's current version.
 
 ### When you change a grain interface, within a major
 
@@ -33,12 +33,12 @@ silo. Raise it only on the interface that gained a method, never on every interf
 makes every call from a new silo seek a new silo and moves every grain during a rollout.
 
 Write it with a `using`, not qualified in place, because inside a `Cratis.*` namespace `Orleans` resolves to
-`Cratis.Orleans`:
+`Cratis.Choreography`:
 
 ```csharp
 using Orleans.CodeGeneration;
 
-namespace Cratis.Orleans.Jobs;
+namespace Cratis.Choreography.Jobs;
 
 [Version(1)]
 public interface IJob : IGrainWithGuidCompoundKey
@@ -52,7 +52,7 @@ public interface IJob : IGrainWithGuidCompoundKey
 ### Types that travel between silos
 
 - **Never move or rename a codec, or a type a codec writes the name of.** `ConceptSerializer`, `OneOfSerializer` and
-  the other `Cratis.Orleans.Serialization` codecs write type names into every value. Moving `ConceptSerializer` out of
+  the other `Cratis.Choreography.Serialization` codecs write type names into every value. Moving `ConceptSerializer` out of
   Chronicle into this package broke Chronicle 19.4 to 19.13 (Cratis/Chronicle#4325).
 - **Request, result, error and state types only gain members.** Renaming, retyping or removing a property, or changing a
   `[GenerateSerializer]` type's `[Id]` numbers, breaks a silo of the other release. Nothing checks this automatically.
@@ -64,10 +64,10 @@ and every grain class. It is generated, never hand-edited. After changing a grai
 the diff:
 
 ```bash
-dotnet format Source/Orleans/Orleans.csproj analyzers --severity info --diagnostics ORLEANS0016 ORLEANS0017 ORLEANS0018 ORLEANS0019 ORLEANS0020 ORLEANS0022 ORLEANS0023 ORLEANS0024
+dotnet format Source/Choreography/Choreography.csproj analyzers --severity info --diagnostics ORLEANS0016 ORLEANS0017 ORLEANS0018 ORLEANS0019 ORLEANS0020 ORLEANS0022 ORLEANS0023 ORLEANS0024
 ```
 
-Use `Source/Orleans.Chronicle/Orleans.Chronicle.csproj` for the state machine. A project that gains its first grain
+Use `Source/Choreography.Chronicle/Choreography.Chronicle.csproj` for the state machine. A project that gains its first grain
 interface enables the analyzer the same way and is added to `CONTRACT_PROJECTS` in `grain-compatibility.yml`.
 
 - The Orleans contract analyzer fails the build when the source and the manifest disagree.

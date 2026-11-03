@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-namespace Cratis.Orleans.Tools.GrainCompatibility.for_SelfTest.when_running;
+namespace Cratis.Choreography.Tools.GrainCompatibility.for_SelfTest.when_running;
 
 public class and_the_comparison_is_intact : Specification
 {

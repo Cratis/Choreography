@@ -1,0 +1,108 @@
+// Copyright (c) Cratis. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+using Cratis.Choreography.Jobs.Stages;
+using Cratis.Choreography.Workers;
+using Cratis.Monads;
+using Orleans.Concurrency;
+
+namespace Cratis.Choreography.Jobs;
+
+/// <summary>
+/// Represents a step in a job.
+/// </summary>
+public interface IJobStep : IGrainWithGuidCompoundKey
+{
+    /// <summary>
+    /// Prepare the job step to run in <see cref="JobStepStage.First"/>.
+    /// </summary>
+    /// <param name="request">Request to prepare it with.</param>
+    /// <returns>Awaitable task.</returns>
+    Task<Result<PrepareJobStepError>> Prepare(object request);
+
+    /// <summary>
+    /// Prepare the job step to run in a given stage.
+    /// </summary>
+    /// <param name="request">Request to prepare it with.</param>
+    /// <param name="stage">The <see cref="JobStepStage"/> the step runs in.</param>
+    /// <returns>Awaitable task.</returns>
+    /// <remarks>
+    /// The stage is persisted with the step, so a job resuming after a restart knows which stage each of its steps
+    /// belongs to without planning its steps again.
+    /// </remarks>
+    Task<Result<PrepareJobStepError>> Prepare(object request, JobStepStage stage);
+
+    /// <summary>
+    /// Start the job step.
+    /// </summary>
+    /// <param name="jobGrainId">The <see cref="GrainId"/> for the parent job.</param>
+    /// <returns>Awaitable task.</returns>
+    /// <remarks>
+    /// Starting is idempotent. <see cref="StartJobStepError.AlreadyStarted"/> and <see cref="StartJobStepError.Completed"/>
+    /// report that the work is already in flight or already done - they are outcomes of a repeated start, not failures,
+    /// and the step still reports its own completion to the job. This entry point can interleave with an outcome
+    /// report waiting on the job, so a job awaiting Start cannot deadlock with that report. Implementations must
+    /// reserve live work before yielding and must not await a callback to the job from this entry point.
+    /// </remarks>
+    [AlwaysInterleave]
+    Task<Result<StartJobStepError>> Start(GrainId jobGrainId);
+
+    /// <summary>
+    /// Stop the job step.
+    /// </summary>
+    /// <param name="removing">Whether job step is being removed.</param>
+    /// <remarks>
+    /// A stopped job step can be started again later given it has been prepared.
+    /// </remarks>
+    /// <returns>Awaitable task.</returns>
+    Task<Result<JobStepError>> Stop(bool removing);
+
+    /// <summary>
+    /// Report a status change.
+    /// </summary>
+    /// <param name="status">The <see cref="JobStepStatus"/> to change to.</param>
+    /// <returns>Awaitable task.</returns>
+    Task<Result<JobStepError>> ReportStatusChange(JobStepStatus status);
+
+    /// <summary>
+    /// Report the step has failed.
+    /// </summary>
+    /// <param name="error">The <see cref="PerformJobStepError"/>.</param>
+    /// <returns>Awaitable task.</returns>
+    Task<Result<JobStepError>> ReportFailure(PerformJobStepError error);
+
+    /// <summary>
+    /// Run a step that failed again as a later attempt.
+    /// </summary>
+    /// <param name="jobGrainId">The <see cref="GrainId"/> of the job that schedules the attempt.</param>
+    /// <param name="attempt">The number of the attempt to run; it must be later than the one the step is on.</param>
+    /// <returns>The outcome of starting the attempt. Asking for an attempt the step is already on starts the step as <see cref="Start"/> does, so it is idempotent.</returns>
+    /// <remarks>
+    /// The job schedules the attempt after its backoff; the step never waits for it.
+    /// </remarks>
+    [AlwaysInterleave]
+    Task<Result<StartJobStepError>> Retry(GrainId jobGrainId, int attempt);
+}
+
+/// <summary>
+/// Represents a step in a job.
+/// </summary>
+/// <typeparam name="TRequest">Type of the request for the job step.</typeparam>
+/// <typeparam name="TResult">Type of the result for the job step.</typeparam>
+/// <typeparam name="TState">Type of the state.</typeparam>
+public interface IJobStep<in TRequest, TResult, TState> : IGrainWithBackgroundTask<TRequest, JobStepResult>, IJobStep
+{
+    /// <summary>
+    /// Prepare the job step.
+    /// </summary>
+    /// <param name="request">Request to prepare it with.</param>
+    /// <returns>Awaitable task.</returns>
+    Task<Result<PrepareJobStepError>> Prepare(TRequest request);
+
+    /// <summary>
+    /// Gets the <typeparamref name="TState"/>.
+    /// </summary>
+    /// <returns>The state.</returns>
+    [AlwaysInterleave]
+    Task<TState> GetState();
+}

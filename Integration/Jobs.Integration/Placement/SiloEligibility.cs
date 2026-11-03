@@ -4,7 +4,7 @@
 using System.Globalization;
 using Orleans.Runtime.MembershipService.SiloMetadata;
 
-namespace Cratis.Orleans.Jobs.Integration.Placement;
+namespace Cratis.Choreography.Jobs.Integration.Placement;
 
 public static class SiloEligibility
 {

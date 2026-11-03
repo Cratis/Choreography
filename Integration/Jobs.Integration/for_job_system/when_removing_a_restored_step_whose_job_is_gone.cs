@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-namespace Cratis.Orleans.Jobs.Integration.for_job_system;
+namespace Cratis.Choreography.Jobs.Integration.for_job_system;
 
 [Collection(JobsClusterCollection.Name)]
 public class when_removing_a_restored_step_whose_job_is_gone : given.a_job_restored_before_its_step_starts

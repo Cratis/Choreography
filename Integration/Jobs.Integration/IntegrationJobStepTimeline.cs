@@ -3,7 +3,7 @@
 
 using System.Collections.Concurrent;
 
-namespace Cratis.Orleans.Jobs.Integration;
+namespace Cratis.Choreography.Jobs.Integration;
 
 /// <summary>
 /// Records when each <see cref="IntegrationJobStep"/> performed its item, so a spec can observe the order steps ran in.

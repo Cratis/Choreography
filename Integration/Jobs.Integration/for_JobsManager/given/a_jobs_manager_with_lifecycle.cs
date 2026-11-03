@@ -4,7 +4,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
 
 public class a_jobs_manager_with_lifecycle : Specification
 {

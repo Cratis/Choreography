@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
-using context = Cratis.Orleans.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step.and_job_step_fails_and_keep_state_is_false.context;
+using Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
+using context = Cratis.Choreography.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step.and_job_step_fails_and_keep_state_is_false.context;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step;
 
 [Collection(JobsClusterCollection.Name)]
 public class and_job_step_fails_and_keep_state_is_false(context context) : Given<context>(context)
@@ -15,7 +15,7 @@ public class and_job_step_fails_and_keep_state_is_false(context context) : Given
         public JobState? Job;
         public IImmutableList<JobStepState> JobSteps = [];
         public JobId JobId;
-        public Catch<JobState, Cratis.Orleans.Storage.Jobs.JobError> GetJobResult;
+        public Catch<JobState, Cratis.Choreography.Storage.Jobs.JobError> GetJobResult;
 
         async Task Because()
         {

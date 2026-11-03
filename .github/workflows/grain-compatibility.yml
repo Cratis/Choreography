@@ -23,7 +23,7 @@ on:
 env:
   DOTNET_VERSION: "10.0.x"
   # Every project that declares grain interfaces, and so carries an OrleansContracts.txt.
-  CONTRACT_PROJECTS: Source/Orleans/Orleans.csproj Source/Orleans.Chronicle/Orleans.Chronicle.csproj
+  CONTRACT_PROJECTS: Source/Choreography/Choreography.csproj Source/Choreography.Chronicle/Choreography.Chronicle.csproj
 
 jobs:
   grain-compatibility:

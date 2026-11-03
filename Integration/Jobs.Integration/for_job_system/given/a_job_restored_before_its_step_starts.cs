@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Cratis.Orleans.Jobs.Integration.for_job_system.given;
+namespace Cratis.Choreography.Jobs.Integration.for_job_system.given;
 
 public class a_job_restored_before_its_step_starts : Specification
 {

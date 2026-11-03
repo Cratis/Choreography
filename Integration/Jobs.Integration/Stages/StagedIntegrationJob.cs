@@ -1,9 +1,9 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Stages;
+using Cratis.Choreography.Jobs.Stages;
 
-namespace Cratis.Orleans.Jobs.Integration.Stages;
+namespace Cratis.Choreography.Jobs.Integration.Stages;
 
 /// <summary>
 /// A job that runs its items in stages - the steps of a stage in parallel, the stages one after the other.

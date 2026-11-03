@@ -1,0 +1,56 @@
+// Copyright (c) Cratis. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+namespace Cratis.Choreography.Jobs;
+
+/// <summary>
+/// The type of error that occurred while starting <see cref="IJob{TRequest}"/>.
+/// </summary>
+public enum StartJobError
+{
+    /// <summary>
+    /// Unknown error occurred.
+    /// </summary>
+    Unknown = 0,
+
+    /// <summary>
+    /// Some job steps failed to prepare.
+    /// </summary>
+    CouldNotPrepareJobSteps = 1,
+
+    /// <summary>
+    /// Some job steps failed to start and count as failed; the job keeps running until its remaining steps finish.
+    /// Also returned when no step in the first stage starts, but that stage continues on failure and a later stage starts.
+    /// </summary>
+    FailedStartingSomeJobSteps = 2,
+
+    /// <summary>
+    /// No step of the job started, so the job is not running.
+    /// </summary>
+    AllJobStepsFailedStarting = 3,
+
+    /// <summary>
+    /// There were no prepared job steps.
+    /// </summary>
+    NoJobStepsToStart = 4,
+
+    /// <summary>
+    /// The job has already been started and successfully been prepared before.
+    /// </summary>
+    AlreadyBeenPrepared = 5,
+
+    /// <summary>
+    /// The job has already completed and cannot be started again.
+    /// </summary>
+    AlreadyCompleted = 6,
+
+    /// <summary>
+    /// A registered <see cref="IJobAdmission"/> refused the job, so it did not start.
+    /// </summary>
+    NotAdmitted = 7,
+
+    /// <summary>
+    /// A step request cannot round-trip with the JSON serializer options used for durable recovery.
+    /// </summary>
+    InvalidStepPlan = 8,
+}

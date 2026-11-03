@@ -1,12 +1,12 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.Recovery;
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Jobs.Integration.Recovery;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Jobs.Integration.for_job_system;
+namespace Cratis.Choreography.Jobs.Integration.for_job_system;
 
 [Collection(JobsClusterCollection.Name)]
 public class when_the_silo_dies_while_resuming_a_stopped_job : Specification

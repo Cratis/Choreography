@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobStepPlanStorage;
+namespace Cratis.Choreography.Jobs.Integration.for_JobStepPlanStorage;
 
 [Collection(JobsClusterCollection.Name)]
 public class when_a_stale_save_retries_after_a_new_publication : given.a_plan_store

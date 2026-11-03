@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Tools.GrainCompatibility;
+using Cratis.Choreography.Tools.GrainCompatibility;
 
 // During a rolling upgrade, silos of the previous release and of this one call each other's grains. That only works
 // when this release adds to the grain contracts and changes nothing the previous release relies on. This compares

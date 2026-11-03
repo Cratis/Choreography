@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Hosting;
-using Cratis.Orleans.Jobs.Integration.Recovery;
-using Cratis.Orleans.Setup;
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Hosting;
+using Cratis.Choreography.Jobs.Integration.Recovery;
+using Cratis.Choreography.Setup;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -14,13 +14,13 @@ using Orleans.Runtime.Hosting;
 using Orleans.Runtime.MembershipService.SiloMetadata;
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Jobs.Integration.Placement;
+namespace Cratis.Choreography.Jobs.Integration.Placement;
 
 public sealed class PlacementClusterConfigurator : ISiloConfigurator, IClientBuilderConfigurator
 {
     public static PlacementSignals Signals { get; set; } = null!;
 
-    public void Configure(IConfiguration configuration, IClientBuilder clientBuilder) => clientBuilder.Services.AddCratisOrleansSerializers();
+    public void Configure(IConfiguration configuration, IClientBuilder clientBuilder) => clientBuilder.Services.AddCratisChoreographySerializers();
 
     public void Configure(ISiloBuilder siloBuilder)
     {
@@ -29,7 +29,7 @@ public sealed class PlacementClusterConfigurator : ISiloConfigurator, IClientBui
             ?? throw new InvalidOperationException("The test silo has no configured name.");
         var plan = signals.PlanFor(siloName);
 
-        siloBuilder.Services.AddCratisOrleansSerializers();
+        siloBuilder.Services.AddCratisChoreographySerializers();
         siloBuilder.Services.AddSingleton(signals);
 
         // The recovery integration fixtures share this assembly, so its keys are type-discovered here as well.
@@ -40,7 +40,7 @@ public sealed class PlacementClusterConfigurator : ISiloConfigurator, IClientBui
         siloBuilder.Services.AddSingleton<IJobs, Jobs>();
         siloBuilder.Services.AddSingleton<IJobStepThrottle, JobStepThrottle>();
         siloBuilder.Services.AddSingleton(Options.Create(new JobsOptions { JobWatchdogInterval = TimeSpan.FromSeconds(1) }));
-        siloBuilder.Services.AddCratisOrleansMongoDBJobsStorage(new MongoClient(JobsClusterFixture.ConnectionString),
+        siloBuilder.Services.AddCratisChoreographyMongoDBJobsStorage(new MongoClient(JobsClusterFixture.ConnectionString),
             options => options.DatabaseNameResolver = (_, _) => signals.Database);
         siloBuilder.Services.AddGrainStorage<JobGrainStorageProvider>(WellKnownGrainStorageProviders.Jobs,
             (provider, _) => new(provider.GetRequiredService<IJobsStorage>()));
@@ -50,7 +50,7 @@ public sealed class PlacementClusterConfigurator : ISiloConfigurator, IClientBui
         siloBuilder.AddJobPlacement<TestControllerDirector>();
         siloBuilder.AddJobStepPlacement<TestWorkerDirector>();
         siloBuilder.UseJobStepParallelismFromSiloMetadata();
-        siloBuilder.AddCratisOrleansJobsRecovery();
+        siloBuilder.AddCratisChoreographyJobsRecovery();
         siloBuilder.Configure<ClusterMembershipOptions>(options =>
         {
             options.ProbeTimeout = TimeSpan.FromSeconds(1);

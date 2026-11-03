@@ -3,7 +3,7 @@
 
 using System.Collections.Concurrent;
 
-namespace Cratis.Orleans.Jobs.Integration.Placement;
+namespace Cratis.Choreography.Jobs.Integration.Placement;
 
 public sealed class PlacementSignals(string database, IReadOnlyDictionary<string, SiloPlan> plans, IEnumerable<SiloPlan>? extras = null, bool roundRobinWorkers = false)
 {

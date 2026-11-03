@@ -1,0 +1,840 @@
+// Copyright (c) Cratis. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+using System.Collections.Immutable;
+using System.Reactive.Linq;
+using System.Runtime.CompilerServices;
+using Cratis.Choreography.Storage;
+using Cratis.Choreography.Storage.Jobs;
+using Cratis.Monads;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using OneOf.Types;
+using Orleans.Concurrency;
+using Orleans.Runtime.Diagnostics;
+
+namespace Cratis.Choreography.Jobs;
+
+/// <summary>
+/// Represents an implementation of <see cref="IJobsManager"/>.
+/// </summary>
+/// <remarks>
+/// Initializes a new instance of the <see cref="JobsManager"/> class.
+/// </remarks>
+/// <param name="jobsStorage"><see cref="IJobsStorage"/> for resolving underlying storage.</param>
+/// <param name="jobTypes"><see cref="IJobTypes"/> that knows about job type associations.</param>
+/// <param name="options">Jobs options.</param>
+/// <param name="logger">Logger for logging.</param>
+[Reentrant]
+[GrainType("cratis-orleans-jobs-manager")]
+public class JobsManager(
+    IJobsStorage jobsStorage,
+    IJobTypes jobTypes,
+    IOptions<JobsOptions> options,
+    ILogger<JobsManager> logger) : Grain, IJobsManager
+{
+    static readonly JobStatus[] _interruptedStatuses = [JobStatus.Running, JobStatus.PreparingJob, JobStatus.PreparingSteps, JobStatus.StartingSteps];
+    static readonly JobStatus[] _stoppingStatuses = [JobStatus.Stopped, JobStatus.Removing];
+    static readonly JobStatus[] _rehydratedStatuses = [.. _interruptedStatuses, .. _stoppingStatuses];
+    static readonly JobStatus[] _terminalStatuses = [JobStatus.CompletedSuccessfully, JobStatus.CompletedWithFailures, JobStatus.Failed];
+
+    /// <summary>
+    /// Whether a persisted job still needs rehydration. A stop whose stopped hook already ran is settled, and leaving it
+    /// alone keeps every historical stopped job out of memory.
+    /// </summary>
+    static readonly Func<JobState, bool> _needsRehydration = state => !(state.Status is JobStatus.Stopped && state.StopFinalized);
+
+    CancellationTokenSource _rehydrationCancellation = null!;
+    IDisposable? _deactivationSubscription;
+    bool _deactivationNotificationsUnavailable;
+    Task? _rehydrationPreparation;
+    Task? _rehydration;
+    bool _rehydrationActive;
+    bool _rehydrationRequested;
+    JobsStorage? _jobsStorageForScope;
+    IJobStorage? _jobStorage;
+    IJobStepStorage? _jobStepStorage;
+    JobsManagerKey _key = JobsManagerKey.NotSet;
+    IGrainTimer? _cleanupTimer;
+
+    /// <inheritdoc/>
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        this.GetPrimaryKeyLong(out var key);
+        _key = key!;
+        ServiceProvider.GetService<JobsManagerKeys>()?.Remember(_key);
+        var applicationLifetime = ServiceProvider.GetRequiredService<IHostApplicationLifetime>();
+        _rehydrationCancellation = CancellationTokenSource.CreateLinkedTokenSource(applicationLifetime.ApplicationStopping);
+
+        _jobsStorageForScope = jobsStorage.GetFor(_key.Scope, _key.Namespace);
+        _jobStorage = _jobsStorageForScope.Jobs;
+        _jobStepStorage = _jobsStorageForScope.JobSteps;
+
+        var cleanupCadence = options.Value.CleanupCadence;
+        _cleanupTimer = this.RegisterGrainTimer(
+            async _ => await CleanupDeadJobs(),
+            new GrainTimerCreationOptions
+            {
+                DueTime = cleanupCadence,
+                Period = cleanupCadence
+            });
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public override async Task OnDeactivateAsync(DeactivationReason reason, CancellationToken cancellationToken)
+    {
+        _cleanupTimer?.Dispose();
+        try
+        {
+            await _rehydrationCancellation.CancelAsync();
+            if (_rehydration is not null)
+            {
+                await _rehydration.WaitAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Orleans bounds teardown; the drain still owns its failures and releases its keep-alive.
+        }
+        catch (Exception exception)
+        {
+            logger.UnknownError(exception);
+        }
+        finally
+        {
+            _deactivationSubscription?.Dispose();
+            _deactivationSubscription = null;
+            _rehydrationCancellation.Dispose();
+        }
+    }
+
+    /// <inheritdoc/>
+    public Task<Result<JobId, StartJobError>> Start<TJob, TRequest>(TRequest request)
+        where TJob : IJob<TRequest>
+        where TRequest : class, IJobRequest
+        => Start<TJob, TRequest>(JobId.New(), request);
+
+    /// <inheritdoc/>
+    public async Task<Result<JobId, StartJobError>> Start<TJob, TRequest>(JobId jobId, TRequest request)
+        where TJob : IJob<TRequest>
+        where TRequest : class, IJobRequest
+    {
+        using var scope = logger.BeginJobsManagerScope(_key);
+        logger.StartingJob(jobId);
+
+        return await JobStarter.Start<TJob, TRequest>(GrainFactory, new JobKey(_key.Scope, _key.Namespace), jobId, request);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> Resume(JobId jobId)
+    {
+        using var scope = logger.BeginJobsManagerScope(_key);
+
+        logger.ResumingJob(jobId);
+
+        return await ResumeJobAndHandleResult(jobId);
+    }
+
+    /// <inheritdoc/>
+    public async Task<Result<ResumeJobSuccess, ResumeJobError>> ResumeIfRunning(JobId jobId)
+    {
+        using var scope = logger.BeginJobsManagerScope(_key);
+
+        logger.ResumingJobIfRunning(jobId);
+
+        var outcome = await DoActionOnJobGrain(jobId, async (_, job) =>
+        {
+            var result = await job.ResumeIfRunning();
+            await result.Match(
+                success => HandleResumeJobSuccess(jobId, success),
+                error => HandleResumeJobError(jobId, error));
+            return result;
+        });
+        return outcome.Match(
+            result => result,
+            _ => Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.Unknown));
+    }
+
+    /// <inheritdoc/>
+    public Task Rehydrate()
+    {
+        // This grain is reentrant: share both preparation and the background drain, but never make callers
+        // wait for a backlog which can take longer than their grain response timeout.
+        if (_rehydrationPreparation?.IsCompleted == false)
+        {
+            return _rehydrationPreparation;
+        }
+        if (_rehydrationActive)
+        {
+            _rehydrationRequested = true;
+            return Task.CompletedTask;
+        }
+        return _rehydrationPreparation = PrepareRehydration();
+    }
+
+    /// <inheritdoc/>
+    public async Task<Cratis.Monads.Result<StopJobError>> Stop(JobId jobId)
+    {
+        using var scope = logger.BeginJobsManagerScope(_key);
+
+        logger.StoppingJob(jobId);
+        var outcome = await DoActionOnJobGrain(jobId, async (_, job) =>
+        {
+            var stopResult = await job.Stop();
+            if (stopResult.TryGetError(out var error))
+            {
+                await HandleStopJobError(jobId, error);
+                return Result.Failed(error);
+            }
+            return Result.Success<StopJobError>();
+        });
+        return outcome.Match(result => result, _ => Result.Failed(StopJobError.Unknown));
+    }
+
+    /// <inheritdoc/>
+    public async Task<Result<int, RetryFailedStepsError>> RetryFailedSteps(JobId jobId)
+    {
+        using var scope = logger.BeginJobsManagerScope(_key);
+
+        logger.RetryingFailedSteps(jobId);
+        var outcome = await DoActionOnJobGrain(jobId, (_, job) => job.RetryFailed());
+        return outcome.Match(result => result, _ => Result.Failed<int, RetryFailedStepsError>(RetryFailedStepsError.Unknown));
+    }
+
+    /// <inheritdoc/>
+    public async Task Delete(JobId jobId)
+    {
+        using var scope = logger.BeginJobsManagerScope(_key);
+
+        logger.DeletingJob(jobId);
+        var deletedJobResult = await DoActionOnJobGrain(jobId, async (jobState, job) =>
+        {
+            var removeResult = await job.Remove();
+            return await removeResult.Match(
+                _ => Task.FromResult(true),
+                async removeJobError =>
+                {
+                    await HandleRemoveJobError(jobState.Id, removeJobError);
+                    return false;
+                });
+        });
+        if (!deletedJobResult.TryGetResult(out var deletedJob) || !deletedJob)
+        {
+            logger.FailedToDeleteJob(jobId);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IImmutableList<JobState>> GetJobsOfType<TJob, TRequest>()
+        where TJob : IJob<TRequest>
+        where TRequest : class, IJobRequest
+    {
+        var getJobs = await _jobStorage!.GetJobs<TJob, JobState>();
+        return await getJobs.Match(
+            Task.FromResult,
+            error =>
+            {
+                logger.UnableToGetJobs(typeof(TJob), error);
+                return Task.FromResult<IImmutableList<JobState>>(ImmutableList<JobState>.Empty);
+            },
+            async error =>
+            {
+                await HandleUnknownFailure(error);
+                return [];
+            });
+    }
+
+    /// <inheritdoc/>
+    public async Task<IImmutableList<JobState>> GetJobs(JobQuery query)
+    {
+        var getJobs = await _jobStorage!.GetJobs(query);
+        return await getJobs.Match(
+            Task.FromResult,
+            exception =>
+            {
+                logger.UnableToGetAllJobs(exception);
+                return Task.FromResult<IImmutableList<JobState>>(ImmutableList<JobState>.Empty);
+            });
+    }
+
+    /// <inheritdoc/>
+    public async Task<IImmutableList<JobState>> GetAllJobs()
+    {
+        var getJobs = await _jobStorage!.GetJobs();
+        return await getJobs.Match(
+            Task.FromResult,
+            exception =>
+            {
+                logger.UnableToGetAllJobs(exception);
+                return Task.FromResult<IImmutableList<JobState>>(ImmutableList<JobState>.Empty);
+            });
+    }
+
+    /// <inheritdoc/>
+    public async Task CleanupDeadJobs()
+    {
+        using var scope = logger.BeginJobsManagerScope(_key);
+
+        logger.CleaningUpDeadJobs();
+
+        var now = DateTimeOffset.UtcNow;
+        var cleanupOptions = options.Value;
+        var deadJobCutoff = now - cleanupOptions.DeadJobThreshold;
+        var getPreparingJobs = await _jobStorage!.GetJobs(new JobQuery
+        {
+            Statuses = [JobStatus.PreparingJob, JobStatus.PreparingSteps],
+            CreatedBefore = deadJobCutoff,
+            Take = Math.Max(1, cleanupOptions.MaxTerminalJobsPerCleanup)
+        });
+        await getPreparingJobs.Match(
+            CleanupDeadJobsInternal,
+            exception =>
+            {
+                logger.FailedToGetJobsForCleanup(exception);
+                return Task.CompletedTask;
+            });
+
+        await CleanupOrphanedStepPlans();
+
+        if (cleanupOptions.TerminalJobRetention == Timeout.InfiniteTimeSpan)
+        {
+            return;
+        }
+
+        var terminalJobCutoff = now - cleanupOptions.TerminalJobRetention;
+        var getTerminalJobs = await _jobStorage.GetJobs(new JobQuery
+        {
+            Statuses = _terminalStatuses,
+            CreatedBefore = terminalJobCutoff,
+            Take = Math.Max(1, cleanupOptions.MaxTerminalJobsPerCleanup)
+        });
+        await getTerminalJobs.Match(
+            CleanupTerminalJobs,
+            exception =>
+            {
+                logger.FailedToGetJobsForCleanup(exception);
+                return Task.CompletedTask;
+            });
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static IDisposable ObserveDeactivation(IGrainContext grainContext, CancellationTokenSource cancellation)
+    {
+        // Orleans 10.3.1: GrainLifecycleEvents is a diagnostic API which may change between minor versions.
+        // Keep its type references behind a non-inlined boundary so even JIT/type-loading failures are caught
+        // by SubscribeToDeactivation. Observe preparation and the drain, without pinning idle grains.
+        // Unlike OnDeactivateAsync, this fires before active requests finish, possibly off-scheduler.
+        // Only touch the thread-safe CTS here. Keep-alive prevents idle collection, not initiated deactivation
+        // (including migration), so all deactivation reasons must cancel dispatch.
+        return GrainLifecycleEvents.AllEvents
+            .OfType<GrainLifecycleEvents.Deactivating>()
+            .Where(notification => ReferenceEquals(notification.GrainContext, grainContext))
+            .Subscribe(_ => cancellation.Cancel());
+    }
+
+    void SubscribeToDeactivation()
+    {
+        if (_deactivationNotificationsUnavailable)
+        {
+            return;
+        }
+        try
+        {
+            _deactivationSubscription = ObserveDeactivation(GrainContext, _rehydrationCancellation);
+        }
+        catch (Exception exception)
+        {
+            // Log once per activation and retain OnDeactivateAsync/host shutdown cancellation as a fallback.
+            _deactivationNotificationsUnavailable = true;
+            logger.EarlyDeactivationNotificationsUnavailable(exception);
+        }
+    }
+
+    async Task PrepareRehydration()
+    {
+        using var scope = logger.BeginJobsManagerScope(_key);
+        var cancellationToken = _rehydrationCancellation.Token;
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Deactivating is emitted only once: subscribe before preparation can yield, not just at dispatch.
+        SubscribeToDeactivation();
+        var drainStarted = false;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            logger.Rehydrating();
+            await CleanupDeadJobs().WaitAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var getRunningJobs = await _jobStorage!.GetJobsExcludingFinalizedStops(_rehydratedStatuses).WaitAsync(cancellationToken);
+            await getRunningJobs.Match(
+                runningJobs =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    DelayDeactivation(Timeout.InfiniteTimeSpan);
+                    _rehydration = ResumeJobsInBackground(runningJobs.Where(_needsRehydration), cancellationToken);
+                    drainStarted = true;
+                    return Task.CompletedTask;
+                },
+                HandleUnknownFailure);
+        }
+        finally
+        {
+            if (!drainStarted)
+            {
+                _deactivationSubscription?.Dispose();
+                _deactivationSubscription = null;
+            }
+        }
+    }
+
+    async Task ResumeJobsInBackground(IEnumerable<JobState> runningJobs, CancellationToken cancellationToken)
+    {
+        _rehydrationActive = true;
+
+        // Yield onto the grain scheduler, not the thread pool, so even a synchronously completing backlog
+        // cannot keep Rehydrate's caller waiting. This work owns its failures and activation lifetime.
+        await Task.Yield();
+        using var scope = logger.BeginJobsManagerScope(_key);
+        try
+        {
+            await DrainRehydrationPasses(runningJobs, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Undispatched jobs stay in storage for an explicit Rehydrate call or the next host startup.
+        }
+        catch (Exception exception)
+        {
+            logger.UnknownError(exception);
+        }
+        finally
+        {
+            _deactivationSubscription?.Dispose();
+            _deactivationSubscription = null;
+            try
+            {
+                DelayDeactivation(TimeSpan.Zero);
+            }
+            catch (InvalidOperationException exception)
+            {
+                // Teardown can invalidate the activation before this continuation runs.
+                logger.RehydrationKeepAliveAlreadyReleased(exception);
+            }
+
+            // Release everything this pass owns before admitting another one. Task completion happens later.
+            _rehydrationActive = false;
+        }
+    }
+
+    async Task DrainRehydrationPasses(IEnumerable<JobState> runningJobs, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            await RunBounded(
+                runningJobs.OrderBy(state => state.Created).ToList(),
+                options.Value.MaxConcurrentRehydration,
+                state => ResumeJobAndHandleResult(state, cancellationToken),
+                cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_rehydrationRequested)
+            {
+                return;
+            }
+
+            // Coalesce requests during a drain into a fresh full pass, not another concurrent drain.
+            _rehydrationRequested = false;
+            await CleanupDeadJobs().WaitAsync(cancellationToken);
+            var discovered = await _jobStorage!.GetJobsExcludingFinalizedStops(_rehydratedStatuses).WaitAsync(cancellationToken);
+            discovered.RethrowError();
+            runningJobs = discovered.AsT0.Where(_needsRehydration);
+        }
+    }
+
+    async Task CleanupDeadJobsInternal(IEnumerable<JobState> preparingJobs)
+    {
+        var deadJobs = new List<JobState>();
+
+        foreach (var job in preparingJobs.Where(job => job.StepPlan is null && !job.HasStoredStepPlan))
+        {
+            var stepCountResult = await _jobStepStorage!.CountForJob(job.Id);
+            var shouldDelete = await stepCountResult.Match(
+                count => Task.FromResult(count == 0),
+                error =>
+                {
+                    logger.FailedToGetStepCountForJob(job.Id, error);
+                    logger.SkippingJobDueToStepCountError(job.Id);
+                    return Task.FromResult(false);
+                });
+
+            if (shouldDelete)
+            {
+                deadJobs.Add(job);
+            }
+        }
+
+        if (deadJobs.Count > 0)
+        {
+            logger.FoundDeadJobs(deadJobs.Count);
+            await RunBounded(deadJobs, options.Value.MaxConcurrentCleanup, job => Delete(job.Id));
+        }
+        else
+        {
+            logger.NoDeadJobsFound();
+        }
+    }
+
+    /// <summary>
+    /// Removes the stored step plans that no job needs any more.
+    /// </summary>
+    /// <remarks>
+    /// A fresh plan incarnation is persisted in non-terminal job state before any plan documents are saved.
+    /// Recheck a candidate immediately before deletion, then delete only the incarnation read from those documents.
+    /// Reusing a job id cannot publish that incarnation, even between the final read and deletion.
+    /// An unreadable or non-terminal job keeps its plans.
+    /// </remarks>
+    /// <returns>Awaitable task.</returns>
+    async Task CleanupOrphanedStepPlans()
+    {
+        if (_jobsStorageForScope?.StepPlans is not { } stepPlans)
+        {
+            return;
+        }
+
+        try
+        {
+            var withPlans = await stepPlans.GetJobsWithPlans();
+            withPlans.RethrowError();
+            foreach (var plan in withPlans.AsT0)
+            {
+                var jobId = plan.JobId;
+                try
+                {
+                    if (!await IsOrphanedPlan(jobId) || !await IsOrphanedPlan(jobId))
+                    {
+                        continue;
+                    }
+
+                    var removed = await stepPlans.RemoveForJob(jobId, plan.Incarnation);
+                    if (removed.TryGetException(out var exception))
+                    {
+                        logger.FailedToRemoveStoredStepPlan(jobId, exception);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    logger.FailedToRemoveStoredStepPlan(jobId, exception);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.FailedToCleanUpOrphanedStepPlans(exception);
+        }
+    }
+
+    async Task<bool> IsOrphanedPlan(JobId jobId)
+    {
+        var job = await _jobStorage!.GetJob(jobId);
+        return job.Match(
+            state => _terminalStatuses.Contains(state.Status) || (state.Status is JobStatus.Stopped && state.StopFinalized),
+            error => error is Storage.Jobs.JobError.NotFound,
+            _ => false);
+    }
+
+    async Task CleanupTerminalJobs(IImmutableList<JobState> terminalJobs)
+    {
+        if (terminalJobs.Count == 0)
+        {
+            return;
+        }
+
+        logger.FoundTerminalJobs(terminalJobs.Count);
+        await RunBounded(terminalJobs, options.Value.MaxConcurrentCleanup, RemoveTerminalJob);
+    }
+
+    async Task RemoveTerminalJob(JobState job)
+    {
+        var removeSteps = await _jobStepStorage!.RemoveAllForJob(job.Id);
+        var stepsRemoved = await removeSteps.Match(
+            _ => Task.FromResult(true),
+            exception =>
+            {
+                logger.FailedToRemoveTerminalJobSteps(job.Id, exception);
+                return Task.FromResult(false);
+            });
+        if (!stepsRemoved)
+        {
+            return;
+        }
+
+        var removeJob = await _jobStorage!.RemoveTerminal(job.Id);
+        await removeJob.Match(
+            removed =>
+            {
+                if (!removed)
+                {
+                    logger.SkippedTerminalJobRemoval(job.Id);
+                }
+                return Task.CompletedTask;
+            },
+            exception =>
+            {
+                logger.FailedToRemoveTerminalJob(job.Id, exception);
+                return Task.CompletedTask;
+            });
+    }
+
+    async Task RunBounded(IReadOnlyCollection<JobState> jobs, int maxConcurrency, Func<JobState, Task> action, CancellationToken cancellationToken = default)
+    {
+        // Run on the grain's own scheduler (not the thread pool) so grain calls keep their context. One failing
+        // job must never stop the others, so every action is isolated.
+        using var gate = new SemaphoreSlim(Math.Max(1, maxConcurrency));
+        var tasks = jobs.Select(async state =>
+        {
+            try
+            {
+                await gate.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await action(state).WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Stop dispatch without waiting for an already in-flight grain call or storage read.
+            }
+            catch (Exception ex)
+            {
+                logger.UnknownError(ex);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+        await Task.WhenAll(tasks);
+    }
+
+    Result<IJob, IJobTypes.GetClrTypeForError> GetJobGrain(JobState jobState) => jobTypes.GetClrTypeFor(jobState.Type)
+        .Match(
+            jobType => Result<IJob, IJobTypes.GetClrTypeForError>.Success((IJob)GrainFactory.GetGrain(jobType, jobState.Id, new JobKey(_key.Scope, _key.Namespace))),
+            error => error);
+
+    async Task<Result<TResult, None>> DoActionOnJobGrain<TResult>(JobId jobId, Func<JobState, IJob, Task<TResult>> doAction)
+    {
+        try
+        {
+            var jobStateResult = await _jobStorage!.GetJob(jobId);
+            var getJobState = await jobStateResult.Match(
+                state => Task.FromResult(Result.Success<JobState, None>(state)),
+                async jobError =>
+                {
+                    await HandleJobStorageError(jobId, jobError);
+                    return Result<JobState, None>.Failed(default);
+                },
+                async exception =>
+                {
+                    await HandleUnknownFailure(jobId, exception);
+                    return Result<JobState, None>.Failed(default);
+                });
+            if (!getJobState.TryGetResult(out var jobState))
+            {
+                return Result<TResult, None>.Failed(default);
+            }
+            return await DoActionOnJobGrain(jobState, doAction);
+        }
+        catch (Exception ex)
+        {
+            logger.UnknownError(ex);
+            return Result<TResult, None>.Failed(default);
+        }
+    }
+
+    async Task<Result<TResult, None>> DoActionOnJobGrain<TResult>(JobState jobState, Func<JobState, IJob, Task<TResult>> doAction)
+    {
+        try
+        {
+            var getJobGrain = GetJobGrain(jobState);
+            if (getJobGrain.TryPickT1(out var getJobGrainError, out var job))
+            {
+                await HandleGetJobGrainError(jobState.Id, jobState.Type, getJobGrainError);
+                return Result<TResult, None>.Failed(default);
+            }
+            return await doAction(jobState, job);
+        }
+        catch (Exception ex)
+        {
+            logger.UnknownError(ex);
+            return Result<TResult, None>.Failed(default);
+        }
+    }
+
+    async Task<bool> ResumeJobAndHandleResult(JobId jobId)
+    {
+        var outcome = await DoActionOnJobGrain(jobId, ResumeAction(jobId));
+        return outcome.Match(taken => taken, _ => false);
+    }
+
+    async Task<bool> ResumeJobAndHandleResult(JobState state, CancellationToken cancellationToken)
+    {
+        // Discovery is a snapshot. Storage has no status-only read, so reload once at dispatch to preserve
+        // a Stop issued while this job was queued. Reuse that fresh state for grain resolution, without a
+        // second read. Explicit Resume remains unrestricted.
+        var outcome = await DoActionOnJobGrain(state.Id, async (currentState, job) =>
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            // A stop or removal whose silo went away before its steps reported is finished, never resumed: the stop stands.
+            if (!_needsRehydration(currentState))
+            {
+                return false;
+            }
+            if (_stoppingStatuses.Contains(currentState.Status))
+            {
+                await (job as IJobStopFinalization ?? job.AsReference<IJobStopFinalization>()).FinalizeStop();
+                return true;
+            }
+            return _interruptedStatuses.Contains(currentState.Status) && await ResumeAction(state.Id)(currentState, job);
+        });
+        return outcome.Match(taken => taken, _ => false);
+    }
+
+    Func<JobState, IJob, Task<bool>> ResumeAction(JobId jobId) => async (_, job) =>
+    {
+        var resumeResult = await job.Resume();
+        await resumeResult.Match(
+            success => HandleResumeJobSuccess(jobId, success),
+            error => HandleResumeJobError(jobId, error));
+        return resumeResult.IsSuccess;
+    };
+
+    Task HandleRemoveJobError(JobId jobId, RemoveJobError jobError)
+    {
+        switch (jobError)
+        {
+            case RemoveJobError.JobIsCompleted:
+                logger.JobIsCompletedAndCannotBeRemovedOrStopped(jobId);
+                break;
+            case RemoveJobError.JobIsAlreadyBeingRemoved:
+                logger.JobIsAlreadyBeingRemoved(jobId);
+                break;
+            case RemoveJobError.CouldNotPersistRemoval:
+                logger.FailedToDeleteJob(jobId);
+                break;
+            default:
+                logger.FailedToRemoveJob(jobId);
+                break;
+        }
+        return Task.CompletedTask;
+    }
+    Task HandleStopJobError(JobId jobId, StopJobError jobError)
+    {
+        switch (jobError)
+        {
+            case StopJobError.JobIsCompleted:
+                logger.JobIsCompletedAndCannotBeRemovedOrStopped(jobId);
+                break;
+            case StopJobError.JobIsNotRunning:
+                logger.JobCannotBeStoppedIsNotRunning(jobId);
+                break;
+            default:
+                logger.FailedToStopJob(jobId);
+                break;
+        }
+        return Task.CompletedTask;
+    }
+
+    Task HandleGetJobGrainError(JobId jobId, JobType jobType, IJobTypes.GetClrTypeForError error)
+    {
+        logger.UnableToGetJob(jobId, jobType, error);
+        return Task.CompletedTask;
+    }
+
+    Task HandleJobStorageError(JobId jobId, Storage.Jobs.JobError jobError)
+    {
+        switch (jobError)
+        {
+            case Storage.Jobs.JobError.NotFound:
+                logger.JobCouldNotBeFound(jobId);
+                break;
+            default:
+                logger.JobErrorOccurred(jobId, jobError);
+                break;
+        }
+        return Task.CompletedTask;
+    }
+
+    Task HandleResumeJobSuccess(JobId jobId, ResumeJobSuccess success)
+    {
+        switch (success)
+        {
+            case ResumeJobSuccess.JobAlreadyRunning:
+                logger.CannotResumeJobBecauseAlreadyRunning(jobId);
+                break;
+            case ResumeJobSuccess.JobIsCompleted:
+                logger.CannotResumeJobBecauseCompleted(jobId);
+                break;
+            case ResumeJobSuccess.JobIsNotRunning:
+                logger.NotResumingJobBecauseItIsNotRunning(jobId);
+                break;
+            default:
+                return Task.CompletedTask;
+        }
+        return Task.CompletedTask;
+    }
+
+    Task HandleResumeJobError(JobId jobId, ResumeJobError error) => error.Match(
+        cannotResumeError => HandleCannotResumeError(jobId, cannotResumeError),
+        failedResumingSteps =>
+        {
+            logger.FailedToResumeJobSteps(jobId, failedResumingSteps.FailedJobSteps);
+            return Task.CompletedTask;
+        });
+
+    Task HandleCannotResumeError(JobId jobId, CannotResumeJobError jobError)
+    {
+        switch (jobError)
+        {
+            case CannotResumeJobError.JobIsNotPrepared:
+                logger.CannotResumeUnpreparedJob(jobId);
+                break;
+            case CannotResumeJobError.JobCannotBeResumed:
+                logger.JobCannotBeResumed(jobId);
+                break;
+            case CannotResumeJobError.NotAdmitted:
+                logger.JobNotAdmitted(jobId);
+                break;
+            case CannotResumeJobError.MissingStepPlan:
+                logger.CannotResumeJobWithoutStepPlan(jobId);
+                break;
+            default:
+                logger.FailedResumingJob(jobId);
+                break;
+        }
+        return Task.CompletedTask;
+    }
+
+    Task HandleUnknownFailure(JobId jobId, Exception ex)
+    {
+        logger.UnknownError(ex, jobId);
+        return Task.FromException(ex);
+    }
+
+    Task HandleUnknownFailure(Exception ex)
+    {
+        logger.UnknownError(ex);
+        return Task.FromException(ex);
+    }
+}

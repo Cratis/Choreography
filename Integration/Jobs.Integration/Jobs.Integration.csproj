@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <AssemblyName>Cratis.Orleans.Jobs.Integration</AssemblyName>
-        <RootNamespace>Cratis.Orleans.Jobs.Integration</RootNamespace>
+        <AssemblyName>Cratis.Choreography.Jobs.Integration</AssemblyName>
+        <RootNamespace>Cratis.Choreography.Jobs.Integration</RootNamespace>
         <IsTestProject>true</IsTestProject>
         <IsPackable>false</IsPackable>
         <!-- xUnit v3 test projects are executables -->
@@ -23,9 +23,9 @@
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     </ItemGroup>
     <ItemGroup>
-        <ProjectReference Include="../../Source/Orleans/Orleans.csproj" />
-        <ProjectReference Include="../../Source/Orleans.Storage/Orleans.Storage.csproj" />
-        <ProjectReference Include="../../Source/Orleans.Storage.MongoDB/Orleans.Storage.MongoDB.csproj" />
-        <ProjectReference Include="../../Source/Orleans.Storage.Sql/Orleans.Storage.Sql.csproj" />
+        <ProjectReference Include="../../Source/Choreography/Choreography.csproj" />
+        <ProjectReference Include="../../Source/Choreography.Storage/Choreography.Storage.csproj" />
+        <ProjectReference Include="../../Source/Choreography.Storage.MongoDB/Choreography.Storage.MongoDB.csproj" />
+        <ProjectReference Include="../../Source/Choreography.Storage.Sql/Choreography.Storage.Sql.csproj" />
     </ItemGroup>
 </Project>

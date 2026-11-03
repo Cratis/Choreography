@@ -2,9 +2,9 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Diagnostics;
-using Cratis.Orleans.Storage.Sql.Jobs;
+using Cratis.Choreography.Storage.Sql.Jobs;
 
-namespace Cratis.Orleans.Jobs.Integration.for_SqlJobStorage.when_reading_jobs_excluding_finalized_stops;
+namespace Cratis.Choreography.Jobs.Integration.for_SqlJobStorage.when_reading_jobs_excluding_finalized_stops;
 
 public class from_postgresql_with_many_finalized_stops : given.a_postgresql_jobs_database
 {

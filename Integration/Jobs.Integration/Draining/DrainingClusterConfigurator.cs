@@ -1,9 +1,9 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.Recovery;
-using Cratis.Orleans.Setup;
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Jobs.Integration.Recovery;
+using Cratis.Choreography.Setup;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -13,7 +13,7 @@ using Orleans.Metadata;
 using Orleans.Runtime.Hosting;
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Jobs.Integration.Draining;
+namespace Cratis.Choreography.Jobs.Integration.Draining;
 
 /// <summary>
 /// Configures a cluster whose silos give a deactivating grain only a short time and count step state writes.
@@ -32,20 +32,20 @@ public sealed class DrainingClusterConfigurator : ISiloConfigurator, IClientBuil
     public static DrainingSignals Signals { get; set; } = null!;
 
     /// <inheritdoc/>
-    public void Configure(IConfiguration configuration, IClientBuilder clientBuilder) => clientBuilder.Services.AddCratisOrleansSerializers();
+    public void Configure(IConfiguration configuration, IClientBuilder clientBuilder) => clientBuilder.Services.AddCratisChoreographySerializers();
 
     /// <inheritdoc/>
     public void Configure(ISiloBuilder siloBuilder)
     {
         var signals = Signals;
-        siloBuilder.Services.AddCratisOrleansSerializers();
+        siloBuilder.Services.AddCratisChoreographySerializers();
         siloBuilder.Services.AddSingleton(signals);
         siloBuilder.Services.AddSingleton<ITypes>(_ => new Cratis.Types.Types());
         siloBuilder.Services.AddSingleton<IJobTypes, JobTypes>();
         siloBuilder.Services.AddSingleton<IJobs, Jobs>();
         siloBuilder.Services.AddSingleton<IJobStepThrottle, JobStepThrottle>();
         siloBuilder.Services.AddSingleton(Options.Create(new JobsOptions()));
-        siloBuilder.Services.AddCratisOrleansMongoDBJobsStorage(
+        siloBuilder.Services.AddCratisChoreographyMongoDBJobsStorage(
             new MongoClient(JobsClusterFixture.ConnectionString),
             options => options.DatabaseNameResolver = (_, _) => signals.Database);
         siloBuilder.Services.AddGrainStorage<JobGrainStorageProvider>(

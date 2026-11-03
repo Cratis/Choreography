@@ -33,7 +33,7 @@ another silo lands in the same database as the one that started it.
 
 ## One accessor, every provider
 
-`IJobsStorage` is the single registration the engine needs. `AddCratisOrleansMongoDBJobsStorage` (or the SQL
+`IJobsStorage` is the single registration the engine needs. `AddCratisChoreographyMongoDBJobsStorage` (or the SQL
 or in-memory equivalents) registers it, and the silo hosting picks it up for the grain storage providers.
 Chronicle's own storage tree exposes the same interface, so its kernel and the job system resolve identical
 storage for the same event store and namespace.

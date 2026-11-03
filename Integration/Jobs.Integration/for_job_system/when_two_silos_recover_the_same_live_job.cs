@@ -1,11 +1,11 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.Recovery;
+using Cratis.Choreography.Jobs.Integration.Recovery;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Jobs.Integration.for_job_system;
+namespace Cratis.Choreography.Jobs.Integration.for_job_system;
 
 [Collection(JobsClusterCollection.Name)]
 public class when_two_silos_recover_the_same_live_job : Specification

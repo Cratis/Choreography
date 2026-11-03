@@ -1,11 +1,11 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
+using Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
 using Microsoft.Extensions.DependencyInjection;
-using context = Cratis.Orleans.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step.and_job_is_stopped_while_its_step_reports_a_failure.context;
+using context = Cratis.Choreography.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step.and_job_is_stopped_while_its_step_reports_a_failure.context;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step;
 
 /// <summary>
 /// A step reports a failure to its job through a request of its own, and that request waits for the job. If the

@@ -6,6 +6,6 @@
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Cratis.Orleans" Version="$(CratisOrleansVersion)" />
+    <PackageReference Include="Cratis.Choreography" Version="$(CratisChoreographyVersion)" />
   </ItemGroup>
 </Project>

@@ -2,12 +2,12 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Collections.Immutable;
+using Cratis.Choreography.Chronicle.StateMachines;
+using Cratis.Choreography.StateMachines;
 using Cratis.Chronicle.Events;
 using Cratis.Chronicle.Projections;
-using Cratis.Orleans.Chronicle.StateMachines;
-using Cratis.Orleans.StateMachines;
 
-namespace Cratis.Orleans.Chronicle.Integration.Documents;
+namespace Cratis.Choreography.Chronicle.Integration.Documents;
 
 public class DocumentLifecycle : EventSourcedStateMachine<Document>, IDocumentLifecycle
 {

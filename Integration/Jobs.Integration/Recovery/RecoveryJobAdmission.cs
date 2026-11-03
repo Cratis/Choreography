@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-namespace Cratis.Orleans.Jobs.Integration.Recovery;
+namespace Cratis.Choreography.Jobs.Integration.Recovery;
 
 /// <summary>
 /// Admits every job unless a scenario asks it to refuse, and signals each refusal.

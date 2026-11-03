@@ -3,7 +3,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
 
 public class JobWithHeldTurn : Job<JobWithSingleStepRequest, JobWithSingleStepState>, IJobWithHeldTurn
 {

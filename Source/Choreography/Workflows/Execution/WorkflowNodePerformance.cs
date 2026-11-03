@@ -1,0 +1,116 @@
+// Copyright (c) Cratis. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+using Cratis.Choreography.Workflows.Adapters;
+using Cratis.Choreography.Workflows.Contracts;
+using Cratis.Choreography.Workflows.Runs;
+
+namespace Cratis.Choreography.Workflows.Execution;
+
+/// <summary>
+/// Performs a wave item and reports its outcome. Reporting failures propagate to the job step, never
+/// become business failures; only exceptions thrown by the performer are translated into outcomes.
+/// </summary>
+/// <param name="run">The run to report to.</param>
+/// <param name="item">The wave item.</param>
+/// <param name="execution">The execution.</param>
+/// <param name="attempt">The attempt.</param>
+/// <param name="performer">The performer, or null when none exists.</param>
+public class WorkflowNodePerformance(IWorkflowRun run, WorkflowWaveItem item, NodeExecutionKey execution, WorkflowAttempt attempt, IWorkflowNodePerformer? performer)
+{
+    WorkflowNodeInvocation Invocation => new(
+        WorkflowRunKey.Parse(item.Run),
+        execution,
+        attempt,
+        new(item.IdempotencyKey),
+        new(item.Configuration),
+        new(item.Input),
+        [.. item.Evidence.Select(evidence => new EvidenceReference(evidence))]);
+
+    /// <summary>
+    /// Performs the item, bounded by its timeout even if the performer ignores cancellation.
+    /// </summary>
+    /// <param name="cancellationToken">Cancelled when the job is stopped.</param>
+    /// <returns>Awaitable task.</returns>
+    public async Task Perform(CancellationToken cancellationToken)
+    {
+        if (!await run.TryStartInvocation(execution, attempt))
+        {
+            return;
+        }
+
+        if (performer is null)
+        {
+            await run.FailAttempt(execution, attempt, WorkflowFailureKind.PerformerMissing, $"No performer is registered for '{item.Capability}@{item.CapabilityVersion}'");
+            return;
+        }
+
+        if (performer is IStagedWorkflowNodePerformer staged && !string.IsNullOrEmpty(item.Operation))
+        {
+            await PerformOperation(staged, cancellationToken);
+            return;
+        }
+
+        var (outcome, timedOut) = await Invoke(token => performer.Perform(Invocation, token), cancellationToken);
+        await Report(outcome, timedOut);
+    }
+
+    async Task PerformOperation(IStagedWorkflowNodePerformer staged, CancellationToken cancellationToken)
+    {
+        var operations = staged.Operations.ToList();
+        var index = operations.FindIndex(operation => operation.Value == item.Operation);
+        if (index < 0)
+        {
+            await run.CompleteNode(execution, attempt, WorkflowNodeOutcome.Failed($"The performer no longer has an operation called '{item.Operation}'"));
+            return;
+        }
+
+        var previous = WorkflowData.Empty;
+        if (index > 0)
+        {
+            previous = await run.GetOperationOutput(execution, attempt, operations[index - 1]);
+            if (previous.IsEmpty)
+            {
+                return;
+            }
+        }
+
+        var (outcome, timedOut) = await Invoke(token => staged.PerformOperation(Invocation, operations[index], previous, token), cancellationToken);
+        if (!timedOut && index < operations.Count - 1 && outcome.Status == WorkflowNodeOutcomeStatus.Succeeded)
+        {
+            if (outcome.Output.ExceedsLimit || !outcome.Output.IsValidJson)
+            {
+                await run.FailAttempt(execution, attempt, WorkflowFailureKind.InvalidOutput, "The operation output is not bounded valid JSON");
+                return;
+            }
+
+            await run.CompleteOperation(execution, attempt, operations[index], outcome.Output.IsEmpty ? WorkflowNodeStep.CompletedWithoutOutput : outcome.Output);
+            return;
+        }
+
+        await Report(outcome, timedOut);
+    }
+
+    async Task<(WorkflowNodeOutcome Outcome, bool TimedOut)> Invoke(Func<CancellationToken, Task<WorkflowNodeOutcome>> perform, CancellationToken cancellationToken)
+    {
+        var timeout = TimeSpan.FromSeconds(Math.Max(1, item.TimeoutSeconds));
+        using var attemptCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        attemptCancellation.CancelAfter(timeout);
+        try
+        {
+            return (await perform(attemptCancellation.Token).WaitAsync(timeout, cancellationToken), false);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested && exception is TimeoutException or OperationCanceledException)
+        {
+            return (WorkflowNodeOutcome.Failed($"The attempt ran longer than {timeout}"), true);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return (WorkflowNodeOutcome.Failed(exception.Message), false);
+        }
+    }
+
+    Task Report(WorkflowNodeOutcome outcome, bool timedOut) => timedOut
+        ? run.FailAttempt(execution, attempt, WorkflowFailureKind.TimedOut, outcome.Reason)
+        : run.CompleteNode(execution, attempt, outcome);
+}

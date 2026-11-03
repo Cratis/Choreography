@@ -1,13 +1,13 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Storage;
-using Cratis.Orleans.Storage.MongoDB;
+using Cratis.Choreography.Storage;
+using Cratis.Choreography.Storage.MongoDB;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace Cratis.Orleans.Jobs.Integration.for_Jobs.given;
+namespace Cratis.Choreography.Jobs.Integration.for_Jobs.given;
 
 public class an_unknown_job : Specification
 {

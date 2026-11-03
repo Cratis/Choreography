@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using Cratis.Choreography.Chronicle.Integration.Documents;
 using Cratis.Chronicle.Reactors;
-using Cratis.Orleans.Chronicle.Integration.Documents;
 
-namespace Cratis.Orleans.Chronicle.Integration.for_event_sourced_state_machines;
+namespace Cratis.Choreography.Chronicle.Integration.for_event_sourced_state_machines;
 
 [Collection(StateMachineClusterCollection.Name)]
 public class when_registering_with_chronicle : Specification

@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-namespace Cratis.Orleans.Tools.GrainCompatibility.for_ContractManifest.when_parsing;
+namespace Cratis.Choreography.Tools.GrainCompatibility.for_ContractManifest.when_parsing;
 
 public class and_it_is_a_manifest_the_analyzer_wrote : Specification
 {

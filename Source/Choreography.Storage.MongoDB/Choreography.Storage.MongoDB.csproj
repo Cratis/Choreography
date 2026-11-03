@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <AssemblyName>Cratis.Choreography.Storage.MongoDB</AssemblyName>
+        <RootNamespace>Cratis.Choreography.Storage.MongoDB</RootNamespace>
+        <Description>MongoDB storage provider for the Cratis.Choreography job system</Description>
+        <PackageTags>orleans;jobs;storage;mongodb;cratis</PackageTags>
+        <RepositoryUrl>https://github.com/Cratis/Choreography</RepositoryUrl>
+        <ProjectUrl>https://github.com/Cratis/Choreography</ProjectUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    </PropertyGroup>
+    <ItemGroup>
+        <InternalsVisibleTo Include="Cratis.Choreography.Storage.MongoDB.Specs" />
+        <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="MongoDB.Driver" />
+        <PackageReference Include="Cratis.Arc.MongoDB" />
+        <PackageReference Include="System.Reactive" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Choreography/Choreography.csproj" />
+        <ProjectReference Include="../Choreography.Storage/Choreography.Storage.csproj" />
+    </ItemGroup>
+</Project>

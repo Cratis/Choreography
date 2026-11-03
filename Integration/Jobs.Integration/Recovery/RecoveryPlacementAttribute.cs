@@ -3,7 +3,7 @@
 
 using Orleans.Placement;
 
-namespace Cratis.Orleans.Jobs.Integration.Recovery;
+namespace Cratis.Choreography.Jobs.Integration.Recovery;
 
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class RecoveryPlacementAttribute() : PlacementAttribute(new RecoveryPlacement());

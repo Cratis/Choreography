@@ -66,71 +66,71 @@ test('identical runs pass despite run metadata and file names', t => {
 test('replaced case with same count is rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
-    f.writeRun('candidate', 'Orleans.Specs', [...BASE.slice(0, 2), ['B.when_y', 'should_other', 'NotExecuted']], { trxName: 'x.trx' });
-    assert.throws(f.run, parity(/Orleans\.Specs: case missing from candidate: B\.when_y\.should_skip[\s\S]*case added in candidate: B\.when_y\.should_other/));
+    f.writeRun('candidate', 'Choreography.Specs', [...BASE.slice(0, 2), ['B.when_y', 'should_other', 'NotExecuted']], { trxName: 'x.trx' });
+    assert.throws(f.run, parity(/Choreography\.Specs: case missing from candidate: B\.when_y\.should_skip[\s\S]*case added in candidate: B\.when_y\.should_other/));
 });
 
 test('outcome change with same totals is rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
-    f.writeRun('candidate', 'Orleans.Specs', [['A.when_x', 'should_one', 'Failed'], ['A.when_x', 'should_two', 'Passed'], BASE[2]], { trxName: 'x.trx' });
+    f.writeRun('candidate', 'Choreography.Specs', [['A.when_x', 'should_one', 'Failed'], ['A.when_x', 'should_two', 'Passed'], BASE[2]], { trxName: 'x.trx' });
     assert.throws(f.run, parity(/outcome changed for A\.when_x\.should_one: Passed -> Failed/));
 });
 
 test('lost skipped case is rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
-    f.writeRun('candidate', 'Orleans.Specs', BASE.slice(0, 2), { trxName: 'x.trx' });
+    f.writeRun('candidate', 'Choreography.Specs', BASE.slice(0, 2), { trxName: 'x.trx' });
     assert.throws(f.run, parity(/case missing from candidate: B\.when_y\.should_skip/));
 });
 
 test('skipped becoming passed is rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
-    f.writeRun('candidate', 'Orleans.Specs', [...BASE.slice(0, 2), ['B.when_y', 'should_skip', 'Passed']], { trxName: 'x.trx' });
+    f.writeRun('candidate', 'Choreography.Specs', [...BASE.slice(0, 2), ['B.when_y', 'should_skip', 'Passed']], { trxName: 'x.trx' });
     assert.throws(f.run, parity(/NotExecuted -> Passed/));
 });
 
 test('duplicate identity is ambiguous', t => {
     const f = fixture(t);
     f.populate(BASE);
-    f.writeRun('candidate', 'Orleans.Specs', [...BASE, BASE[0]], { trxName: 'x.trx' });
+    f.writeRun('candidate', 'Choreography.Specs', [...BASE, BASE[0]], { trxName: 'x.trx' });
     assert.throws(f.run, parity(/ambiguous duplicate case identity 'A\.when_x\.should_one'/));
 });
 
 test('total that disagrees with results is rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
-    f.writeRun('candidate', 'Orleans.Specs', BASE, { trxName: 'x.trx', total: 4 });
-    assert.throws(f.run, parity(/Orleans\.Specs: TRX total 4 does not match 3 results/));
+    f.writeRun('candidate', 'Choreography.Specs', BASE, { trxName: 'x.trx', total: 4 });
+    assert.throws(f.run, parity(/Choreography\.Specs: TRX total 4 does not match 3 results/));
 });
 
 test('counter contradicting results is rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
-    f.writeRun('candidate', 'Orleans.Specs', BASE, { trxName: 'x.trx', passed: 3 });
+    f.writeRun('candidate', 'Choreography.Specs', BASE, { trxName: 'x.trx', passed: 3 });
     assert.throws(f.run, parity(/counter passed=3 contradicts 1 Passed/));
 });
 
 test('malformed TRX is rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
-    writeFileSync(join(f.dir, 'candidate/Orleans.Specs/Orleans.Specs.trx'), '<TestRun');
-    assert.throws(f.run, parity(/Orleans\.Specs: invalid TRX/));
+    writeFileSync(join(f.dir, 'candidate/Choreography.Specs/Choreography.Specs.trx'), '<TestRun');
+    assert.throws(f.run, parity(/Choreography\.Specs: invalid TRX/));
 });
 
 test('zero total is rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
-    f.writeRun('candidate', 'Orleans.Specs', [], { trxName: 'x.trx' });
-    assert.throws(f.run, parity(/Orleans\.Specs: expected a positive TRX test total/));
+    f.writeRun('candidate', 'Choreography.Specs', [], { trxName: 'x.trx' });
+    assert.throws(f.run, parity(/Choreography\.Specs: expected a positive TRX test total/));
 });
 
 test('missing project results are rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
-    rmSync(join(f.dir, 'candidate/Orleans.Storage.Specs'), { recursive: true });
-    assert.throws(f.run, parity(/Orleans\.Storage\.Specs: missing results directory/));
+    rmSync(join(f.dir, 'candidate/Choreography.Storage.Specs'), { recursive: true });
+    assert.throws(f.run, parity(/Choreography\.Storage\.Specs: missing results directory/));
 });
 
 test('empty results are rejected', t => {
@@ -140,14 +140,14 @@ test('empty results are rejected', t => {
 test('extra TRX is ambiguous', t => {
     const f = fixture(t);
     f.populate(BASE);
-    writeFileSync(join(f.dir, 'candidate/Orleans.Specs/extra.trx'), trx(BASE));
+    writeFileSync(join(f.dir, 'candidate/Choreography.Specs/extra.trx'), trx(BASE));
     assert.throws(f.run, parity(/expected exactly one TRX/));
 });
 
 test('discovery must match execution total', t => {
     const f = fixture(t);
     f.populate(BASE);
-    f.writeRun('candidate', 'Orleans.Specs', BASE, { trxName: 'x.trx', discoveryCases: BASE.slice(0, 2) });
+    f.writeRun('candidate', 'Choreography.Specs', BASE, { trxName: 'x.trx', discoveryCases: BASE.slice(0, 2) });
     assert.throws(f.run, parity(/discovery listed 2 tests but the TRX holds 3/));
 });
 
@@ -155,38 +155,38 @@ test('readable and underscore display names with the same class and method are e
     const f = fixture(t);
     f.populate(BASE);
     const readable = BASE.map(([c, m, o]) => [c, m, o, `${c.replace(/_/g, ' ')} ${m.replace(/_/g, ' ')}`]);
-    f.writeRun('candidate', 'Orleans.Specs', readable, { trxName: 'x.trx', discoveryCases: readable.map(([, , , d]) => ['readable', d]) });
-    assert.equal(f.run().get('Orleans.Specs'), 3);
+    f.writeRun('candidate', 'Choreography.Specs', readable, { trxName: 'x.trx', discoveryCases: readable.map(([, , , d]) => ['readable', d]) });
+    assert.equal(f.run().get('Choreography.Specs'), 3);
 });
 
 test('extra case in candidate is rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
     const more = [...BASE, ['B.when_y', 'should_extra', 'Passed']];
-    f.writeRun('candidate', 'Orleans.Specs', more, { trxName: 'x.trx' });
+    f.writeRun('candidate', 'Choreography.Specs', more, { trxName: 'x.trx' });
     assert.throws(f.run, parity(/case added in candidate: B\.when_y\.should_extra/));
 });
 
 test('discovery multiplicity differing between sides is rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
-    writeFileSync(join(f.dir, 'candidate/Orleans.Specs/discovery.txt'), discovery([...BASE, BASE[0]]));
+    writeFileSync(join(f.dir, 'candidate/Choreography.Specs/discovery.txt'), discovery([...BASE, BASE[0]]));
     assert.throws(f.run, parity(/discovery listed 4 tests but the TRX holds 3/));
 });
 
 test('missing discovery is rejected', t => {
     const f = fixture(t);
     f.populate(BASE);
-    unlinkSync(join(f.dir, 'candidate/Orleans.Specs/discovery.txt'));
+    unlinkSync(join(f.dir, 'candidate/Choreography.Specs/discovery.txt'));
     assert.throws(f.run, parity(/Cannot read discovery output/));
 });
 
 test('all failures are reported together', t => {
     const f = fixture(t);
     f.populate(BASE);
-    rmSync(join(f.dir, 'candidate/Orleans.Storage.Specs'), { recursive: true });
-    rmSync(join(f.dir, 'candidate/Orleans.Chronicle.Specs'), { recursive: true });
-    assert.throws(f.run, parity(/Orleans\.Storage\.Specs[\s\S]*Orleans\.Chronicle\.Specs/));
+    rmSync(join(f.dir, 'candidate/Choreography.Storage.Specs'), { recursive: true });
+    rmSync(join(f.dir, 'candidate/Choreography.Chronicle.Specs'), { recursive: true });
+    assert.throws(f.run, parity(/Choreography\.Storage\.Specs[\s\S]*Choreography\.Chronicle\.Specs/));
 });
 
 test('CLI exit codes', t => {
@@ -195,8 +195,8 @@ test('CLI exit codes', t => {
     const args = ['--baseline', join(f.dir, 'baseline'), '--candidate', join(f.dir, 'candidate')];
     const ok = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
     assert.equal(ok.status, 0, ok.stderr);
-    assert.match(ok.stdout, /Orleans\.Specs: 3 cases identical/);
-    rmSync(join(f.dir, 'candidate/Orleans.Specs'), { recursive: true });
+    assert.match(ok.stdout, /Choreography\.Specs: 3 cases identical/);
+    rmSync(join(f.dir, 'candidate/Choreography.Specs'), { recursive: true });
     const bad = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
     assert.equal(bad.status, 1);
     assert.doesNotMatch(bad.stdout, /identical/);
@@ -232,7 +232,7 @@ function inventoryTree(t, { extra = [], omit = [] } = {}) {
         members.push(`<Project Path="${path}" />`);
     }
     extra.forEach(write);
-    writeFileSync(join(f.dir, 'Orleans.slnx'), `<Solution>${members.join('')}</Solution>`);
+    writeFileSync(join(f.dir, 'Choreography.slnx'), `<Solution>${members.join('')}</Solution>`);
     return f.dir;
 }
 
@@ -256,9 +256,9 @@ test('missing project is rejected', t => {
 
 test('project missing from solution is rejected', t => {
     const dir = inventoryTree(t);
-    const solution = join(dir, 'Orleans.slnx');
+    const solution = join(dir, 'Choreography.slnx');
     writeFileSync(solution, readFileSync(solution, 'utf8').replace('<Project Path="Integration/Jobs.Integration/Jobs.Integration.csproj" />', ''));
-    assert.throws(() => checkInventory(dir), parity(/missing from Orleans\.slnx/));
+    assert.throws(() => checkInventory(dir), parity(/missing from Choreography\.slnx/));
 });
 
 test('unknown scope is rejected', () => {

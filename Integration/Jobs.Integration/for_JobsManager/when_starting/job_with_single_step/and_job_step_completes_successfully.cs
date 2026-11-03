@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
-using context = Cratis.Orleans.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step.and_job_step_completes_successfully.context;
+using Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
+using context = Cratis.Choreography.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step.and_job_step_completes_successfully.context;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager.when_starting.job_with_single_step;
 
 [Collection(JobsClusterCollection.Name)]
 public class and_job_step_completes_successfully(context context) : Given<context>(context)

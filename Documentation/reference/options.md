@@ -5,13 +5,13 @@ description: Every option the job system and the silo hosting expose.
 
 # Options
 
-## CratisOrleansOptions
+## CratisChoreographyOptions
 
-The silo co-hosting options, passed to `AddCratisOrleans`.
+The silo co-hosting options, passed to `AddCratisChoreography`.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `Enabled` | `true` | When `false`, `AddCratisOrleans` configures nothing |
+| `Enabled` | `true` | When `false`, `AddCratisChoreography` configures nothing |
 | `Clustering` | `Localhost` | `Localhost` for single-instance development, `MongoDB` for durable cluster membership |
 | `ClusterId` | `"default"` | The cluster id every instance joins |
 | `ServiceId` | `"default"` | The service id every instance joins |
@@ -21,7 +21,7 @@ The silo co-hosting options, passed to `AddCratisOrleans`.
 | `Workflows` | `false` | Host the [workflow engine](../concepts/workflows.md): its grain storage, journal, sweep and node execution |
 | `ConfigureWorkflows` | `null` | Configures the `WorkflowsOptions` when `Workflows` is on |
 
-`CratisOrleansOptions.Local()` is localhost clustering with `Storage = InMemory`: a silo that needs no database.
+`CratisChoreographyOptions.Local()` is localhost clustering with `Storage = InMemory`: a silo that needs no database.
 
 ## JobsOptions
 
@@ -62,7 +62,7 @@ Before rollback, drain externalized jobs and let them finish: older silos cannot
 zombie `PreparingJob` without a plan, remove it or wait for dead-job cleanup, then release observer-owned catching-up
 partitions through the host's recovery procedure. See [upgrade and repair guidance](../concepts/jobs.md#a-very-large-plan-is-kept-outside-the-job-document).
 A lost Running acknowledgement can still stall progress until rehydration; see
-[Cratis/Orleans#177](https://github.com/Cratis/Orleans/issues/177).
+[Cratis/Orleans#177](https://github.com/Cratis/Choreography/issues/177).
 
 Rehydration and cleanup isolate each job, so one job that fails to resume or delete never stops the others.
 Cleanup reads an oldest-first, storage-filtered page; it does not materialize the entire job collection. Terminal cleanup only conditionally removes immutable terminal states, so it cannot remove preparing, running, stopped, or removing jobs. It removes regular and failed job steps before the terminal job record; a failed removal is safe to retry on the next bounded pass.
@@ -97,7 +97,7 @@ out, the original exception surfaces and is reported as the storage error. Each 
 
 ### MongoDB connection pool
 
-The library does not create the `IMongoClient`; you pass it to `AddCratisOrleansMongoDBJobsStorage`, so the
+The library does not create the `IMongoClient`; you pass it to `AddCratisChoreographyMongoDBJobsStorage`, so the
 pool settings are yours. These `MongoClientSettings` matter for the job system:
 
 - Share one `IMongoClient` for the whole process. Each client owns its own connection pool.
@@ -116,7 +116,7 @@ pool settings are yours. These `MongoClientSettings` matter for the job system:
 
 ## WorkflowsOptions
 
-The workflow engine, passed to `AddCratisOrleansWorkflows` (or `CratisOrleansOptions.ConfigureWorkflows`). See
+The workflow engine, passed to `AddCratisChoreographyWorkflows` (or `CratisChoreographyOptions.ConfigureWorkflows`). See
 [Workflows](../concepts/workflows.md).
 
 | Option | Default | Meaning |
@@ -131,7 +131,7 @@ The workflow engine, passed to `AddCratisOrleansWorkflows` (or `CratisOrleansOpt
 
 ## EventSourcedWorkflowsOptions
 
-The Chronicle adapter, passed to `AddEventSourcedWorkflows` in `Cratis.Orleans.Chronicle`.
+The Chronicle adapter, passed to `AddEventSourcedWorkflows` in `Cratis.Choreography.Chronicle`.
 
 | Option | Default | Meaning |
 | --- | --- | --- |

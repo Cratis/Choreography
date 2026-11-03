@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
 
 /// <summary>
 /// The storage and the step processor every job-system scenario reaches for, against the shared silo.

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <AssemblyName>Cratis.Choreography.Storage.MongoDB.Specs</AssemblyName>
+        <RootNamespace>Cratis.Choreography</RootNamespace>
+        <IsTestProject>true</IsTestProject>
+        <IsPackable>false</IsPackable>
+        <!-- xUnit v3 test projects are executables -->
+        <OutputType>Exe</OutputType>
+        <!-- Test projects always target net10.0 only, also in the packaging build. -->
+        <TargetFrameworks>net10.0</TargetFrameworks>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Moq" />
+        <PackageReference Include="OrleansTestKit10" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Choreography/Choreography.csproj" />
+        <ProjectReference Include="../Choreography.Storage/Choreography.Storage.csproj" />
+        <ProjectReference Include="../Choreography.Storage.MongoDB/Choreography.Storage.MongoDB.csproj" />
+    </ItemGroup>
+</Project>

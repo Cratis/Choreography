@@ -3,7 +3,7 @@
 
 using Orleans.Storage;
 
-namespace Cratis.Orleans.Jobs.Integration.Draining;
+namespace Cratis.Choreography.Jobs.Integration.Draining;
 
 /// <summary>
 /// Counts the step state writes that reach the real step storage.

@@ -1,9 +1,9 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.Draining;
+using Cratis.Choreography.Jobs.Integration.Draining;
 
-namespace Cratis.Orleans.Jobs.Integration.for_job_system;
+namespace Cratis.Choreography.Jobs.Integration.for_job_system;
 
 /// <summary>
 /// Nobody asks for the drain again after the job's silo died: a call that only reads the job activates it, and the

@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Cratis.Orleans.Jobs.Integration.for_job_system;
+namespace Cratis.Choreography.Jobs.Integration.for_job_system;
 
 [Collection(JobsClusterCollection.Name)]
 public class when_stopping_before_the_step_performs : Specification

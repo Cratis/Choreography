@@ -1,9 +1,9 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Jobs.Integration.Recovery;
+using Cratis.Choreography.Jobs.Integration.Recovery;
 
-namespace Cratis.Orleans.Jobs.Integration.for_job_system;
+namespace Cratis.Choreography.Jobs.Integration.for_job_system;
 
 /// <summary>
 /// The owner stops admitting the job, and then the silo hosting it dies. Rehydration finds the job running, is

@@ -3,7 +3,7 @@
 
 using Orleans.Metadata;
 
-namespace Cratis.Orleans.Jobs.Integration.Recovery;
+namespace Cratis.Choreography.Jobs.Integration.Recovery;
 
 public sealed class RecoveryPlacementProperties : IGrainPropertiesProvider
 {

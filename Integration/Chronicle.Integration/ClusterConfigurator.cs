@@ -1,19 +1,19 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using Cratis.Choreography.Chronicle.Hosting;
+using Cratis.Choreography.Chronicle.Integration.Documents;
+using Cratis.Choreography.Chronicle.StateMachines;
 using Cratis.Chronicle;
-using Cratis.Orleans.Chronicle.Hosting;
-using Cratis.Orleans.Chronicle.Integration.Documents;
-using Cratis.Orleans.Chronicle.StateMachines;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Chronicle.Integration;
+namespace Cratis.Choreography.Chronicle.Integration;
 
 public class ClusterConfigurator : ISiloConfigurator, IClientBuilderConfigurator
 {
-    public void Configure(IConfiguration configuration, IClientBuilder clientBuilder) => clientBuilder.Services.AddCratisOrleansSerializers();
+    public void Configure(IConfiguration configuration, IClientBuilder clientBuilder) => clientBuilder.Services.AddCratisChoreographySerializers();
 
     public void Configure(ISiloBuilder siloBuilder)
     {
@@ -22,7 +22,7 @@ public class ClusterConfigurator : ISiloConfigurator, IClientBuilderConfigurator
         artifacts.Projections.Returns([]);
         artifacts.ModelBoundProjections.Returns([]);
 
-        siloBuilder.Services.AddCratisOrleansSerializers();
+        siloBuilder.Services.AddCratisChoreographySerializers();
         siloBuilder.Services.AddSingleton(artifacts);
         siloBuilder.Services.AddSingleton<IStateMachineEventStores>(InMemoryReadModels.Instance);
         siloBuilder.AddEventSourcedStateMachines(options =>

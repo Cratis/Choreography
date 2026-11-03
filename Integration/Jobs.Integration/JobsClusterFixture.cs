@@ -1,17 +1,17 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Hosting;
-using Cratis.Orleans.Setup;
+using Cratis.Choreography.Hosting;
+using Cratis.Choreography.Setup;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 
-namespace Cratis.Orleans.Jobs.Integration;
+namespace Cratis.Choreography.Jobs.Integration;
 
 /// <summary>
 /// A real co-hosted Orleans silo running the job system end to end against a real MongoDB: started through
-/// the public <c lang="csharp">AddCratisOrleans</c> surface exactly as an application would. Requires a MongoDB on
+/// the public <c lang="csharp">AddCratisChoreography</c> surface exactly as an application would. Requires a MongoDB on
 /// <c lang="csharp">mongodb://localhost:27017</c>.
 /// </summary>
 public class JobsClusterFixture : IDisposable
@@ -53,7 +53,7 @@ public class JobsClusterFixture : IDisposable
         // fixed port means a second spec class - or anything else on the machine - cannot start one.
         builder.Configuration["urls"] = "http://127.0.0.1:0";
 
-        builder.AddCratisOrleans(new CratisOrleansOptions
+        builder.AddCratisChoreography(new CratisChoreographyOptions
         {
             ClusterId = Scope,
             ServiceId = Scope
@@ -64,7 +64,7 @@ public class JobsClusterFixture : IDisposable
         // instance for the whole silo; each spec resets it.
         builder.Services.AddSingleton<for_JobsManager.given.TheJobStepProcessor>();
         builder.Services.AddSingleton<for_JobsManager.given.JobTurnHold>();
-        builder.Services.AddCratisOrleansMongoDBJobsStorage(
+        builder.Services.AddCratisChoreographyMongoDBJobsStorage(
             new MongoClient(ConnectionString),
             options => options.DatabaseNameResolver = (_, _) => DatabaseName);
 

@@ -3,7 +3,7 @@
 
 using System.Collections.Concurrent;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager.given;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager.given;
 
 /// <summary>
 /// Records what the steps of a job actually did, so a scenario can assert on the work rather than only on

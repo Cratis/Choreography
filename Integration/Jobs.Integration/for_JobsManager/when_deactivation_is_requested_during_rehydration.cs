@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Jobs.Integration.for_JobsManager;
+namespace Cratis.Choreography.Jobs.Integration.for_JobsManager;
 
 public class when_deactivation_is_requested_during_rehydration : given.a_jobs_manager_with_lifecycle
 {

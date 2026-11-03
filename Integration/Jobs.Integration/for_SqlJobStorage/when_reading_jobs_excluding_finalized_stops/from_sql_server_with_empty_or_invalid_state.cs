@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Storage.Sql.Jobs;
+using Cratis.Choreography.Storage.Sql.Jobs;
 using Microsoft.EntityFrameworkCore;
 
-namespace Cratis.Orleans.Jobs.Integration.for_SqlJobStorage.when_reading_jobs_excluding_finalized_stops;
+namespace Cratis.Choreography.Jobs.Integration.for_SqlJobStorage.when_reading_jobs_excluding_finalized_stops;
 
 public class from_sql_server_with_empty_or_invalid_state : given.a_sql_server_jobs_database
 {

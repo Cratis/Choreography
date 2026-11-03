@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-namespace Cratis.Orleans.Jobs.Integration.for_job_system.when_running_a_job_in_stages;
+namespace Cratis.Choreography.Jobs.Integration.for_job_system.when_running_a_job_in_stages;
 
 /// <summary>
 /// Ordering has to be observed where it matters - in steps that really run in parallel on a real silo.

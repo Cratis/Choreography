@@ -1,4 +1,4 @@
-# Cratis Orleans — project context
+# Cratis Choreography — project context
 
 The canonical project context for this repository: what is true only here. Shared guidance arrives through the Cratis AI profiles recorded in `.cratis/ai.json`.
 

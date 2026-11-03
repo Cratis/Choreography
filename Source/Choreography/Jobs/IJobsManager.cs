@@ -1,0 +1,151 @@
+// Copyright (c) Cratis. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+using System.Collections.Immutable;
+using Cratis.Choreography.Storage.Jobs;
+using Cratis.Monads;
+using Orleans.CodeGeneration;
+
+namespace Cratis.Choreography.Jobs;
+
+/// <summary>
+/// Defines a system that manages jobs.
+/// </summary>
+[Version(1)]
+public interface IJobsManager : IGrainWithIntegerCompoundKey
+{
+    /// <summary>
+    /// Prepares the jobs manager, schedules interrupted jobs for resumption and stopped or removing jobs for finalization.
+    /// </summary>
+    /// <returns>A task that completes after dead-job cleanup and loading the interrupted jobs, before all jobs resume.</returns>
+    /// <remarks>
+    /// Jobs resume oldest first in bounded background work owned by this activation. Overlapping calls share
+    /// preparation and the drain. A queued job whose freshly loaded status is no longer interrupted is skipped;
+    /// an explicit <see cref="Resume"/> can still resume a stopped job; <see cref="ResumeIfRunning"/> cannot. A job that is stopped or being removed when it is
+    /// dispatched is never resumed; it finalizes its stop through <see cref="IJobStopFinalization.FinalizeStop"/>.
+    /// The activation is kept alive during the drain, but deactivation, migration, memory-pressure shedding
+    /// (<see cref="global::Orleans.Configuration.GrainCollectionOptions.EnableActivationSheddingOnMemoryPressure"/>),
+    /// or silo shutdown cancels further dispatch. Jobs not yet resumed remain in storage and resume on the next
+    /// <see cref="Rehydrate"/> call or host startup.
+    /// </remarks>
+    Task Rehydrate();
+
+    /// <summary>
+    /// Start a new job.
+    /// </summary>
+    /// <param name="request">The request parameter being passed to the job.</param>
+    /// <typeparam name="TJob">Type of job to start.</typeparam>
+    /// <typeparam name="TRequest">Type of the request to pass along.</typeparam>
+    /// <returns>Awaitable task.</returns>
+    /// <remarks>
+    /// Unsafe while two releases share a cluster: the manager's silo must understand both generic types.
+    /// Use the caller-local <see cref="IJobs"/> to start jobs during rolling upgrades.
+    /// </remarks>
+    Task<Result<JobId, StartJobError>> Start<TJob, TRequest>(TRequest request)
+        where TJob : IJob<TRequest>
+        where TRequest : class, IJobRequest;
+
+    /// <summary>
+    /// Start a new job.
+    /// </summary>
+    /// <remarks>
+    /// Mainly used for testing purposes. Unsafe while two releases share a cluster: the manager's silo
+    /// must understand both generic types. Use the caller-local <see cref="IJobs"/> during rolling upgrades.
+    /// </remarks>
+    /// <param name="jobId">The <see cref="JobId"/>.</param>
+    /// <param name="request">The request parameter being passed to the job.</param>
+    /// <typeparam name="TJob">Type of job to start.</typeparam>
+    /// <typeparam name="TRequest">Type of the request to pass along.</typeparam>
+    /// <returns>Awaitable task.</returns>
+    Task<Result<JobId, StartJobError>> Start<TJob, TRequest>(JobId jobId, TRequest request)
+        where TJob : IJob<TRequest>
+        where TRequest : class, IJobRequest;
+
+    /// <summary>
+    /// Resume a job.
+    /// </summary>
+    /// <param name="jobId"><see cref="JobId"/> to resume.</param>
+    /// <returns>True if the job was taken forward - resumed, already running, or finalized as completed - false if nothing took it.</returns>
+    /// <remarks>
+    /// A refusal matters to the caller. Resuming can decline because the job was never prepared or its owner is no
+    /// longer interested, and a job nobody took stays exactly as it was: it will not run, will not finalize, and
+    /// will never report back. A caller that treats that as success waits forever for something that is not coming.
+    /// </remarks>
+    Task<bool> Resume(JobId jobId);
+
+    /// <summary>
+    /// Resume a job only if it is running.
+    /// </summary>
+    /// <param name="jobId"><see cref="JobId"/> to resume.</param>
+    /// <returns>
+    /// The job's own result: <see cref="ResumeJobSuccess.JobIsNotRunning"/> when it was not running and nothing was done,
+    /// or <see cref="CannotResumeJobError.Unknown"/> when the job could not be reached.
+    /// </returns>
+    /// <remarks>
+    /// The status check happens inside the job grain, in the same turn as the resume, so a stop or removal can never
+    /// land between the check and the resume. On a cold activation the check reads the durable status.
+    /// </remarks>
+    Task<Result<ResumeJobSuccess, ResumeJobError>> ResumeIfRunning(JobId jobId);
+
+    /// <summary>
+    /// Stop a job if running.
+    /// </summary>
+    /// <param name="jobId"><see cref="JobId"/> to stop.</param>
+    /// <returns>Success when the job accepted the stop, otherwise the reason it did not.</returns>
+    /// <remarks>
+    /// A job that cannot be found, or whose type is unknown to this release, answers <see cref="StopJobError.Unknown"/>.
+    /// A stop that could not be made durable answers <see cref="StopJobError.CouldNotPersistStop"/> and leaves the
+    /// job as it was.
+    /// </remarks>
+    Task<Result<StopJobError>> Stop(JobId jobId);
+
+    /// <summary>
+    /// Run the failed steps of a job that completed with failures again.
+    /// </summary>
+    /// <param name="jobId"><see cref="JobId"/> of the job.</param>
+    /// <returns>The number of steps run again, or the reason the job did not run any.</returns>
+    /// <remarks>
+    /// Opt-in per job type. Resuming a job that completed with failures still does nothing.
+    /// </remarks>
+    Task<Result<int, RetryFailedStepsError>> RetryFailedSteps(JobId jobId);
+
+    /// <summary>
+    /// Delete an existing job.
+    /// </summary>
+    /// <param name="jobId"><see cref="JobId"/> to remove.</param>
+    /// <returns>Awaitable task.</returns>
+    Task Delete(JobId jobId);
+
+    /// <summary>
+    /// Get a collection of all running jobs of specific type.
+    /// </summary>
+    /// <typeparam name="TJob">Type of job to get for.</typeparam>
+    /// <typeparam name="TRequest">Type of request.</typeparam>
+    /// <returns>Collection of job states.</returns>
+    /// <remarks>
+    /// Unsafe while two releases share a cluster: the manager's silo must understand both generic types.
+    /// Use <see cref="IJobs"/> for lifecycle operations and <see cref="GetJobs"/> for non-generic queries.
+    /// </remarks>
+    Task<IImmutableList<JobState>> GetJobsOfType<TJob, TRequest>()
+        where TJob : IJob<TRequest>
+        where TRequest : class, IJobRequest;
+
+    /// <summary>
+    /// Gets one bounded page of jobs selected in storage.
+    /// </summary>
+    /// <param name="query">The type, status, age, and page selection.</param>
+    /// <returns>A page of job states.</returns>
+    Task<IImmutableList<JobState>> GetJobs(JobQuery query);
+
+    /// <summary>
+    /// Get all jobs.
+    /// </summary>
+    /// <returns>Collection of job states.</returns>
+    Task<IImmutableList<JobState>> GetAllJobs();
+
+    /// <summary>
+    /// Clean up dead jobs that are stuck in preparation and have no steps.
+    /// </summary>
+    /// <returns>Awaitable task.</returns>
+    Task CleanupDeadJobs();
+}

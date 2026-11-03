@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Jobs.Integration.Recovery;
+namespace Cratis.Choreography.Jobs.Integration.Recovery;
 
 public sealed class RecoveryClusterFixture : IDisposable
 {

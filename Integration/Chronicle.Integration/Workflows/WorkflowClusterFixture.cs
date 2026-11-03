@@ -3,7 +3,7 @@
 
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Chronicle.Integration.Workflows;
+namespace Cratis.Choreography.Chronicle.Integration.Workflows;
 
 /// <summary>
 /// A real two-silo Orleans cluster hosting the workflow engine with its runs in <see cref="InMemoryEventLog"/>.

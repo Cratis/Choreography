@@ -1,10 +1,10 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using Cratis.Orleans.Storage;
+using Cratis.Choreography.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Cratis.Orleans.Jobs.Integration.for_job_system;
+namespace Cratis.Choreography.Jobs.Integration.for_job_system;
 
 /// <summary>
 /// End-to-end spec for a job with a failing step, against a real co-hosted silo and a real MongoDB.

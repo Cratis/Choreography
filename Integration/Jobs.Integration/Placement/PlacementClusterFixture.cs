@@ -6,7 +6,7 @@ using MongoDB.Driver;
 using Orleans.Runtime.MembershipService.SiloMetadata;
 using Orleans.TestingHost;
 
-namespace Cratis.Orleans.Jobs.Integration.Placement;
+namespace Cratis.Choreography.Jobs.Integration.Placement;
 
 public sealed class PlacementClusterFixture : IDisposable
 {
