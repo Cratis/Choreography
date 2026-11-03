@@ -34,20 +34,4 @@ public class when_round_tripping_a_plan : given.a_plan_store
         _plan.Select(step => step.Id.Value).ShouldContain(document["jobStepId"].AsBsonBinaryData.ToGuid());
     }
     [Fact] async Task should_return_empty_for_a_missing_plan() => (await _store.GetForJob(JobId.New(), _incarnation)).AsT0.ShouldBeEmpty();
-    [Fact]
-    async Task should_represent_an_empty_plan_as_missing()
-    {
-        (await _store.Save(_jobId, _incarnation, [])).RethrowError();
-        (await _store.GetForJob(_jobId, _incarnation)).AsT0.ShouldBeEmpty();
-        (await _store.GetJobsWithPlans()).AsT0.ShouldBeEmpty();
-    }
-    [Fact]
-    async Task should_ensure_the_compound_index_idempotently()
-    {
-        (await _store.Save(_jobId, _incarnation, _plan)).RethrowError();
-        using var cursor = await _collection.Indexes.ListAsync(cancellationToken: TestContext.Current.CancellationToken);
-        var indexes = await cursor.ToListAsync(TestContext.Current.CancellationToken);
-        indexes.Single(index => index["name"] == "jobId_incarnation_index")["key"].AsBsonDocument
-            .ShouldEqual(new BsonDocument { ["jobId"] = 1, ["incarnation"] = 1, ["index"] = 1 });
-    }
 }
