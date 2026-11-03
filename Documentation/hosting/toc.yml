@@ -1,0 +1,6 @@
+- name: Overview
+  href: index.md
+- name: Reminders and recovery
+  href: reminders-and-recovery.md
+- name: Configure Orleans yourself
+  href: configure-orleans-yourself.md

@@ -9,11 +9,11 @@ subscribes to the events that should change it, and hopes the two never disagree
 the grain storage is restored from a different point in time than the event log, they do disagree, and nothing tells
 you which one is right.
 
-`EventSourcedStateMachine<TModel>` in the `Cratis.Choreography.Chronicle` package removes the copy. The events in Chronicle
-are the only source of truth. The model is a Chronicle read model projected from them, the grain only ever reads it,
-and the state machine's current state is derived from the model every time the grain activates. Events the state
-machine is interested in are delivered to it, the model is re-read, and the transitions you declare for the event
-decide where it goes next.
+`EventSourcedStateMachine<TModel>` in the `Cratis.Choreography.Chronicle` package removes the copy. The events in
+Cratis Chronicle are the only source of truth. The model is a Chronicle read model projected from them, the grain only
+ever reads it, and the state machine's current state is derived from the model every time the grain activates. Events
+the state machine is interested in are delivered to it, the model is re-read, and the transitions you declare for the
+event decide where it goes next.
 
 ```mermaid
 sequenceDiagram
@@ -24,7 +24,7 @@ sequenceDiagram
     Log->>Projection: OrderApproved
     Log->>Reactor: OrderApproved
     Reactor->>Reactor: wait until a materialized model has caught up
-    Reactor->>Grain: Refresh (store/namespace/event source)
+    Reactor->>Grain: Refresh (store, namespace, event source)
     Grain->>Projection: GetInstanceById(event source)
     Grain->>Grain: OnModelChanged(previous, current, context)
     Grain->>Grain: transitions for OrderApproved, guarded by the model
@@ -33,8 +33,8 @@ sequenceDiagram
 ## Define a state machine
 
 A state machine names its model, its states and the transitions events drive. The model is an ordinary Chronicle
-read model - this one uses model-bound projection attributes, and is passive, which is the recommended choice for a
-state machine (see [Read model lag](#read-model-lag)):
+read model. This one uses model-bound projection attributes, and is passive, which is the recommended choice for a
+state machine (see [read model lag](event-sourced-hosting.md)):
 
 ```csharp
 using Cratis.Chronicle.Events;
@@ -66,8 +66,8 @@ public record Order(
     OrderStatus Status);
 ```
 
-The states are the same `State<TStoredState>` types any [state machine](state-machines.md) uses, with the model as
-the stored state:
+The states are the same `State<TStoredState>` types any [state machine](index.md) uses, with the model as the
+stored state:
 
 ```csharp
 using System.Collections.Immutable;
@@ -86,8 +86,8 @@ public class Approved : State<Order>
 public class Shipped : State<Order>;
 ```
 
-The grain derives `EventSourcedStateMachine<TModel>`. Its grain interface derives `IEventSourcedStateMachine`, which
-is a string-keyed grain interface:
+The grain derives `EventSourcedStateMachine<TModel>`. Its grain interface derives `IEventSourcedStateMachine`, a
+string-keyed grain interface:
 
 ```csharp
 using System.Collections.Immutable;
@@ -121,54 +121,23 @@ public class OrderProcess : EventSourcedStateMachine<Order>, IOrderProcess
 ```
 
 There is no `[StorageProvider]` attribute and no storage to configure. The grain's storage reads the model through
-Chronicle and never writes anything.
+Chronicle and never writes anything. Inside the grain, the protected `Model` property gives the model as the grain
+last read it, and `Key` gives its `StateMachineKey`.
 
-## Add it to the application
+## Declare the transitions
 
-Call `AddEventSourcedStateMachines()` on the silo builder or the service collection, next to `AddCratisChronicle()`:
+`DefineTransitions` declares what each event does:
 
-```csharp
-using Cratis.Choreography.Chronicle.Hosting;
+- `On<TEvent>()` names an event type marked with `[EventType]`, or an interface or abstract type that event types
+  implement, which then matches every event type implementing it. Anything else fails startup with
+  `TransitionEventIsNotAnEventType`.
+- `When(guard)` receives the model as it is after the event. Calling it more than once requires every guard to hold,
+  and a guarded transition is never taken while the model has no instance.
+- `TransitionTo<TState>()` completes the transition. `TState` must be a state of the same model.
 
-builder.AddCratisChronicle();
-builder.Host.UseOrleans(silo => silo.AddEventSourcedStateMachines());
-```
-
-Every concrete `EventSourcedStateMachine<TModel>` type discovery finds is inspected when the Chronicle client is
-created, and its artifacts are registered with Chronicle's explicit registration API, so they reach every event store
-and namespace the client connects:
-
-| The model's projection | What is registered |
-| --- | --- |
-| The state machine overrides `DefineProjection` | That projection |
-| The model carries model-bound projection attributes Chronicle has not discovered | The model-bound read model |
-| Chronicle already discovered a projection for the model | Nothing - it is not registered twice |
-
-A state machine that overrides `DefineProjection` for a model Chronicle already has a projection for fails client
-creation with `StateMachineModelAlreadyHasProjection`; one without any projection fails with
-`MissingProjectionForStateMachineModel`. Failing at startup is deliberate: a state machine that silently never
-refreshes is far harder to find.
-
-Then **one reactor per state machine** is registered. It subscribes to exactly the event types the state machine is
-interested in - the events its projection consumes (from, join, removed with, children and nested) together with the
-events its transitions are declared for, with interfaces and base types expanded to the event types implementing
-them. It never subscribes to all events.
-
-To register only some state machines, turn discovery off and list them:
-
-```csharp
-silo.AddEventSourcedStateMachines(options =>
-{
-    options.Discover = false;
-    options.StateMachines.Add(typeof(OrderProcess));
-});
-```
-
-### Describe the state machine from its type alone
-
-`DefineProjection` and `DefineTransitions` are called at startup on an instance created without running any
-constructor, so the integration can learn which events the state machine needs before any grain exists. They must
-not use fields, constructor parameters or injected services - only the builder they are given.
+For a delivered event, the transitions declared for its type are evaluated in declaration order. The first whose
+guards hold and that the current state allows through `CanTransitionTo` is taken, and the rest are skipped. A
+transition that is not taken because of a guard or the current state is skipped without an error.
 
 ## Define the projection in code
 
@@ -183,27 +152,34 @@ protected override void DefineProjection(IProjectionBuilderFor<Ticket> projectio
     .From<TicketResolved>(_ => _.Set(ticket => ticket.Resolved).ToValue(true));
 ```
 
+Overriding it makes the integration register the projection with Chronicle. Leave it alone when the model carries
+model-bound attributes, or when Chronicle already discovers a projection for the model; defining a second one fails
+startup, as [hosting event-sourced state machines](event-sourced-hosting.md) explains.
+
 ## What happens when an event is delivered
 
 1. The reactor finds the grain for the event's event store, namespace and event source.
 2. The grain re-reads the model through `IReadModels.GetInstanceById`.
-3. `OnModelChanged(previous, current, context)` is called with the model before and after the event and the event's
-   `EventContext`. Either model is `null` while there is no instance.
-4. The transitions declared for the event type are evaluated in declaration order against the refreshed model. The
-   first whose guards are satisfied and that the current state allows - through `CanTransitionTo` - is taken. A
-   guarded transition is never taken while the model has no instance.
+3. `OnModelChanged(previous, current, context)` is called with the model the grain held before the re-read, the model
+   after it, and the event's `EventContext`. Either model is `null` while there is no instance.
+4. The transitions declared for the event type are evaluated against the refreshed model.
+
+A grain that the delivery itself activates has already read a model that includes the event, so `previous` and `current`
+can be the same instance, and `ResolveState` has already put it in the state that model implies. The declared
+transition is then usually refused, because the state the grain is already in does not allow its own target, and
+nothing happens. Do not rely on `previous` differing from `current`.
 
 Nothing about the current state is persisted. When the grain activates, `ResolveState(model)` - by default
 `InitialState` - decides the state it enters, so the state after a restart, a deactivation or a move to another silo
 is always what the authoritative model says. Make `ResolveState` agree with your transitions, because it is what the
-state machine becomes the next time it activates.
+state machine becomes the next time it activates. `ResolveActivationState()` is sealed here and calls `ResolveState`.
 
 ## Grain keys and namespaces
 
 A state machine's grain key is a `StateMachineKey`: `{eventStore}/{namespace}/{eventSourceId}`. The event store and
 namespace are part of the key, so the same event source in two namespaces - two tenants - is two grains, and each
 reads its model from its own namespace. The event source id may contain `/`; the event store name and namespace may
-not.
+not, and a key that cannot be formatted or parsed throws `InvalidStateMachineKey`.
 
 Get a state machine from application code with the `IGrainFactory` extensions:
 
@@ -225,23 +201,5 @@ a `StateMachineKey`.
 The grain reaches Chronicle through `IStateMachineEventStores`, which asks `IChronicleClient` for the event store of
 the namespace in its key. It never uses a scoped, request-resolved `IEventStore`, because a grain has no request.
 
-## Read model lag
-
-A **passive** model is computed from the event log when it is read, so it always includes the event that was just
-delivered. That is why passive models are recommended for state machines.
-
-A **materialized** model is written by its projection's own observer, which may not have handled the delivered event
-yet. Before refreshing the grain for an event the projection consumes, the reactor waits until the projection has
-handled the event's sequence number. If it has not within `ModelCatchUpTimeout` (30 seconds by default), the delivery
-fails with `ModelDidNotCatchUp` and Chronicle retries the partition - a stale model never decides a transition. An
-event only the transitions use is not waited for: the projection never handles it, and events reach the reactor in
-order per event source, so every projected event before it has already been waited for.
-
-## When it is the wrong fit
-
-- **A process that decides, rather than follows.** Transitions here react to facts that already happened. When the
-  grain must accept or reject a command, validate it where the event is appended - a command or a constraint - and
-  let the state machine follow the outcome.
-- **State that is not derived from events.** Use a [state machine](state-machines.md) with its own storage.
-- **Work that must happen exactly once per event.** `OnModelChanged` and `OnEnter` can run again when Chronicle
-  redelivers an event after a failure or a replay. Make side effects idempotent, or use a reactor built for them.
+The next page, [hosting event-sourced state machines](event-sourced-hosting.md), registers them with Chronicle and
+covers the options, read model lag and failures.

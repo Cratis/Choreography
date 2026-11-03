@@ -1,2 +1,10 @@
 - name: Options
   href: options.md
+- name: Hosting API
+  href: hosting-api.md
+- name: Packages
+  href: packages.md
+- name: Storage names
+  href: storage-names.md
+- name: Troubleshooting
+  href: troubleshooting.md

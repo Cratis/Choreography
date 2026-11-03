@@ -1,153 +1,163 @@
 ---
-title: Options
-description: Every option the job system and the silo hosting expose.
+title: Choreography options reference
+description: Every Choreography options class with its property names, defaults and meaning, from the silo host to jobs, workflows, patching and storage.
 ---
 
-# Options
+## How each class is supplied
+
+| Options class | Supplied through | Mutability |
+| --- | --- | --- |
+| `CratisChoreographyOptions` | The argument of `AddCratisChoreography` | Init-only |
+| `JobsOptions` | A registered `IOptions<JobsOptions>` instance | Init-only |
+| `WorkflowsOptions` | `CratisChoreographyOptions.ConfigureWorkflows` or the `configure` callback of `AddCratisChoreographyWorkflows` | Settable |
+| `EventSourcedWorkflowsOptions` | The `configure` callback of `AddEventSourcedWorkflows` | Settable |
+| `EventSourcedStateMachinesOptions` | The `configure` callback of `AddEventSourcedStateMachines` | Settable |
+| `PatchingOptions` | `CratisChoreographyOptions.ConfigurePatching` or the `configure` callback of `AddCratisChoreographyPatching` | Settable |
+| `MongoDBJobsStorageOptions` | The `configure` callback of `AddCratisChoreographyMongoDBJobsStorage` | Settable |
+| `MongoDBPatchStorageOptions` | The `configure` callback of `AddCratisChoreographyMongoDBPatchStorage` | Settable |
+| `SqlJobsStorageOptions` | The required `configure` callback of `AddCratisChoreographySqlJobsStorage` | Settable |
+| `SqlPatchStorageOptions` | The required `configure` callback of `AddCratisChoreographySqlPatchStorage` | Settable |
 
 ## CratisChoreographyOptions
 
-The silo co-hosting options, passed to `AddCratisChoreography`.
+Namespace `Cratis.Choreography.Hosting`. See [Host the Choreography silo](../hosting/index.md).
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `Enabled` | `true` | When `false`, `AddCratisChoreography` configures nothing |
-| `Clustering` | `Localhost` | `Localhost` for single-instance development, `MongoDB` for durable cluster membership |
-| `ClusterId` | `"default"` | The cluster id every instance joins |
-| `ServiceId` | `"default"` | The service id every instance joins |
-| `DatabaseName` | `"orleans"` | The MongoDB database holding cluster membership and grain storage |
-| `ConnectionString` | `"mongodb://localhost:27017"` | The MongoDB connection string |
-| `Storage` | `MongoDB` | Where grain state is kept. `InMemory` keeps jobs, job steps and workflow runs in the silo's memory, for development and tests; nothing survives the process |
-| `Workflows` | `false` | Host the [workflow engine](../concepts/workflows.md): its grain storage, journal, sweep and node execution |
-| `ConfigureWorkflows` | `null` | Configures the `WorkflowsOptions` when `Workflows` is on |
+| `Enabled` | `true` | When `false`, `AddCratisChoreography` configures nothing. |
+| `Clustering` | `ClusteringMode.Localhost` | Localhost clustering, or durable MongoDB cluster membership. |
+| `ClusterId` | `"default"` | The cluster id every instance joins. |
+| `ServiceId` | `"default"` | The service id every instance joins. |
+| `DatabaseName` | `"orleans"` | The MongoDB database for cluster membership and, with MongoDB storage, the grain storage providers. |
+| `ConnectionString` | `"mongodb://localhost:27017"` | The MongoDB connection string used for clustering and grain storage. |
+| `Storage` | `GrainStorageMode.MongoDB` | Where grain state lives. `InMemory` keeps jobs, job steps and workflow runs in the silo's memory. |
+| `Workflows` | `false` | Hosts the workflow engine: its grain storage, journal, sweep and node execution. |
+| `ConfigureWorkflows` | `null` | Configures `WorkflowsOptions` when `Workflows` is on. |
+| `Patching` | `false` | Applies patches when the silo becomes Active. With in-memory storage, the applied-patch record is in memory too. |
+| `ConfigurePatching` | `null` | Configures `PatchingOptions` when `Patching` is on. |
 
-`CratisChoreographyOptions.Local()` is localhost clustering with `Storage = InMemory`: a silo that needs no database.
+`CratisChoreographyOptions.Local()` returns `Clustering = Localhost` and `Storage = InMemory`.
+
+## ClusteringMode and GrainStorageMode
+
+| Enum | Value | Meaning |
+| --- | --- | --- |
+| `ClusteringMode` | `Localhost` (0) | Localhost clustering for a single instance. |
+| `ClusteringMode` | `MongoDB` (1) | Durable MongoDB cluster membership for more than one instance. |
+| `GrainStorageMode` | `MongoDB` (0) | Durable grain state in MongoDB. |
+| `GrainStorageMode` | `InMemory` (1) | Grain state in memory for one silo; nothing survives the process. |
 
 ## JobsOptions
 
-The job system behavior. Register through `services.Configure<JobsOptions>(...)` to override; the hosting
-setup registers the defaults.
+Namespace `Cratis.Choreography.Jobs`. Values below 1 are treated as 1 for `MaxConcurrentRehydration`, `MaxConcurrentCleanup`,
+`MaxTerminalJobsPerCleanup`, `MaxConcurrentStepStarts`, `MaxActiveStepsPerJob`, `MaxStepAttempts` and `StepDeliveryMaxAttempts`.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `MaxParallelSteps` | processor count − 1, minimum 1 | How many steps may run concurrently on one silo |
-| `DeadJobThreshold` | 1 hour | How old a job stuck in preparation with no steps may be before cleanup removes it |
-| `MaxInlineStepPlanSize` | 1 MiB | The serialized size of a job's whole step plan (requests, identities, types and stages) above which its plan is kept outside the job document, when storage and every silo support it |
-| `CleanupCadence` | 1 hour | How often the scavenger looks for dead jobs |
-| `StepCheckpointBatchInterval` | 100 | How many reported batches a step accumulates before its progress checkpoint is persisted |
-| `StepCheckpointFlushInterval` | 5 seconds | How long a step may hold an unpersisted checkpoint before it is flushed regardless; zero or less disables the timed flush |
-| `MaxConcurrentRehydration` | 8 | How many stored jobs are resumed at once when the jobs manager rehydrates (oldest first); values below 1 count as 1 |
-| `MaxConcurrentCleanup` | 4 | How many jobs the cleanup deletes at once; values below 1 count as 1 |
-| `TerminalJobRetention` | 7 days | How long completed-successfully, completed-with-failures, and failed jobs stay available before cleanup removes them and all their steps; `Timeout.InfiniteTimeSpan` disables terminal retention |
-| `MaxTerminalJobsPerCleanup` | 100 | The maximum oldest-first terminal jobs selected in one cleanup pass; values below 1 count as 1 |
-| `MaxConcurrentStepStarts` | 16 | How many steps of one job are started at once when it starts or resumes; values below 1 count as 1 |
-| `StepStopTimeout` | 10 seconds | How long stopping a step waits for its work and activation callbacks to settle before it answers `JobStepError.StopTimedOut`; keep it below the Orleans response timeout. A drained step refuses callbacks only once it has passed since its stop began, and a job completing a pending drain after activation waits up to it |
-| `MaxActiveStepsPerJob` | null (every step starts up front) | How many steps of one job are active at once; the job starts the next step as one reaches an outcome. A job overrides it with `Job.MaxActiveSteps`; values below 1 count as 1 |
-| `MaxStepAttempts` | 1 (a failed step is not retried) | How many times a step is attempted before its failure counts as the job's; `Job.ShouldRetryStep` decides per failure |
-| `StepRetryBackoff` | 5 seconds | The delay before the second attempt of a failed step; every further attempt doubles it |
-| `MaxStepRetryBackoff` | 5 minutes | The longest delay between two attempts of a step |
-| `JobWatchdogInterval` | 1 minute | How often a running job counts its steps in storage and finalizes itself when every step is done, and how often it retries a failed resume hook, also for a job interrupted while starting; zero, negative or infinite turns the watchdog off |
-| `StepLeaseTimeout` | zero (leases off) | How long a running step may go without a heartbeat before the watchdog may restart it, and only when its owner silo has left the cluster; zero, negative or infinite turns leases off |
-| `StepDeliveryMaxAttempts` | 10 | How many times a step delivers its persisted outcome to its job before it leaves it to the job's watchdog; values below 1 count as 1 |
-| `StepDeliveryRetryDelay` | 1 second | The delay before a step delivers its outcome a second time; every further delivery doubles it |
-| `MaxStepDeliveryRetryDelay` | 30 seconds | The longest delay between two deliveries of a step's outcome |
-
-`MaxInlineStepPlanSize` measures the whole serialized plan, not summed request lengths. Externalization requires storage
-support and every hosting silo's capability advertisement; during upgrades, oversized inline plans fail cleanly until the
-last older silo leaves. Stored plans survive `Running` and are deleted only after a durable terminal state or job removal;
-cleanup retains non-terminal plans. MongoDB creates the ordered `{jobId:1, index:1}` index idempotently and leaves any
-legacy jobId-only index in place.
-
-Before rollback, drain externalized jobs and let them finish: older silos cannot resume their preparation. For an existing
-zombie `PreparingJob` without a plan, remove it or wait for dead-job cleanup, then release observer-owned catching-up
-partitions through the host's recovery procedure. See [upgrade and repair guidance](../concepts/jobs.md#a-very-large-plan-is-kept-outside-the-job-document).
-A lost Running acknowledgement can still stall progress until rehydration; see
-[Cratis/Orleans#177](https://github.com/Cratis/Choreography/issues/177).
-
-Rehydration and cleanup isolate each job, so one job that fails to resume or delete never stops the others.
-Cleanup reads an oldest-first, storage-filtered page; it does not materialize the entire job collection. Terminal cleanup only conditionally removes immutable terminal states, so it cannot remove preparing, running, stopped, or removing jobs. It removes regular and failed job steps before the terminal job record; a failed removal is safe to retry on the next bounded pass.
-
-`IJobsManager.Rehydrate()` waits for dead-job cleanup and loading the interrupted jobs, then returns before
-all jobs resume. The manager drains that snapshot oldest first as bounded background work on its activation
-scheduler. Overlapping calls share preparation and the drain instead of starting duplicate work.
-
-A job already stopped when its slot comes up is skipped. Before dispatch, the manager reloads the job and checks
-that its status is still Running, PreparingJob, PreparingSteps, or StartingSteps. Storage has no status-only
-read, so this costs one additional job read beyond discovery; the same fresh state is reused to resolve the
-grain. An explicit `Resume()` can still resume a stopped job.
-
-The manager keeps its activation alive while the drain runs. This prevents idle collection, not requested
-deactivation, migration, memory-pressure shedding (`GrainCollectionOptions.EnableActivationSheddingOnMemoryPressure`),
-or silo shutdown. These stop further dispatch; jobs not yet resumed remain in storage and resume on the next
-`Rehydrate()` call or host startup. The drain is activation-owned, not a durable queue or a cluster-wide
-concurrency limit. Already dispatched calls may finish after cancellation.
-
-`GetEffectiveMaxParallelSteps()` returns `MaxParallelSteps ?? Math.Max(1, Environment.ProcessorCount - 1)`. The limit applies per silo. To give silos different limits, call `UseJobStepParallelismFromSiloMetadata()`: each silo reads the `cratis.jobs.max-parallel-steps` silo metadata value (or a key you pass), and falls back to these options when the value is missing, invalid or not positive.
-
-## MongoDBJobsStorageOptions
-
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `DatabaseNameResolver` | `null` | When set, decides the database name for a scope and namespace; when `null`, `DatabaseNames.ForJobs` applies (`{scope}+jobs`, or `{scope}+jobs+{namespace}`) |
-| `TransientRetryCount` | 5 | How many times an operation is retried after a transient error (wait queue full, timeout, connection failure); zero disables retrying |
-| `TransientRetryBaseDelay` | 200 milliseconds | Delay before the first retry; it doubles each retry and is randomized by up to 50% so callers do not retry in lockstep |
-
-Non-transient errors such as a missing job or a serialization failure are never retried. When the retries run
-out, the original exception surfaces and is reported as the storage error. Each retry is logged as a warning.
-
-### MongoDB connection pool
-
-The library does not create the `IMongoClient`; you pass it to `AddCratisChoreographyMongoDBJobsStorage`, so the
-pool settings are yours. These `MongoClientSettings` matter for the job system:
-
-- Share one `IMongoClient` for the whole process. Each client owns its own connection pool.
-- `MaxConnectionPoolSize` (driver default 100) caps concurrent operations; further operations wait in a queue.
-- `MaxConnecting` (driver default 2) limits how fast a cold pool opens connections, so a burst at startup queues
-  up. Raise it if startup shows `MongoWaitQueueFullException`.
-- The driver fails with `MongoWaitQueueFullException` once its wait queue is full. The bounded rehydration and
-  cleanup options above, together with the transient retry, keep a restart with many interrupted jobs from
-  reaching that point.
-
-## SqlJobsStorageOptions
-
-| Option | Meaning |
-| --- | --- |
-| `OptionsResolver` | Required. Returns the `DbContextOptions<JobsDbContext>` for a scope and namespace - the place you choose provider (SQL Server, PostgreSQL, SQLite) and connection |
+| `MaxParallelSteps` | `null` | Steps one silo runs at once. `GetEffectiveMaxParallelSteps()` returns it, or the processor count minus 1 with a minimum of 1. |
+| `DeadJobThreshold` | 1 hour | How old a job stuck in preparation with no steps must be before cleanup removes it. |
+| `CleanupCadence` | 1 hour | How often the scavenger looks for dead jobs. |
+| `MaxInlineStepPlanSize` | 1,048,576 bytes | Serialized size of a job's whole step plan above which the plan is kept outside the job document, when storage and every silo support it. Zero keeps every plan outside whenever possible. |
+| `StepCheckpointBatchInterval` | 100 | Reported batches a step accumulates before its progress checkpoint is persisted. |
+| `StepCheckpointFlushInterval` | 5 seconds | How long a step may hold an unpersisted checkpoint before it is flushed; zero or less disables the timed flush. |
+| `MaxConcurrentRehydration` | 8 | Stored jobs resumed at once when the jobs manager rehydrates, oldest first. |
+| `MaxConcurrentCleanup` | 4 | Dead jobs the cleanup deletes at once. |
+| `TerminalJobRetention` | 7 days | How long completed and failed jobs stay before cleanup removes them with their steps; `Timeout.InfiniteTimeSpan` keeps them. |
+| `MaxTerminalJobsPerCleanup` | 100 | Most terminal jobs selected, oldest first, in one cleanup pass. |
+| `MaxConcurrentStepStarts` | 16 | Steps of one job started at once when it starts or resumes. |
+| `MaxActiveStepsPerJob` | `null` | Steps of one job active at once; `null` starts every step up front. `Job.MaxActiveSteps` overrides it per job. |
+| `MaxStepAttempts` | 1 | Attempts before a step's failure counts as the job's; 1 never retries. `Job.ShouldRetryStep` decides per failure. |
+| `StepRetryBackoff` | 5 seconds | Delay before the second attempt of a failed step; each further attempt doubles it. |
+| `MaxStepRetryBackoff` | 5 minutes | Longest delay between two attempts of a step. |
+| `JobWatchdogInterval` | 1 minute | How often a running job counts its steps in storage, finalizes itself when all are done and retries a failed resume hook; zero, negative or infinite turns it off. |
+| `StepLeaseTimeout` | zero | Heartbeat silence after which the watchdog may restart a step whose owner silo has left the cluster; zero, negative or infinite turns leases off. |
+| `StepDeliveryMaxAttempts` | 10 | Times a step delivers its persisted outcome to its job before leaving it to the job's watchdog. |
+| `StepDeliveryRetryDelay` | 1 second | Delay before the second delivery of a step outcome; each further delivery doubles it. |
+| `MaxStepDeliveryRetryDelay` | 30 seconds | Longest delay between two deliveries of a step outcome. |
+| `StepStopTimeout` | 10 seconds | How long stopping a step waits for its work to settle before it answers `JobStepError.StopTimedOut`. Keep it below the Orleans response timeout. |
 
 ## WorkflowsOptions
 
-The workflow engine, passed to `AddCratisChoreographyWorkflows` (or `CratisChoreographyOptions.ConfigureWorkflows`). See
-[Workflows](../concepts/workflows.md).
+Namespace `Cratis.Choreography.Workflows`. See [Host and start workflows](../workflows/host-and-start.md).
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `JobsScope` | `"workflows"` | The scope of the jobs manager that holds the wave jobs of a run, for the default `IWorkflowExecutionScopes` |
-| `Scopes` | empty | Scopes the sweep and the recovery of wave jobs act on, besides those an `IWorkflowScopeSource` names and those the silo has served |
-| `WakeRunsItself` | `true` | While a retry or a wait deadline is pending, the run's grain keeps a timer and a reminder so it acts when the time comes |
-| `Sweep` | `true` | Whether the sweep runs on this silo |
-| `SweepInterval` | 30 seconds | How often the sweep asks every active run whether it has anything to do |
-| `SweepStartupDelay` | 20 seconds | How long after start the first sweep runs |
-| `IdleBeforeResume` | 15 minutes | How long a run may be idle before the sweep takes it forward again from its recorded history |
+| `JobsScope` | `"workflows"` | Scope of the jobs manager that holds a run's wave jobs, for the default `IWorkflowExecutionScopes`. |
+| `Scopes` | empty set | Scopes the sweep and wave-job recovery act on, besides those an `IWorkflowScopeSource` names and those the silo has seen. |
+| `WakeRunsItself` | `true` | While a retry or wait deadline is pending, the run's grain keeps a timer and a reminder to act on time. |
+| `Sweep` | `true` | Whether the sweep runs on this silo. |
+| `SweepInterval` | 30 seconds | How often the sweep asks every active run of every known scope whether it has work. |
+| `SweepStartupDelay` | 20 seconds | Delay after the sweep starts before its first pass. |
+| `IdleBeforeResume` | 15 minutes | How long a run may be idle before the sweep takes it forward from its recorded history. |
 
 ## EventSourcedWorkflowsOptions
 
-The Chronicle adapter, passed to `AddEventSourcedWorkflows` in `Cratis.Choreography.Chronicle`.
+Namespace `Cratis.Choreography.Chronicle.Workflows`. See
+[Chronicle journal and triggers](../workflows/chronicle-journal-and-triggers.md).
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `EventStore` | `"Default"` | The event store the facts of runs are appended to, and the jobs scope of the wave jobs |
-| `NamespaceFor` | the scope's value | Maps a `WorkflowScope` onto an event store namespace |
-| `ScopeFor` | the namespace's value | Maps an event store namespace back onto a `WorkflowScope`; used by event triggers |
-| `ReadModels` | `true` | Register the run listing and open waits read models |
-| `OnEvent<TEvent>(...)` | none | Declares that an event admits a run of a workflow |
-| `Schedule(...)` | none | Declares that a workflow starts on a schedule |
+| `EventStore` | `"Default"` | Event store that run facts are appended to. |
+| `NamespaceFor` | the scope's value | Maps a `WorkflowScope` to an event store namespace. |
+| `ScopeFor` | the namespace's value | Maps an event store namespace back to a `WorkflowScope`, for event triggers. |
+| `ReadModels` | `true` | Maintains the run listing and open waits as read models. |
+| `EventTriggers` | empty, read-only | The event triggers declared so far. |
+| `Schedules` | empty, read-only | The schedules declared so far. |
+| `OnEvent<TEvent>(workflow, trigger)` | none | Declares that an event admits a run of a workflow. |
+| `Schedule(schedule)` | none | Declares that a workflow starts on a schedule. |
 
-## Well-known grain storage providers
+## EventSourcedStateMachinesOptions
 
-The silo registers the job system's grain storage under these names; job grains reference them by name:
+Namespace `Cratis.Choreography.Chronicle.StateMachines`. See [Event-sourced state machines](../state-machines/event-sourced.md).
 
-| Name | Used by |
-| --- | --- |
-| `jobs` | The job grain's persisted state |
-| `job-steps` | The job step grain's persisted state |
-| `workflows` | The facts of workflow runs for the journal on grain storage, and the run index of each scope |
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `Discover` | `true` | Discovers every concrete `EventSourcedStateMachine<TModel>` by type discovery. |
+| `StateMachines` | empty set | State machine types registered in addition to the discovered ones. |
+| `ModelCatchUpTimeout` | 30 seconds | How long a delivered event waits for a materialized model to catch up before the delivery fails. A passive model never waits. |
+| `ModelCatchUpPollInterval` | 50 milliseconds | How often a materialized model is checked while waiting. |
+
+## PatchingOptions
+
+Namespace `Cratis.Choreography.Patching`. See [Patching](../patching/index.md) and the
+[patching reference](../patching/reference.md).
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `HostVersion` | `null` | Version of the running host. When `null`, the informational version of the entry assembly without build metadata, falling back to its assembly version. An unset or `1.0.0` version is unknown: patches apply, but the store is not marked. |
+| `MaxAttempts` | 5 | Times the host asks the patch manager to apply patches while waiting for it to move to a host at least as new, before the start fails. |
+| `RelocationDelay` | 1 second | Wait before asking again; it doubles after every attempt. |
+
+## MongoDBJobsStorageOptions
+
+Namespace `Cratis.Choreography.Storage.MongoDB`. See [MongoDB storage](../storage/mongodb.md).
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `DatabaseNameResolver` | `null` | Function of scope and namespace that returns the database name. When `null`, `DatabaseNames.ForJobs` applies: `{scope}+jobs`, or `{scope}+jobs+{namespace}`. |
+| `TransientRetryCount` | 5 | Retries after a transient error (wait queue full, timeout, connection failure); zero disables retrying. |
+| `TransientRetryBaseDelay` | 200 milliseconds | Delay before the first retry; it doubles each retry and is randomized. |
+
+## MongoDBPatchStorageOptions
+
+Namespace `Cratis.Choreography.Storage.MongoDB`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `DatabaseName` | `"choreography"` | The one database that holds the patch records for the whole store. |
+
+## SqlJobsStorageOptions
+
+Namespace `Cratis.Choreography.Storage.Sql`. See [SQL storage](../storage/sql.md).
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `OptionsResolver` | required | Function of scope and namespace that returns the `DbContextOptions<JobsDbContext>`, which also picks the EF Core provider. |
+
+## SqlPatchStorageOptions
+
+Namespace `Cratis.Choreography.Storage.Sql`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `OptionsResolver` | required | Function that returns the `DbContextOptions<PatchesDbContext>`, which picks the database and the EF Core provider. |

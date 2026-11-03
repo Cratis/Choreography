@@ -2,9 +2,29 @@
   href: index.md
 - name: Getting started
   href: getting-started/toc.yml
-- name: Concepts
-  href: concepts/toc.yml
-- name: How-to
-  href: how-to/toc.yml
+- name: Choosing a building block
+  href: choosing-a-building-block.md
+- name: Jobs
+  href: jobs/toc.yml
+- name: Workflows
+  href: workflows/toc.yml
+- name: State machines
+  href: state-machines/toc.yml
+- name: Workers
+  href: workers.md
+- name: Hosting
+  href: hosting/toc.yml
+- name: Storage
+  href: storage/toc.yml
+- name: Patching
+  href: patching/toc.yml
+- name: Tenancy
+  href: tenancy.md
+- name: Serializers and grain keys
+  href: serializers-and-keys.md
+- name: Upgrading and compatibility
+  href: upgrading/toc.yml
+- name: Testing
+  href: testing/toc.yml
 - name: Reference
   href: reference/toc.yml
