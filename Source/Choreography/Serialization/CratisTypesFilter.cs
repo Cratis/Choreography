@@ -13,24 +13,21 @@ namespace Cratis.Choreography.Serialization;
 /// never hit the type-name check, which is why this only surfaces in a cluster.
 /// </summary>
 /// <remarks>
-/// A constructed generic type is never allowed here, only its generic type definition. Orleans
-/// treats an allowing filter verdict on a constructed generic type as final and stops at that
-/// point, so allowing one would also allow whatever its generic arguments are. Leaving the
-/// verdict open makes Orleans check every generic argument on its own and then the definition,
-/// which this filter allows when it is a Cratis type.
+/// A closed generic type is left undecided, and only its generic type definition is allowed here;
+/// see <see cref="ClosedGenericTypes"/> for why.
 /// </remarks>
 public class CratisTypesFilter : ITypeFilter
 {
     /// <inheritdoc/>
     public bool? IsTypeAllowed(Type type)
     {
-        var elementType = type;
-        while (elementType.HasElementType)
+        if (type.IsClosedGeneric())
         {
-            elementType = elementType.GetElementType()!;
+            return null;
         }
 
-        if (!elementType.IsConstructedGenericType && (elementType.Namespace?.StartsWith("Cratis", StringComparison.Ordinal) ?? false))
+        var elementType = type.IsArray ? type.GetElementType()! : type;
+        if (elementType.Namespace?.StartsWith("Cratis", StringComparison.Ordinal) ?? false)
         {
             return true;
         }

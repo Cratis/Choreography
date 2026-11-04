@@ -20,7 +20,12 @@ explains what they own, so you can tell when a type of yours needs its own.
 | `ExpandoObjectSerializer` | `ExpandoObject` payloads, copied through the dictionary copier. |
 | `LinqCollectionCopier` | Deep copies of the internal types LINQ and collection expressions produce, which Orleans cannot copy. It materializes them to an array. |
 | `CratisJsonSerializer` | Everything else that is Cratis-owned and has no generated codec, carried as System.Text.Json. |
-| `CratisTypesFilter` | Allows the types in namespaces that start with `Cratis`, including arrays of them, so interface-typed payloads pass the Orleans type manifest on cross-silo calls. A closed generic Cratis type is left to Orleans, which allows it only when each generic argument is allowed on its own. |
+| `CratisTypesFilter` | Allows the types in namespaces that start with `Cratis`, including arrays of them, so interface-typed payloads pass the Orleans type manifest on cross-silo calls. |
+
+The serializers that also act as type filters (`OneOfSerializer`, `CratisJsonSerializer` and `CratisTypesFilter`) allow
+only the plain types and generic type definitions they own. A closed generic type, such as `Result<string, JobId>`, is left to
+Orleans, which allows it only when each generic argument is allowed on its own. Which serializer writes the value does
+not change.
 
 The public registration helpers are `AddConceptSerializer()`, `AddLinqCollectionCopier()` and
 `AddCompleteSerializer<TSerializer>()` for a serializer that implements `IGeneralizedCodec`, `IGeneralizedCopier` and
