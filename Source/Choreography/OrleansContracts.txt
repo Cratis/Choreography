@@ -69,6 +69,11 @@ class [GrainType("cratis-orleans-jobs-manager")] Cratis.Choreography.Jobs.JobsMa
 # Cratis.Choreography.Jobs.NullJob
 class [GrainType("cratis-orleans-null-job")] Cratis.Choreography.Jobs.NullJob
 
+interface [GrainInterfaceType("Cratis.Choreography.Patching.IPatchManager")] Cratis.Choreography.Patching.IPatchManager [Version(0)]
+  0AB5CDA8: ApplyPatchesFor(Cratis.Choreography.Patching.SemanticVersion) -> Task<Cratis.Choreography.Patching.PatchOutcome>
+
+class [GrainType("cratis-choreography-patch-manager")] Cratis.Choreography.Patching.PatchManager
+
 interface [GrainInterfaceType("Cratis.Choreography.Workers.IGrainWithBackgroundTask")] Cratis.Choreography.Workers.IGrainWithBackgroundTask [Version(0)]
   1CC1DE2C: GetException() -> Task<Cratis.Monads.Result<OneOf.Types.None, System.Exception>>
   4346509B: GetWorkStatus() -> Task<Cratis.Choreography.Workers.GrainWithBackgroundTaskStatus>

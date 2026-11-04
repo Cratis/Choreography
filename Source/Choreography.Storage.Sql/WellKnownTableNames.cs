@@ -21,4 +21,14 @@ public static class WellKnownTableNames
     /// unlike the MongoDB provider which moves them into a dedicated collection.
     /// </remarks>
     public const string JobSteps = "JobSteps";
+
+    /// <summary>
+    /// The table holding the records of applied patches.
+    /// </summary>
+    public const string Patches = "Patches";
+
+    /// <summary>
+    /// The table holding the versions patching keeps - how far patches have come and which host last patched.
+    /// </summary>
+    public const string PatchVersions = "PatchVersions";
 }

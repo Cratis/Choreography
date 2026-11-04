@@ -1,0 +1,8 @@
+- name: Overview
+  href: index.md
+- name: Persistence and testing
+  href: persistence-and-testing.md
+- name: Event-sourced
+  href: event-sourced.md
+- name: Event-sourced hosting
+  href: event-sourced-hosting.md

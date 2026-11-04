@@ -1,2 +1,4 @@
 - name: Run your first job
   href: index.md
+- name: Run your first workflow
+  href: first-workflow.md

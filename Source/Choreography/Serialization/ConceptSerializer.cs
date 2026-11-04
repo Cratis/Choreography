@@ -28,6 +28,11 @@ public class ConceptSerializer : IGeneralizedCodec, IGeneralizedCopier, ITypeFil
     /// <inheritdoc/>
     public bool? IsTypeAllowed(Type type)
     {
+        if (type.IsClosedGeneric())
+        {
+            return null;
+        }
+
         if (type == _codecType || type.IsConcept())
         {
             return true;
