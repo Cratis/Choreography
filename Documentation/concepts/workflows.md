@@ -3,11 +3,15 @@ title: Workflows
 description: Define a business process as a graph of nodes and run it as a durable process on grains, with every run rebuilt from its own journal of facts.
 ---
 
-A workflow is a business process that is defined as data and runs as a durable process: when an order is placed,
-wait for an approval, call a capability, wait a day, fan out over its lines and join the results. The engine in
-`Cratis.Orleans` runs it on grains, so a run survives a silo restart, a deactivation and a move between silos in the
-same way the [state machines](state-machines.md) do, and node work runs as [jobs](jobs.md), so it is retried,
-stoppable and recoverable like any other job.
+A workflow defines a business process as a graph: when an order is placed, wait for an approval, call a
+capability, wait a day, fan out over its lines and join the results. Use one when the process needs to decide
+what happens next across actions, waits and branches. A [state machine](state-machines.md) describes a grain's
+lifecycle; a workflow coordinates a run of the graph.
+
+The engine in `Cratis.Orleans` records each run's history in a journal and rebuilds its coordinator state when
+the run grain activates. Ready node work runs as [jobs](jobs.md). Those are two persistence responsibilities:
+the journal remembers the process's decisions and outcomes, while jobs storage holds the work being performed.
+The default journal uses grain storage; [Chronicle integration](#keep-the-journal-in-chronicle) is optional.
 
 ```mermaid
 flowchart LR
@@ -104,7 +108,8 @@ first delivery started.
 
 ### The run's state is its journal
 
-A run grain keeps no state of its own. Everything that happened to it is a fact - `WorkflowRunAdmitted`,
+A run grain rebuilds its coordinator state from its journal rather than saving a separate coordinator snapshot.
+Everything that happened to it is a fact - `WorkflowRunAdmitted`,
 `WorkflowNodeScheduled`, `WorkflowNodeSucceeded`, `WorkflowNodeAttemptFailed`, `WorkflowWaitOpened`,
 `WorkflowWaitResolved`, `WorkflowBranchesFannedOut`, `WorkflowBranchesJoined`, `WorkflowRunSucceeded`,
 `WorkflowRunFailed`, `WorkflowRunCancelled` and the rest of `WorkflowRunFacts.Types` - recorded in an
@@ -127,6 +132,11 @@ fact by adding a record, and never rename or reshape an existing one.
 [Chronicle adapter](#keep-the-journal-in-chronicle) keeps the facts as events in the event log instead.
 
 ### Node work runs as jobs
+
+The journal says which node executions are ready and what the run has recorded about them. Performing those
+executions is a separate responsibility: wave jobs and their steps use jobs storage for their state and progress.
+Removing a completed wave job does not remove the run's journal history. Do not use retained wave-job state as
+a substitute for that history, or the journal as a substitute for configuring jobs storage.
 
 When the coordinator schedules work, the run starts a `WorkflowWaveJob`: one job per wave of node executions that were
 ready together, and one job step (`WorkflowNodeStep`) per execution. The job is started under an identity derived from
@@ -158,10 +168,17 @@ interprets a scope. A host with tenants says what a scope is by implementing `IW
 - `JobsManagerFor(scope)` and `ScopeOf(key)` map the scope onto the jobs manager that holds its wave jobs and back.
 
 The default uses the [`ITenancy`](jobs.md) registered with the silo when there is one, and keeps the wave jobs under the jobs
-scope `workflows` and a namespace that is the scope. To run node work as a particular principal, register an
-`IWorkflowNodeExecutionContext`: its `Begin` is called around every node's work.
+scope `workflows` and a namespace that is the scope. This routes wave jobs to their [jobs storage](storage-scopes.md);
+it does not select the run journal. The Chronicle adapter supplies its event-store and namespace mapping for
+wave jobs when that integration is used.
+
+To run node work as a particular principal, register an `IWorkflowNodeExecutionContext`: its `Begin` is called
+around every node's work.
 
 ## Host the engine
+
+Set up the [silo](../how-to/host-the-silo.md) and [jobs storage](../how-to/configure-storage.md) for node work as
+well as choosing a run journal. Registering the journal's storage alone does not provide job and step storage.
 
 Add the engine to a silo, or switch it on in `AddCratisOrleans`:
 
@@ -196,6 +213,10 @@ process.
 The `Cratis.Orleans.Chronicle` package adds `AddEventSourcedWorkflows()`, which keeps a run's facts as events in
 Chronicle's event log with the run as event source, appended with a concurrency scope on the tail and replayed on
 activation.
+
+This replaces where run facts are recorded; it does not replace wave-job execution or make jobs themselves
+event-sourced. Keep jobs storage configured. The workflow engine still uses its grain-storage provider for its
+run index, so selecting the Chronicle journal is not a reason to remove that provider.
 
 ```csharp
 builder.UseOrleans(silo => silo.AddEventSourcedWorkflows(options =>

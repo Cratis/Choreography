@@ -5,11 +5,18 @@ description: The background-task pattern job steps run through - and a building 
 
 # Workers
 
-A **worker** is an Orleans grain that keeps a piece of work running in the background, safely off its turn: it starts, it survives the grain being deactivated in between, and its result is retrieved once it is done. The job step grains run through this pattern — and it is usable directly for any grain that needs the same shape.
+A **worker** runs work off an Orleans grain's turn, so the grain can answer status and result queries while
+the task runs. Use it when you need that execution boundary without a job's plan, step tracking and recovery
+machinery.
+
+The task, status and result belong to the current activation. They are not saved as job state or restored when
+the grain activates again. If the work must survive a process restart, use a [job](jobs.md) with its storage
+configured; running a background task alone does not provide that durability.
 
 ## The contract
 
-Derive `GrainWithBackgroundTask<TWork, TResult>`, implement `PerformWork()`, and call `StartWork()`/`GetResult()`:
+Derive `GrainWithBackgroundTask<TWork, TResult>` and implement `PerformWork()`. This is a partial excerpt:
+`DoAPass()` is an application-owned helper returning `Task`, not a method supplied by the base.
 
 ```csharp
 using Cratis.Orleans.Workers;
@@ -18,26 +25,29 @@ public interface IEternalWatch : IGrainWithGuidKey;
 
 public class EternalWatch : GrainWithBackgroundTask<object, string>, IEternalWatch
 {
-    protected override async Task<PerformWorkResult<string>> PerformWork(CancellationToken cancellationToken)
+    protected override async Task<PerformWorkResult<string>> PerformWork()
     {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            await DoAPass(cancellationToken);
-            await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
-        }
-        return "done"; // only reached when cancelled
+        await DoAPass();
+        return new() { Result = "done" };
     }
 }
 ```
+
+A derived grain starts work through the protected `Start(token)` method; expose an application-specific grain
+method if callers need to request it. That protected method is not a public grain operation. Callers poll
+`GetWorkStatus`, `GetException` and `GetResult`; `GetResult` reads the currently available result rather than
+waiting for the task or consuming it.
 
 ## What it guarantees
 
 | Guarantee | Meaning |
 | --- | --- |
-| Off-turn execution | The work runs on the grain's context but never blocks the caller's turn - `StartWork` returns immediately |
-| Cancellation | Deactivating the grain cancels the token; the worker sees it and exits cleanly |
-| Result retrieval | `GetResult()` waits for completion and yields the result or the error, once |
-| Bounded concurrency | An optional maximum concurrency level rejects starting more work than configured |
+| Off-turn execution | The grain can answer calls while the background task runs off its activation scheduler |
+| Status and result queries | `GetWorkStatus`, `GetException` and `GetResult` expose the activation's current values |
+
+The base does not automatically cancel work on deactivation, provide throttle slots, or persist its status and
+result. Cancellation, concurrency limits and durable progress need an application design or the jobs machinery;
+they are not guarantees of the worker base.
 
 ## Where the job system uses it
 

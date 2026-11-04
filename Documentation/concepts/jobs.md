@@ -7,6 +7,26 @@ A **job** is work that outlives a request: a replay, a migration, a provisioning
 survive the process going away while it runs. A job **plans** what it will do, then performs the plan as
 **steps**, each step its own Orleans grain.
 
+Choose the abstraction by what your application needs to remember and coordinate:
+
+| You need to… | Use | What it remembers |
+| --- | --- | --- |
+| Run work off a grain's turn and poll its result | A [worker](workers.md) | The worker base keeps task, status and result in the activation, not in durable storage |
+| Plan work, track its steps and recover interrupted execution | A job | Jobs storage holds the controller's state and each step's state |
+| Give a grain explicit lifecycle states and allowed transitions | A [state machine](state-machines.md) | Grain storage holds the current state; an [event-sourced state machine](event-sourced-state-machines.md) instead resolves it from a Chronicle read model |
+| Coordinate a graph of actions, decisions and waits | A [workflow](workflows.md) | A run journal holds its history; jobs perform the ready work |
+
+A lifecycle and a work plan answer different questions. A tenant's state machine can describe whether it is
+active; a job can perform the work of provisioning its features. A workflow adds graph-level coordination
+when the next action depends on earlier outcomes or outside input. None of those persistence choices follows
+merely from running a task in the background.
+
+Before starting a job, choose its [storage scope and namespace](storage-scopes.md),
+[configure its storage](../how-to/configure-storage.md), and register the types it passes through
+[Orleans serialization](serializers-and-keys.md). The [first-job walkthrough](../getting-started/index.md)
+connects those prerequisites to a host, a performer and a start call. The rest of this page explains what
+happens between planning that work and completing or stopping it:
+
 ```mermaid
 stateDiagram-v2
     [*] --> PreparingJob: Start(request)
@@ -25,6 +45,39 @@ stateDiagram-v2
 `PrepareSteps` says what a job will do before any of it happens. That is what lets somebody watch progress
 rather than a spinner: the total is known up front, and each step reports its own outcome as it finishes.
 
+For example, provisioning a tenant can plan a step for each feature. This partial excerpt is copied from the
+[first-job walkthrough](../getting-started/index.md): it defines the request and job, but needs that walkthrough's
+`IFeatureStep` implementation and host setup before it can run.
+
+```csharp
+using System.Collections.Immutable;
+using Cratis.Orleans.Jobs;
+
+public record ProvisionTenant(string TenantId, string[] Features) : IJobRequest;
+
+public interface IProvisionTenant : IJob<ProvisionTenant>;
+
+public class ProvisionTenantJob : Job<ProvisionTenant, JobState>, IProvisionTenant
+{
+    // Completed jobs remove themselves by default; keep this one queryable after it is done.
+    protected override bool KeepAfterCompleted => true;
+
+    protected override Task<IImmutableList<JobStepDetails>> PrepareSteps(ProvisionTenant request) =>
+        Task.FromResult<IImmutableList<JobStepDetails>>(
+            request.Features.Select(feature => new JobStepDetails(
+                Type: typeof(IFeatureStep),
+                Id: JobStepId.New(),
+                Key: new JobStepKey(JobId, string.Empty, string.Empty),
+                Request: feature,
+                ResultType: typeof(JobStepResult))).ToImmutableList());
+}
+```
+
+The plan names the work without doing it. Each feature becomes a step with its own identity and request;
+its performer does the provisioning later. Keeping the completed job makes the final progress queryable,
+not the successful steps' stored state, as [step state](#step-state-lasts-only-as-long-as-the-step-needs-it)
+explains.
+
 The job saves the complete plan, including step identities, stages, grain types and preparation requests,
 before preparing any step. Recovery reuses that plan; it never calls `PrepareSteps` again. Preparation
 requests must round-trip with the host's `JsonSerializerOptions` (or the default Cratis JSON converters
@@ -36,28 +89,9 @@ The plan is removed in the write that makes `Running` durable, so later progress
 do not retain all preparation requests. Saved plans, including empty plans, are excluded from dead-job
 preparation cleanup even after a long outage.
 
-## Initialize before dispatch on start and resume
-
-A silo can stop during step preparation or inside your start hook, before initialization finishes. Override
-`OnBeforeDispatchingJobSteps(JobStepDispatchContext context)` for initialization that must be ensured before
-steps run on both start and resume. The default implementation does nothing. Make your override idempotent,
-using a durable consumer-owned token or phase when initialization has external effects. If the hook fails,
-that dispatch does not start any steps.
-
-The hook runs after `OnBeforeStartingJobSteps` on a clean start and after `OnBeforeResumingJobSteps` on a
-resume. Those existing hooks retain their roles; recovery never replays the start hook, even if the silo
-stopped before it ran. Resuming between stages also invokes the dispatch hook before starting the next stage.
-Resuming a job left between two stages also runs `OnBeforeResumingJobSteps` first.
-
-`context.InitializationMayBeIncomplete` is `true` when recovering `PreparingSteps` or `StartingSteps`.
-Recovery prepares only steps whose preparation was not saved, with their original identities, then ensures
-initialization before dispatch. It is `false` on a clean first start and on an ordinary resume of a running
-or stopped job: startup already crossed the initialization barrier before reaching `Running`. The flag is
-not an exactly-once guarantee; your initialization still needs to tolerate retries.
-
-A job interrupted before its plan was saved, or a legacy job left preparing or starting without a plan,
-returns `CannotResumeJobError.MissingStepPlan` from `Resume` instead of generating new step identities.
-A fresh activation never treats a persisted starting or running status alone as proof it is already running.
+The saved plan uses `System.Text.Json`, separately from Orleans' grain-call serialization and state copying.
+Registering Orleans codecs or copiers does not establish that a preparation request survives the JSON round trip.
+Check its JSON shape and converters as well as the [grain serialization requirements](serializers-and-keys.md).
 
 ## Steps are grains
 
@@ -65,41 +99,8 @@ Each step runs as an independent grain activation, so slow or hanging steps cann
 job's own bookkeeping, and steps run in parallel - bounded by the throttle. The step reports back to the job
 grain; the job counts outcomes, never performs the work itself.
 
-## A step may be performed twice
-
-The grain counts a step only once it has finished with it, so a step that was in flight when the host went
-down is performed again on resume. A performer must tolerate being asked twice; anything that must not happen
-twice belongs behind a check the performer itself makes. Progress checkpoints are debounced (see
-[Options](../reference/options.md)), so a crash between checkpoints re-delivers every batch handled since -
-an at-least-once relaxation, not a free one.
-
-## Counted outcomes survive reactivation after resume
-
-After a resume or `RetryFailed` reopens an execution, the job records the exact step identities whose
-terminal outcomes it counts in `JobState.CompletedStepsCounted`. It saves the record with progress and
-keeps it across subsequent resumes and activations. A delayed stop from an earlier execution cannot then
-count the same step again during removal, even after a successful step has deleted its own state. Retrying
-a counted failure deliberately removes that step's record along with its failed count; its new terminal
-outcome is recorded when counted. Stops remain separate in `StoppedStepsCounted`.
-
-Jobs that have never resumed or reopened record an **empty list**. For resumed or reopened jobs the record
-grows with counted outcomes; it has no hard entry limit. Measured serialization overhead is about **27.89
-bytes per entry in BSON** and **39 bytes per entry in JSON**. At 100,000 entries the job logs a warning;
-recording continues. Large resumed jobs can approach MongoDB's 16 MiB document limit (or the limit of
-another storage provider), especially when their other state is large.
-
-Custom storage providers must persist and restore `CompletedStepsCounted`, defaulting it to an empty
-list for older state. During a rolling upgrade, older silos do not understand this member and may drop it
-when rewriting a job. Protection is reduced while versions share a cluster: outcomes dropped by an older
-silo cannot be reconstructed from aggregate progress or from successful steps whose state was deleted.
-The durable protection applies to outcomes recorded and retained by upgraded silos; upgrading does not
-recover an already lost record.
-
-## One failed step does not abandon the rest
-
-A job that could not do one piece of work has still done the others, and the job's history says which was
-which. A failed step fails the job's completion status - it never fails the application: the failure is
-recorded state, not an exception on anybody's startup path.
+Independent features can run alongside each other. When one piece of work must finish before another begins,
+express that dependency in the plan with stages rather than making a performer wait for another step.
 
 ## Stages order steps that depend on each other
 
@@ -132,101 +133,14 @@ protected override Task<IImmutableList<JobStepDetails>> PrepareSteps(RecoveryReq
   `FailedStartingSomeJobSteps`, because the job is running. Later stages report their start failures through the job.
 - On resume the job picks up at the stage it had reached, and the stages behind it wait their turn. After a cold activation, a stage reached before `OnBeforeResumingJobSteps` has succeeded waits until it has; the watchdog's resume starts it.
 
-## Jobs are placed where there is capacity
+## One failed step does not abandon the rest
 
-A job is a grain of its own type, so Orleans only considers silos that have that job's class loaded. A silo that does not host a particular job never receives it. Among the silos that do host it, jobs use resource-optimized placement: a new job activates on the silo with the most headroom for CPU, memory and activations, rather than on whichever silo happened to receive the request that started it. Scaling a service out therefore spreads job load instead of pinning it to the busiest replica.
+A job that could not do one piece of work has still done the others, and the job's history says which was
+which. A failed step fails the job's completion status - it never fails the application: the failure is
+recorded state, not an exception on anybody's startup path.
 
-### Placing controllers and workers independently
-
-A host that wants job controllers (the job grains) on some silos and step workers (the job step grains) on others
-can opt in to host-chosen placement. Enabling the job placement strategy makes every job grain use a director you
-register; enabling the job step strategy does the same for step grains. Each is independent, and neither is on
-by default. See [Host the silo](../how-to/host-the-silo.md#place-job-controllers-and-step-workers-separately).
-
-A director answers where a grain activates and throws `NoEligibleJobWorker` when no silo qualifies. What that
-means depends on when it happens:
-
-- **Starting a job: preparing a step fails.** The job ends `Failed` with the director's message in its status
-  history, and `Start` returns `StartJobError.Unknown`.
-- **Starting a job: starting a prepared step fails.** The step counts as failed and the job completes with
-  failures. The step's stored state stays `Prepared`.
-- **Resuming or recovering a job.** The job stays `Running`. The job's in-memory watchdog retries the step
-  once per `JobWatchdogInterval` until a worker appears.
-
-The retry is not durable: it does not survive the job's silo going away, and Cratis does not provide a durable
-waiting state for a job that has no worker.
-
-## Starting, stopping and deleting jobs while two releases share a cluster
-
-During a rolling upgrade, a shared jobs manager may still run on the older release. Calling its generic
-`Start<TJob, TRequest>` or `GetJobsOfType<TJob, TRequest>` sends those types to that silo, which cannot decode a
-job or request introduced by the newer release. Use the singleton `IJobs` from `Cratis.Orleans.Jobs` for
-starting, stopping and deleting instead. `AddCratisOrleans` registers it with the host.
-
-`IJobs` is a local service, not a grain. It addresses the job grain directly from the caller's release;
-Orleans places that grain on a silo that hosts its type. No generic job or request type passes through the
-shared manager.
-
-For a Studio-shaped host, use the event store name as the scope and the tenant namespace as the namespace.
-This excerpt belongs in an existing host with Orleans and jobs storage configured. It assumes your
-serializable `RebuildIndexRequest : IJobRequest` and `IRebuildTenantIndex : IJob<RebuildIndexRequest>` grain:
-
-```csharp
-using System.Threading.Tasks;
-using Cratis.Monads;
-using Cratis.Orleans.Jobs;
-
-public class TenantJobs(IJobs jobs)
-{
-    public Task<Result<JobId, StartJobError>> Start(
-        string eventStoreName, string tenantNamespace, RebuildIndexRequest request) =>
-        jobs.Start<IRebuildTenantIndex, RebuildIndexRequest>(
-            new JobKey(eventStoreName, tenantNamespace), request);
-
-    public Task<StopJobResult> Stop(string eventStoreName, string tenantNamespace, JobId jobId) =>
-        jobs.Stop(new JobKey(eventStoreName, tenantNamespace), jobId);
-
-    public Task<DeleteJobResult> Delete(string eventStoreName, string tenantNamespace, JobId jobId) =>
-        jobs.Delete(new JobKey(eventStoreName, tenantNamespace), jobId);
-}
-```
-
-Start returns the job identity only when the job accepts the request; inspect `StartJobError` on refusal.
-Success means started, not completed. If you supply an identity with `Start(key, jobId, request)`, duplicate
-starts retain the job's existing refusal behavior rather than starting another plan.
-`FailedStartingSomeJobSteps` means the job keeps running until its remaining steps finish, with steps that failed to start counted as failed; it does not mean the job did not start. `AllJobStepsFailedStarting` means no step started and the job is not running.
-
-Stop and delete read only the stored job type, so an unreadable request from a newer release does not hide
-which release owns the job. Match their nested result records:
-
-| Outcome | Stop | Delete |
-| --- | --- | --- |
-| Accepted by the job | `StopJobResult.Stopped(JobId)` | `DeleteJobResult.Deleted(JobId)` |
-| No stored job | `StopJobResult.NotFound(JobId)` | `DeleteJobResult.NotFound(JobId)` |
-| Type unavailable in this release | `StopJobResult.UnknownJobType(JobId, JobType)` | `DeleteJobResult.UnknownJobType(JobId, JobType)` |
-| Refused by the job | `StopJobResult.Refused(JobId, StopJobError)` | `DeleteJobResult.Refused(JobId, RemoveJobError)` |
-
-An unknown type can belong to a newer release, or to a removed job. Neither operation resolves a grain or
-changes state in that case: route the operation to a release that knows the type. Storage exceptions and
-grain-call exceptions propagate; they are not reported as stopped or deleted. Delete preserves the manager's
-removal rules: it calls the job's `Remove`, including stopping its steps, and a completed job can refuse.
-If the removal cannot be persisted, it is refused with `RemoveJobError.CouldNotPersistRemoval` and can be retried.
-Acceptance does not promise that every step has already finished its stop/removal callback. These result
-records stay local; they are not serialized across grains. Third-party storage providers should override
-`IJobStorage.GetJobType` with a metadata-only read; its compatibility fallback reads the full job and can
-still fail on an unknown request.
-
-Starting remembers the scope and namespace for recovery and touches the shared manager once per locally
-seen key with an existing non-generic query, keeping its normal cleanup activation. Start does not wait for
-that query, and a failed touch is logged without failing the job start. The job persists its preparation
-before answering, independently of the manager.
-
-Remembered keys are not a durable catalog. Register singleton `IJobsManagerKeys` providers on every silo
-for complete recovery, as described under [Rehydration](#rehydration). During release overlap, an older
-manager skips job types it does not know; those jobs can resume once their manager runs on a release that
-knows them and another recovery pass occurs. `IJobs` does not change that recovery boundary. The generic
-manager methods remain available for compatible single-version clusters; they have documentation warnings,
-not `[Obsolete]` build warnings.
+That history belongs to the job. Decide which results the application needs to retain before relying on a
+step's stored state: the two have different lifetimes.
 
 ## The job's state is its storage
 
@@ -264,8 +178,10 @@ copy anything the job must retain into job state.
 
 `PerformStep` receives a deep copy of the step's state, taken when the step is marked `Running`. That copy
 does not see later writes to the step's state, and changing it does not persist anything. To change the
-state while the work runs, use an activation callback (see the next section). The copy comes from Orleans'
-`DeepCopier<TState>`, which every silo registers through its serializer. A test host without one, such as an
+state while the work runs, use an
+[activation callback](#a-steps-work-reaches-its-grain-through-activation-callbacks).
+The copy comes from Orleans' `DeepCopier<TState>`, which every silo registers through its serializer. A test host
+without one, such as an
 Orleans.TestKit silo, must register `DeepCopier<TState>` itself; otherwise the step fails with a message that
 names the missing copier.
 
@@ -281,7 +197,55 @@ Removal also preserves the step on an unavailable job type, storage failure, or 
 Only when storage definitively reports that the job no longer exists does `Stop(true)` delete the orphaned
 step without reporting an outcome. This lets you finish removing a step left behind by an interrupted removal.
 
+## Deliver outside input to the job, not its steps
+
+An external worker may call your application back with progress or a result while a step is running.
+Expose a method on the **job's own grain interface**, update job state in its implementation, and call
+`WriteState()`. Override `KeepAfterCompleted` when those values must survive successful completion.
+
+This excerpt adds a callback to an existing job. It assumes your serializable `WorkerProgress` type,
+`WorkerRequest : IJobRequest`, and `WorkerJobState : JobState` with a writable `LatestProgress` property of
+type `WorkerProgress`. The job's existing partial class supplies `PrepareSteps` and its other behavior;
+this is not a standalone job implementation.
+
+```csharp
+using System.Threading.Tasks;
+using Cratis.Monads;
+using Cratis.Orleans.Jobs;
+
+public interface IWorkerJob : IJob<WorkerRequest>
+{
+    Task<Catch> RecordProgress(WorkerProgress progress);
+}
+
+public partial class WorkerJob : Job<WorkerRequest, WorkerJobState>, IWorkerJob
+{
+    protected override bool KeepAfterCompleted => true;
+
+    public Task<Catch> RecordProgress(WorkerProgress progress)
+    {
+        State.LatestProgress = progress;
+        return WriteState();
+    }
+}
+```
+
+The callback handler calls `RecordProgress` through the job's grain reference. `WriteState()` returns a
+`Catch`, so returning it preserves a persistence failure for the caller to handle rather than acknowledging
+an input that was not saved. On success, the latest progress is stored with the job and survives its
+successful completion. This does not update an already-running step's snapshot or wake the step; any
+coordination with that work belongs in your job's design.
+
+:::caution[Do not use step state as a callback inbox]
+Adding step-grain methods that write `State` while `PerformStep` runs is not supported. Such a write can
+race the step's final status write, and successful completion deletes the stored state. Keep incoming
+values on the job instead.
+:::
+
 ## A step's work reaches its grain through activation callbacks
+
+An incoming application callback above calls the job's grain interface. A step's own background work has a
+different boundary: it needs to return to its activation to read or change the step's live state.
 
 `PerformStep` runs in the background, outside the grain's turn. Work that needs to move a checkpoint
 forward has to get back onto the step's own activation. The tempting route is a call to the step's own
@@ -351,6 +315,9 @@ after recovery - the same at-least-once rule as any other crash.
 
 ## Stopping and deactivating wait for the work
 
+The activation boundary matters when work must stop, too. Cancelling work and knowing that its callbacks
+have settled are separate parts of stopping a step.
+
 Stopping a step or deactivating its grain cancels the work and then waits for it, and for any callback it
 has started, before anything else happens. One deadline covers the whole wait:
 
@@ -364,8 +331,9 @@ A second stop, or a removal, that arrives while a stop is still in progress join
 about the step once.
 
 The outcome is the one the work produced. If the work finished successfully just as the stop came in, the
-step reports success, not a stop. The order of writes is unchanged: a failure or stop is reported to the job
-first and persisted once the job accepts it, and success is persisted first and then reported.
+step reports success, not a stop. Normal success and failure outcomes are persisted before they are reported
+to the job. Ordinary cancellation takes the report-first path: the step reports its stop to the job, then
+persists it once the job accepts it.
 
 :::caution[A timed-out stop is not quiescent]
 When the work does not settle in time, `Stop` answers `JobStepError.StopTimedOut` and has recorded nothing
@@ -449,52 +417,15 @@ steps from the earlier execution. None of this guarantees an automatic retry or 
 hook succeed. Inspect the failed resume and correct its cause before retrying. A job left `Running` is retried
 by the watchdog (see [The watchdog](#the-watchdog)); a job reverted to `Stopped` is not.
 
-## Testing your job steps
-
-A step's work only reaches its grain through `TryInvokeOnActivation`, and that needs a run. Host your step in
-an Orleans TestKit silo, as the framework's own specs do, and nothing calls `PerformStep` for you: without a
-run, every callback is refused as `NoRun`. Since v1.21.0, `BeginTestRun` gives the step the run its work has in
-a silo:
-
-```csharp
-var step = await silo.CreateGrainAsync<MyStep>(stepId, keyExtension: key);
-var run = step.BeginTestRun();
-
-var performed = await run.Perform(new MyStepState());
-```
-
-`Perform` calls your `PerformStep` off the activation with the state you pass and the run's cancellation
-token, and returns the `Catch<JobStepResult>` your step returned. Callbacks your step posts with
-`TryInvokeOnActivation` are admitted and run, one at a time, on `run.Activation`, a stand-in scheduler.
-`run.IsOnActivation` tells a spec whether the code that is running is on it, which is how you check that
-state is only touched from a callback. Pass your own `TaskScheduler` to `BeginTestRun` to use another stand-in.
-A run performs once; to perform again, begin a new run after the earlier one's work and callbacks have settled, or
-`BeginTestRun` throws `JobStepAlreadyHasALiveRun`. Beginning a run replaces the step's earlier one, so perform
-through the run you began last: an earlier run's `Perform` throws `JobStepTestRunWasSuperseded`.
-
-Stopping and giving up are separate moments, and a step should be specified at both:
-
-| Call | What it does | What your step sees |
-| --- | --- | --- |
-| `run.Stop()` | Cancels the work. Admission stays open | `run.Cancellation` is cancelled; a final checkpoint through `TryInvokeOnActivation` still lands |
-| `run.CloseAdmission()` | Refuses callbacks that have not started. Does not cancel | Callbacks come back as `ActivationCallbackRejected.Closed` |
-
-`Stop` is what an ordinary stop does while it waits for the work. `CloseAdmission` is what happens once that
-wait passes its deadline, or the activation deactivates after draining. `Perform` closes admission itself
-when your step returns, as a drain does. Wait for `run.CallbacksSettled` before asserting on state a callback
-may still be writing.
-
-A test run does not record or deliver outcomes: it does not write the step's status, call the job or count
-the step as finished. Specify those through the step's grain interface (`Start`, `Stop`) and a substitute
-`IJob`. Starting through the grain interface copies your state for the work, so a TestKit silo that does that
-needs a `DeepCopier` for your state type registered.
-
 ## Stop a job and wait until it is drained
+
+When your next action needs more than a stop request, use a drain. It gives the caller a result describing
+whether the job's work has settled; it does not prevent a future execution from being admitted.
 
 `Stop` is accepted as soon as the job has persisted it; its steps finish stopping afterwards. When you need to
 know that nothing of the job runs any more - before you read its steps' checkpoints, hand its work to someone
 else, or delete it - use `StopAndDrain`, available from v1.20.0. This excerpt adds it to the `TenantJobs`
-service shown [earlier](#starting-stopping-and-deleting-jobs-while-two-releases-share-a-cluster):
+service in the [release-overlap example](#starting-stopping-and-deleting-jobs-while-two-releases-share-a-cluster):
 
 ```csharp
 public async Task<bool> IsDrained(string eventStoreName, string tenantNamespace, JobId jobId) =>
@@ -631,8 +562,10 @@ one that is running. An owner that changes what its jobs may do therefore quiesc
 the running execution to finish, and draining without refusing lets the next resume or stage begin again.
 
 Step work starts only through the job's fan-out, in the turn of an admitted `Start`, `Resume` or stage. A step
-never resumes work on its own when it reactivates, and the engine has no failed-step retry. A restart after a stale
-stop or a deferred start belongs to the same execution, so any `Stop` or drain of that execution cancels it.
+never resumes work on its own when it reactivates. Failed steps are not retried by default; jobs can configure
+[attempts and retries](#attempts-and-retries) or opt in to [running failed steps again](#run-the-failed-steps-again).
+A restart after a stale stop or a deferred start belongs to the same execution, so any `Stop` or drain of that
+execution cancels it.
 
 :::caution[`MayRun` runs inside the job's turn]
 The job asks from its own non-reentrant turn. An implementation can use storage, memory, and calls to grains that
@@ -649,50 +582,13 @@ v1.21.0 or later. A caller from an older release meets the new outcome as its de
 as integers.
 :::
 
-## Deliver outside input to the job, not its steps
+## A step may be performed twice
 
-An external worker may call your application back with progress or a result while a step is running.
-Expose a method on the **job's own grain interface**, update job state in its implementation, and call
-`WriteState()`. Override `KeepAfterCompleted` when those values must survive successful completion.
-
-This excerpt adds a callback to an existing job. It assumes your serializable `WorkerProgress` type,
-`WorkerRequest : IJobRequest`, and `WorkerJobState : JobState` with a writable `LatestProgress` property of
-type `WorkerProgress`. The job's existing partial class supplies `PrepareSteps` and its other behavior;
-this is not a standalone job implementation.
-
-```csharp
-using System.Threading.Tasks;
-using Cratis.Monads;
-using Cratis.Orleans.Jobs;
-
-public interface IWorkerJob : IJob<WorkerRequest>
-{
-    Task<Catch> RecordProgress(WorkerProgress progress);
-}
-
-public partial class WorkerJob : Job<WorkerRequest, WorkerJobState>, IWorkerJob
-{
-    protected override bool KeepAfterCompleted => true;
-
-    public Task<Catch> RecordProgress(WorkerProgress progress)
-    {
-        State.LatestProgress = progress;
-        return WriteState();
-    }
-}
-```
-
-The callback handler calls `RecordProgress` through the job's grain reference. `WriteState()` returns a
-`Catch`, so returning it preserves a persistence failure for the caller to handle rather than acknowledging
-an input that was not saved. On success, the latest progress is stored with the job and survives its
-successful completion. This does not update an already-running step's snapshot or wake the step; any
-coordination with that work belongs in your job's design.
-
-:::caution[Do not use step state as a callback inbox]
-Adding step-grain methods that write `State` while `PerformStep` runs is not supported. Such a write can
-race the step's final status write, and successful completion deletes the stored state. Keep incoming
-values on the job instead.
-:::
+The grain counts a step only once it has finished with it, so a step that was in flight when the host went
+down is performed again on resume. A performer must tolerate being asked twice; anything that must not happen
+twice belongs behind a check the performer itself makes. Progress checkpoints are debounced (see
+[Options](../reference/options.md)), so a crash between checkpoints re-delivers every batch handled since -
+an at-least-once relaxation, not a free one.
 
 ## Bounded, self-healing jobs
 
@@ -709,11 +605,12 @@ first. Stopping a job counts the steps that never started as stopped; they start
 
 ### A step persists its outcome, then delivers it
 
-A step writes its terminal status first and then delivers it to the job, retrying with a growing delay until the
-job acknowledges (`StepDeliveryMaxAttempts`, `StepDeliveryRetryDelay`, `MaxStepDeliveryRetryDelay`). A delivery
-that never succeeds does not mark the step failed: the persisted outcome stays, and the job's watchdog accounts
-for it. The job accepts an outcome once per step and attempt, so a delivery repeated after a lost
-acknowledgement is not counted twice.
+For normal success and failure, a step writes its terminal status first and then delivers it to the job,
+retrying with a growing delay until the job acknowledges (`StepDeliveryMaxAttempts`, `StepDeliveryRetryDelay`,
+`MaxStepDeliveryRetryDelay`). A delivery that never succeeds does not mark the step failed: the persisted outcome
+stays, and the job's watchdog accounts for it. The job accepts an outcome once per step and attempt, so a delivery
+repeated after a lost acknowledgement is not counted twice. Ordinary cancellation instead reports its stop before
+persisting it, as described under [Stopping and deactivating](#stopping-and-deactivating-wait-for-the-work).
 
 ### The watchdog
 
@@ -796,8 +693,15 @@ retries only the failed providers and manager keys after 1 second, doubling the 
 succeed or the silo stops. Retries do not require another membership change and do not block membership-triggered
 recovery passes.
 
-Recovery preserves the original job id, scope, namespace and current stage. It starts only unfinished prepared
-steps; successful steps remain completed. An interrupted step may execute again, so protect external effects with
+Recovery of an interrupted `PreparingJob` or `PreparingSteps` uses the saved plan to recover preparation;
+`StartingSteps` recovers startup from that plan. For these preparation and startup statuses, an absent plan,
+including in older job records that never saved one, makes `Resume()` return
+`CannotResumeJobError.MissingStepPlan` rather than create a replacement plan. Inspect or remove such a job
+through your application's job management. Recovery of a job that reached `Running` is separate, and
+`Resume()` does not treat a persisted status alone as proof that work is running.
+
+Recovery preserves the original job id, scope, namespace and current stage. For a job that reached `Running`,
+it starts only unfinished prepared steps; successful steps remain completed. An interrupted step may execute again, so protect external effects with
 idempotency or receiver-owned deduplication. A durable `Stop()` remains stopped: automatic recovery excludes stopped
 jobs and only restarts stopped steps when recovering an interrupted explicit `Resume()` with no later accepted step stop.
 Explicit `Resume()` is still how you resume a stopped job.
@@ -878,10 +782,6 @@ it finishes on the next report, `Remove()`, or rehydration, as before.
 A registered [`IJobAdmission`](#admit-or-refuse-a-jobs-execution) is asked before a rehydrated job resumes. A refusal stops
 the job, an exception or timeout leaves it as it was, and rehydration asks again only on its next pass.
 
-A job interrupted during `PreparingJob` or `PreparingSteps` cannot safely resume an unfinished plan. Without live
-preparation in its activation, `Resume()` fails with `CannotResumeJobError.JobIsNotPrepared`; it does not claim that
-work is running or prepare a replacement plan. Inspect or remove the job through your application's job management.
-
 ### Tell recovery which namespaces exist
 
 Storage scopes and namespaces are host-owned coordinates. Recovery cannot infer them from arbitrary database-name
@@ -939,3 +839,184 @@ These are the actual scope/namespace pairs passed to `GetJobsManager`, not datab
 namespace explicitly if your application uses one. For a separately configured silo, call
 `ISiloBuilder.AddCratisOrleansJobsRecovery()` from `Cratis.Orleans.Hosting` after registering the job system and
 storage; `AddCratisOrleans` already does this (see [Host the silo](../how-to/host-the-silo.md)).
+
+## Initialize before dispatch on start and resume
+
+A silo can stop during step preparation or inside your start hook, before initialization finishes. Override
+`OnBeforeDispatchingJobSteps(JobStepDispatchContext context)` for initialization that must be ensured before
+steps run on both start and resume. The default implementation does nothing. Make your override idempotent,
+using a durable consumer-owned token or phase when initialization has external effects. If the hook fails,
+that dispatch does not start any steps.
+
+The hook runs after `OnBeforeStartingJobSteps` on a clean start and after `OnBeforeResumingJobSteps` on a
+resume. Those existing hooks retain their roles; recovery never replays the start hook, even if the silo
+stopped before it ran. Resuming between stages also invokes the dispatch hook before starting the next stage.
+Resuming a job left between two stages also runs `OnBeforeResumingJobSteps` first.
+
+`context.InitializationMayBeIncomplete` is `true` when recovering `PreparingSteps` or `StartingSteps`.
+Recovery prepares only steps whose preparation was not saved, with their original identities, then ensures
+initialization before dispatch. It is `false` on a clean first start and on an ordinary resume of a running
+or stopped job: startup already crossed the initialization barrier before reaching `Running`. The flag is
+not an exactly-once guarantee; your initialization still needs to tolerate retries.
+
+A job interrupted before its plan was saved, or a legacy job left preparing or starting without a plan,
+returns `CannotResumeJobError.MissingStepPlan` from `Resume` instead of generating new step identities.
+A fresh activation never treats a persisted starting or running status alone as proof it is already running.
+
+## Counted outcomes survive reactivation after resume
+
+After a resume or `RetryFailed` reopens an execution, the job records the exact step identities whose
+terminal outcomes it counts in `JobState.CompletedStepsCounted`. It saves the record with progress and
+keeps it across subsequent resumes and activations. A delayed stop from an earlier execution cannot then
+count the same step again during removal, even after a successful step has deleted its own state. Retrying
+a counted failure deliberately removes that step's record along with its failed count; its new terminal
+outcome is recorded when counted. Stops remain separate in `StoppedStepsCounted`.
+
+Jobs that have never resumed or reopened record an **empty list**. For resumed or reopened jobs the record
+grows with counted outcomes; it has no hard entry limit. Measured serialization overhead is about **27.89
+bytes per entry in BSON** and **39 bytes per entry in JSON**. At 100,000 entries the job logs a warning;
+recording continues. Large resumed jobs can approach MongoDB's 16 MiB document limit (or the limit of
+another storage provider), especially when their other state is large.
+
+Custom storage providers must persist and restore `CompletedStepsCounted`, defaulting it to an empty
+list for older state. During a rolling upgrade, older silos do not understand this member and may drop it
+when rewriting a job. Protection is reduced while versions share a cluster: outcomes dropped by an older
+silo cannot be reconstructed from aggregate progress or from successful steps whose state was deleted.
+The durable protection applies to outcomes recorded and retained by upgraded silos; upgrading does not
+recover an already lost record.
+
+## Jobs are placed where there is capacity
+
+A job is a grain of its own type, so Orleans only considers silos that have that job's class loaded. A silo that does not host a particular job never receives it. Among the silos that do host it, jobs use resource-optimized placement: a new job activates on the silo with the most headroom for CPU, memory and activations, rather than on whichever silo happened to receive the request that started it. Scaling a service out therefore spreads job load instead of pinning it to the busiest replica.
+
+### Placing controllers and workers independently
+
+A host that wants job controllers (the job grains) on some silos and step workers (the job step grains) on others
+can opt in to host-chosen placement. Enabling the job placement strategy makes every job grain use a director you
+register; enabling the job step strategy does the same for step grains. Each is independent, and neither is on
+by default. See [Host the silo](../how-to/host-the-silo.md#place-job-controllers-and-step-workers-separately).
+
+A director answers where a grain activates and throws `NoEligibleJobWorker` when no silo qualifies. What that
+means depends on when it happens:
+
+- **Starting a job: preparing a step fails.** The job ends `Failed` with the director's message in its status
+  history, and `Start` returns `StartJobError.Unknown`.
+- **Starting a job: starting a prepared step fails.** The step counts as failed and the job completes with
+  failures. The step's stored state stays `Prepared`.
+- **Resuming or recovering a job.** The job stays `Running`. The job's in-memory watchdog retries the step
+  once per `JobWatchdogInterval` until a worker appears.
+
+The retry is not durable: it does not survive the job's silo going away, and Cratis does not provide a durable
+waiting state for a job that has no worker.
+
+## Starting, stopping and deleting jobs while two releases share a cluster
+
+During a rolling upgrade, a shared jobs manager may still run on the older release. Calling its generic
+`Start<TJob, TRequest>` or `GetJobsOfType<TJob, TRequest>` sends those types to that silo, which cannot decode a
+job or request introduced by the newer release. Use the singleton `IJobs` from `Cratis.Orleans.Jobs` for
+starting, stopping and deleting instead. `AddCratisOrleans` registers it with the host.
+
+`IJobs` is a local service, not a grain. It addresses the job grain directly from the caller's release;
+Orleans places that grain on a silo that hosts its type. No generic job or request type passes through the
+shared manager.
+
+For a Studio-shaped host, use the event store name as the scope and the tenant namespace as the namespace.
+This excerpt belongs in an existing host with Orleans and jobs storage configured. It assumes your
+serializable `RebuildIndexRequest : IJobRequest` and `IRebuildTenantIndex : IJob<RebuildIndexRequest>` grain:
+
+```csharp
+using System.Threading.Tasks;
+using Cratis.Monads;
+using Cratis.Orleans.Jobs;
+
+public class TenantJobs(IJobs jobs)
+{
+    public Task<Result<JobId, StartJobError>> Start(
+        string eventStoreName, string tenantNamespace, RebuildIndexRequest request) =>
+        jobs.Start<IRebuildTenantIndex, RebuildIndexRequest>(
+            new JobKey(eventStoreName, tenantNamespace), request);
+
+    public Task<StopJobResult> Stop(string eventStoreName, string tenantNamespace, JobId jobId) =>
+        jobs.Stop(new JobKey(eventStoreName, tenantNamespace), jobId);
+
+    public Task<DeleteJobResult> Delete(string eventStoreName, string tenantNamespace, JobId jobId) =>
+        jobs.Delete(new JobKey(eventStoreName, tenantNamespace), jobId);
+}
+```
+
+Start returns the job identity only when the job accepts the request; inspect `StartJobError` on refusal.
+Success means started, not completed. If you supply an identity with `Start(key, jobId, request)`, duplicate
+starts retain the job's existing refusal behavior rather than starting another plan.
+`FailedStartingSomeJobSteps` means the job keeps running until its remaining steps finish, with steps that failed to start counted as failed; it does not mean the job did not start. `AllJobStepsFailedStarting` means no step started and the job is not running.
+
+Stop and delete read only the stored job type, so an unreadable request from a newer release does not hide
+which release owns the job. Match their nested result records:
+
+| Outcome | Stop | Delete |
+| --- | --- | --- |
+| Accepted by the job | `StopJobResult.Stopped(JobId)` | `DeleteJobResult.Deleted(JobId)` |
+| No stored job | `StopJobResult.NotFound(JobId)` | `DeleteJobResult.NotFound(JobId)` |
+| Type unavailable in this release | `StopJobResult.UnknownJobType(JobId, JobType)` | `DeleteJobResult.UnknownJobType(JobId, JobType)` |
+| Refused by the job | `StopJobResult.Refused(JobId, StopJobError)` | `DeleteJobResult.Refused(JobId, RemoveJobError)` |
+
+An unknown type can belong to a newer release, or to a removed job. Neither operation resolves a grain or
+changes state in that case: route the operation to a release that knows the type. Storage exceptions and
+grain-call exceptions propagate; they are not reported as stopped or deleted. Delete preserves the manager's
+removal rules: it calls the job's `Remove`, including stopping its steps, and a completed job can refuse.
+If the removal cannot be persisted, it is refused with `RemoveJobError.CouldNotPersistRemoval` and can be retried.
+Acceptance does not promise that every step has already finished its stop/removal callback. These result
+records stay local; they are not serialized across grains. Third-party storage providers should override
+`IJobStorage.GetJobType` with a metadata-only read; its compatibility fallback reads the full job and can
+still fail on an unknown request.
+
+Starting remembers the scope and namespace for recovery and touches the shared manager once per locally
+seen key with an existing non-generic query, keeping its normal cleanup activation. Start does not wait for
+that query, and a failed touch is logged without failing the job start. The job persists its preparation
+before answering, independently of the manager.
+
+Remembered keys are not a durable catalog. Register singleton `IJobsManagerKeys` providers on every silo
+for complete recovery, as described under [Rehydration](#rehydration). During release overlap, an older
+manager skips job types it does not know; those jobs can resume once their manager runs on a release that
+knows them and another recovery pass occurs. `IJobs` does not change that recovery boundary. The generic
+manager methods remain available for compatible single-version clusters; they have documentation warnings,
+not `[Obsolete]` build warnings.
+
+## Testing your job steps
+
+A step's work only reaches its grain through `TryInvokeOnActivation`, and that needs a run. Host your step in
+an Orleans TestKit silo, as the framework's own specs do, and nothing calls `PerformStep` for you: without a
+run, every callback is refused as `NoRun`. Since v1.21.0, `BeginTestRun` gives the step the run its work has in
+a silo:
+
+```csharp
+var step = await silo.CreateGrainAsync<MyStep>(stepId, keyExtension: key);
+var run = step.BeginTestRun();
+
+var performed = await run.Perform(new MyStepState());
+```
+
+`Perform` calls your `PerformStep` off the activation with the state you pass and the run's cancellation
+token, and returns the `Catch<JobStepResult>` your step returned. Callbacks your step posts with
+`TryInvokeOnActivation` are admitted and run, one at a time, on `run.Activation`, a stand-in scheduler.
+`run.IsOnActivation` tells a spec whether the code that is running is on it, which is how you check that
+state is only touched from a callback. Pass your own `TaskScheduler` to `BeginTestRun` to use another stand-in.
+A run performs once; to perform again, begin a new run after the earlier one's work and callbacks have settled, or
+`BeginTestRun` throws `JobStepAlreadyHasALiveRun`. Beginning a run replaces the step's earlier one, so perform
+through the run you began last: an earlier run's `Perform` throws `JobStepTestRunWasSuperseded`.
+
+Stopping and giving up are separate moments, and a step should be specified at both:
+
+| Call | What it does | What your step sees |
+| --- | --- | --- |
+| `run.Stop()` | Cancels the work. Admission stays open | `run.Cancellation` is cancelled; a final checkpoint through `TryInvokeOnActivation` still lands |
+| `run.CloseAdmission()` | Refuses callbacks that have not started. Does not cancel | Callbacks come back as `ActivationCallbackRejected.Closed` |
+
+`Stop` is what an ordinary stop does while it waits for the work. `CloseAdmission` is what happens once that
+wait passes its deadline, or the activation deactivates after draining. `Perform` closes admission itself
+when your step returns, as a drain does. Wait for `run.CallbacksSettled` before asserting on state a callback
+may still be writing.
+
+A test run does not record or deliver outcomes: it does not write the step's status, call the job or count
+the step as finished. Specify those through the step's grain interface (`Start`, `Stop`) and a substitute
+`IJob`. Starting through the grain interface copies your state for the work, so a TestKit silo that does that
+needs a `DeepCopier` for your state type registered.

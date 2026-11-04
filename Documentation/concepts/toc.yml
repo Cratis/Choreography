@@ -1,14 +1,14 @@
 - name: The job system
   href: jobs.md
-- name: Storage scopes
-  href: storage-scopes.md
 - name: Workers
   href: workers.md
-- name: Serializers and grain keys
-  href: serializers-and-keys.md
+- name: Workflows
+  href: workflows.md
 - name: State machines
   href: state-machines.md
 - name: Event-sourced state machines
   href: event-sourced-state-machines.md
-- name: Workflows
-  href: workflows.md
+- name: Storage scopes
+  href: storage-scopes.md
+- name: Serializers and grain keys
+  href: serializers-and-keys.md
