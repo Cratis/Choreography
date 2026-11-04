@@ -15,6 +15,10 @@ namespace Cratis.Choreography.Serialization;
 /// <c language="csharp">OrleansCodeGen.Cratis</c>; since Orleans 10.4.1 a generic type definition is authorized on its own,
 /// so a call to a generic grain method fails to serialize unless those are allowed too.
 /// </summary>
+/// <remarks>
+/// A closed generic type is left undecided, and only its generic type definition is allowed here;
+/// see <see cref="ClosedGenericTypes"/> for why.
+/// </remarks>
 public class CratisTypesFilter : ITypeFilter
 {
     const string GeneratedCodePrefix = "OrleansCodeGen.Cratis";
@@ -22,6 +26,11 @@ public class CratisTypesFilter : ITypeFilter
     /// <inheritdoc/>
     public bool? IsTypeAllowed(Type type)
     {
+        if (type.IsClosedGeneric())
+        {
+            return null;
+        }
+
         var elementType = type.IsArray ? type.GetElementType()! : type;
         var @namespace = elementType.Namespace;
         if (@namespace is null)
