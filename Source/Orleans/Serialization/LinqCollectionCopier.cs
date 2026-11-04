@@ -67,5 +67,5 @@ public sealed class LinqCollectionCopier : IGeneralizedCopier, ITypeFilter
     }
 
     /// <inheritdoc/>
-    public bool? IsTypeAllowed(Type type) => IsSupportedType(type) ? true : null;
+    public bool? IsTypeAllowed(Type type) => !type.IsClosedGeneric() && IsSupportedType(type) ? true : null;
 }

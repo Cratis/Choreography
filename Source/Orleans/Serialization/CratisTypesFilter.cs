@@ -12,11 +12,20 @@ namespace Cratis.Orleans.Serialization;
 /// type manifest when a grain call crosses a silo boundary; same-silo calls only deep-copy and
 /// never hit the type-name check, which is why this only surfaces in a cluster.
 /// </summary>
+/// <remarks>
+/// A closed generic type is left undecided, and only its generic type definition is allowed here;
+/// see <see cref="ClosedGenericTypes"/> for why.
+/// </remarks>
 public class CratisTypesFilter : ITypeFilter
 {
     /// <inheritdoc/>
     public bool? IsTypeAllowed(Type type)
     {
+        if (type.IsClosedGeneric())
+        {
+            return null;
+        }
+
         var elementType = type.IsArray ? type.GetElementType()! : type;
         if (elementType.Namespace?.StartsWith("Cratis", StringComparison.Ordinal) ?? false)
         {
