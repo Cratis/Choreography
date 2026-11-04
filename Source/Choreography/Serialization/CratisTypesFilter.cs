@@ -11,6 +11,9 @@ namespace Cratis.Choreography.Serialization;
 /// parameters and arrays of them, such as constraint definitions) are rejected by the Orleans
 /// type manifest when a grain call crosses a silo boundary; same-silo calls only deep-copy and
 /// never hit the type-name check, which is why this only surfaces in a cluster.
+/// The grain call types Orleans generates for Cratis grain interfaces live under
+/// <c language="csharp">OrleansCodeGen.Cratis</c>; since Orleans 10.4.1 a generic type definition is authorized on its own,
+/// so a call to a generic grain method fails to serialize unless those are allowed too.
 /// </summary>
 /// <remarks>
 /// A closed generic type is left undecided, and only its generic type definition is allowed here;
@@ -18,6 +21,8 @@ namespace Cratis.Choreography.Serialization;
 /// </remarks>
 public class CratisTypesFilter : ITypeFilter
 {
+    const string GeneratedCodePrefix = "OrleansCodeGen.Cratis";
+
     /// <inheritdoc/>
     public bool? IsTypeAllowed(Type type)
     {
@@ -27,7 +32,13 @@ public class CratisTypesFilter : ITypeFilter
         }
 
         var elementType = type.IsArray ? type.GetElementType()! : type;
-        if (elementType.Namespace?.StartsWith("Cratis", StringComparison.Ordinal) ?? false)
+        var @namespace = elementType.Namespace;
+        if (@namespace is null)
+        {
+            return null;
+        }
+
+        if (@namespace.StartsWith("Cratis", StringComparison.Ordinal) || @namespace.StartsWith(GeneratedCodePrefix, StringComparison.Ordinal))
         {
             return true;
         }
