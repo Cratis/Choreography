@@ -63,8 +63,9 @@ jobs:
 
           # Take the first line of the whole list rather than piping into head: under pipefail, head closing the pipe
           # kills git with SIGPIPE. When publishing, the release being cut is already tagged; the baseline is the one
-          # before it.
-          ALL_TAGS="$(git tag --list 'v*' --sort=-v:refname | grep -vxF "v${RELEASE_VERSION:-none}" || true)"
+          # before it. Only tags reachable from HEAD count, so a maintenance branch compares with its own line and not
+          # with a later major on main.
+          ALL_TAGS="$(git tag --list 'v*' --merged HEAD --sort=-v:refname | grep -vxF "v${RELEASE_VERSION:-none}" || true)"
           LATEST_TAG="${ALL_TAGS%%$'\n'*}"
           if [ -z "$LATEST_TAG" ]; then
             echo "::notice title=Grain compatibility not checked::No release tag exists yet, so there is no released cluster to stay compatible with."
