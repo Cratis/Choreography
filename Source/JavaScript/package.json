@@ -1,0 +1,69 @@
+{
+    "type": "module",
+    "packageManager": "yarn@4.17.1",
+    "name": "@cratis/choreography",
+    "version": "1.0.0",
+    "description": "A typed client and React hooks for Cratis Choreography operation history and undo/redo.",
+    "keywords": [
+        "cratis",
+        "choreography",
+        "undo",
+        "redo",
+        "operation-history",
+        "react",
+        "typescript"
+    ],
+    "homepage": "https://github.com/Cratis/Choreography",
+    "author": "Cratis",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/Cratis/Choreography.git",
+        "directory": "Source/JavaScript"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "files": [
+        "dist"
+    ],
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        "./package.json": "./package.json",
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        },
+        "./react": {
+            "types": "./dist/react/index.d.ts",
+            "default": "./dist/react/index.js"
+        }
+    },
+    "scripts": {
+        "clean": "rm -rf dist",
+        "build": "tsc -p tsconfig.build.json",
+        "test": "vitest run",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "ci": "yarn typecheck && yarn test && yarn build"
+    },
+    "peerDependencies": {
+        "react": "^18.0.0 || ^19.0.0"
+    },
+    "peerDependenciesMeta": {
+        "react": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@testing-library/dom": "^10.4.0",
+        "@testing-library/react": "^16.3.0",
+        "@types/react": "^19.0.0",
+        "@types/react-dom": "^19.0.0",
+        "jsdom": "^26.0.0",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "typescript": "^5.8.0",
+        "vitest": "^3.2.0"
+    }
+}

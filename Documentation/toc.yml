@@ -10,6 +10,8 @@
   href: workflows/toc.yml
 - name: State machines
   href: state-machines/toc.yml
+- name: Operations and undo/redo
+  href: operations/toc.yml
 - name: Workers
   href: workers.md
 - name: Hosting

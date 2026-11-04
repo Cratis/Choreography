@@ -59,6 +59,14 @@ It is consolidated here from [Chronicle](https://github.com/Cratis/Chronicle) (t
 | **State Machines** | `StateMachine<TStoredState>` makes a grain's lifecycle explicit states and transitions |
 | **Event-sourced** | With `Cratis.Choreography.Chronicle`, transitions are Chronicle events and the model is a Chronicle read model |
 
+### ↩️ Operation History and Undo/Redo
+
+| | |
+|---|---|
+| **Operation History** | A logical user action with a stable id, scope, actor, kind, lifecycle and the event sequence numbers it produced — append-only, queryable by scope and actor |
+| **Explicit Reversal** | A fluent definition supplies the inverse command and the current-state rules; the engine never infers one from events |
+| **Undo as New Activity** | Undo and redo run as new operations targeting the original, multi-event operations as one unit, and a blocked latest operation is never skipped |
+
 ### ⚙️ Job System
 
 | | |

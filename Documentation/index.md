@@ -30,6 +30,7 @@ New to Choreography? Build something and watch it survive a restart:
 | Jobs | Work must not be lost, and its steps can run in parallel and be observed | [Jobs](jobs/index.md) |
 | Workflows | A business process branches, waits for people or timers, or fans out | [Workflows](workflows/index.md) |
 | State machines | A grain has a lifecycle, plain or driven by Chronicle events | [State machines](state-machines/index.md) |
+| Operations | Users must see what they did and undo or redo it as new, recorded operations | [Operations and undo/redo](operations/index.md) |
 | Workers | One grain must run background work off its turn | [Workers](workers.md) |
 | Hosting | You need the silo, its clustering and its options | [Hosting](hosting/index.md) |
 | Storage | Job and workflow state must persist in MongoDB, SQL or memory | [Storage](storage/index.md) |
