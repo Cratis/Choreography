@@ -203,7 +203,11 @@ public class CratisJsonSerializer : IGeneralizedCodec, IGeneralizedCopier, IType
     public bool IsSupportedType(Type type) => type == _codecType || IsCratisOwned(type);
 
     /// <inheritdoc/>
-    public bool? IsTypeAllowed(Type type) => IsCratisOwned(type) ? true : null;
+    /// <remarks>
+    /// A closed generic type is left undecided even when this serializer owns it, so Orleans checks its
+    /// generic arguments; see <see cref="ClosedGenericTypes"/>.
+    /// </remarks>
+    public bool? IsTypeAllowed(Type type) => !type.IsClosedGeneric() && IsCratisOwned(type) ? true : null;
 
     /// <summary>
     /// Whether a type belongs to the set this serializer owns: the Cratis namespaces, the OneOf marker

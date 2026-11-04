@@ -32,33 +32,14 @@ public class OneOfSerializer : IGeneralizedCodec, IGeneralizedCopier, ITypeFilte
     public object? DeepCopy(object? input, CopyContext context) => input;
 
     /// <inheritdoc/>
-    public bool IsSupportedType(Type type) => IsTypeAllowed(type) ?? false;
+    public bool IsSupportedType(Type type) => IsOneOfType(type);
 
     /// <inheritdoc/>
-    public bool? IsTypeAllowed(Type type)
-    {
-        if (type == _codecType)
-        {
-            return true;
-        }
-
-        if (type.Namespace?.Equals(typeof(OneOf<,>).Namespace) == true)
-        {
-            return true;
-        }
-
-        var current = type;
-        while (current != typeof(object) && current is not null)
-        {
-            if (current.IsGenericType && current.GetGenericTypeDefinition().Name.Contains("OneOfBase"))
-            {
-                return true;
-            }
-            current = current.BaseType;
-        }
-
-        return null;
-    }
+    /// <remarks>
+    /// A closed generic type is left undecided even when this serializer handles it, so Orleans checks its
+    /// generic arguments; see <see cref="ClosedGenericTypes"/>.
+    /// </remarks>
+    public bool? IsTypeAllowed(Type type) => !type.IsClosedGeneric() && IsOneOfType(type) ? true : null;
 
     /// <inheritdoc/>
     public object ReadValue<TInput>(ref Reader<TInput> reader, Field field)
@@ -183,5 +164,30 @@ public class OneOfSerializer : IGeneralizedCodec, IGeneralizedCopier, ITypeFilte
         }
 
         throw new CannotReconstructOneOf(type);
+    }
+
+    static bool IsOneOfType(Type type)
+    {
+        if (type == _codecType)
+        {
+            return true;
+        }
+
+        if (type.Namespace?.Equals(typeof(OneOf<,>).Namespace) == true)
+        {
+            return true;
+        }
+
+        var current = type;
+        while (current != typeof(object) && current is not null)
+        {
+            if (current.IsGenericType && current.GetGenericTypeDefinition().Name.Contains("OneOfBase"))
+            {
+                return true;
+            }
+            current = current.BaseType;
+        }
+
+        return false;
     }
 }
