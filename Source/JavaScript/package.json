@@ -3,13 +3,18 @@
     "packageManager": "yarn@4.17.1",
     "name": "@cratis/choreography",
     "version": "1.0.0",
-    "description": "A typed client and React hooks for Cratis Choreography operation history and undo/redo.",
+    "description": "A typed client and React hooks for Cratis Choreography operation history and undo/redo, plus live collaboration presence: remote cursors, a collaborators indicator and a resilient WebSocket client.",
     "keywords": [
         "cratis",
         "choreography",
         "undo",
         "redo",
         "operation-history",
+        "collaboration",
+        "presence",
+        "live-cursors",
+        "multiplayer",
+        "websocket",
         "react",
         "typescript"
     ],
@@ -38,11 +43,20 @@
         "./react": {
             "types": "./dist/react/index.d.ts",
             "default": "./dist/react/index.js"
-        }
+        },
+        "./collaboration": {
+            "types": "./dist/collaboration/index.d.ts",
+            "default": "./dist/collaboration/index.js"
+        },
+        "./collaboration/react": {
+            "types": "./dist/collaboration/react/index.d.ts",
+            "default": "./dist/collaboration/react/index.js"
+        },
+        "./collaboration/collaboration.css": "./dist/collaboration/collaboration.css"
     },
     "scripts": {
         "clean": "rm -rf dist",
-        "build": "tsc -p tsconfig.build.json",
+        "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
         "test": "vitest run",
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "ci": "yarn typecheck && yarn test && yarn build"
