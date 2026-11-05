@@ -1,6 +1,6 @@
 ---
 title: Storage names reference
-description: Every MongoDB collection, SQL table, database name and grain storage provider name that Choreography reads and writes.
+description: Look up Choreography MongoDB collections, database names, SQL tables, and grain storage provider names for queries, backups, and permissions.
 ---
 
 These names are fixed by the library. They matter when you query the data yourself, back it up, grant database permissions, or

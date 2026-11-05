@@ -1,6 +1,6 @@
 ---
 title: In-memory storage for tests and development
-description: Run Choreography without a database for tests and local development, and what you lose when the process ends.
+description: Register Choreography in-memory storage for tests and local development without a database, and understand why jobs and patch records vanish on restart.
 ---
 
 In-memory storage keeps job state and patch records in the process. It needs no database, starts instantly and forgets

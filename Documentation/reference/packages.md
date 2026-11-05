@@ -1,6 +1,6 @@
 ---
 title: Packages and target frameworks
-description: The five Cratis Choreography NuGet packages, what each contains, which frameworks they target and what they depend on.
+description: Compare the five Cratis Choreography NuGet packages, their contents, target frameworks, and dependencies to choose a storage provider and references.
 ---
 
 Cratis Choreography ships as five NuGet packages. Reference `Cratis.Choreography` and a storage provider for most
