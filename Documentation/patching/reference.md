@@ -1,6 +1,6 @@
 ---
 title: Patching API and options reference
-description: Every patching type, option, default and registration method, with the members a custom IPatchStorage must implement.
+description: Look up Choreography patching types, options, defaults, outcomes, and registration methods, including the members required by a custom IPatchStorage.
 ---
 
 Types live in the `Cratis.Choreography.Patching` namespace of the `Cratis.Choreography` package, except `IPatchStorage`

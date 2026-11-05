@@ -1,6 +1,6 @@
 ---
 title: Use operation history and undo/redo in React
-description: Read an actor's operation history, and undo and redo from a React application with the @cratis/choreography package.
+description: Build React undo and redo controls in TypeScript with @cratis/choreography, using an actor's operation history, a transport, and server-validated outcomes.
 ---
 
 The `@cratis/choreography` package is the frontend companion to the [operation history and undo/redo engine](index.md). It has no dependency on a particular application: you give it a transport, and build whatever history or undo controls you need on top.

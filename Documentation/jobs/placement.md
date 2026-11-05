@@ -1,6 +1,6 @@
 ---
 title: Place job controllers and workers on separate silos
-description: Choose which silos host job grains and which perform job steps, and set how many steps each silo runs at once.
+description: Choose which Orleans silos host job controllers and workers, write a placement director, and limit how many job steps each silo runs at once.
 ---
 
 A job that fans out thousands of steps can starve the silos that serve your API: step work is the heaviest thing a silo does, and by default it lands wherever Orleans finds capacity. If you want controllers on small, stable silos and step work on large, disposable ones, you need to say where each kind of grain may activate. This page shows how, and what happens to a job when no silo qualifies.

@@ -1,6 +1,6 @@
 ---
 title: Apply a patch when a host starts
-description: Write an ICanApplyPatch, turn patching on, set the host version and read the log lines of a patch that ran on startup.
+description: Write an ICanApplyPatch, enable Choreography patching with in-memory storage, set the host version, and inspect logs for patches run on startup.
 ---
 
 This page takes you from nothing to a host that applies two patches when it starts, and shows what the log says while it
