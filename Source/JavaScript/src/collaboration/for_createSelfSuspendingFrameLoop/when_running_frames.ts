@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { createSelfSuspendingFrameLoop } from '../createSelfSuspendingFrameLoop.js';
 
 describe('when running frames', () => {
@@ -63,11 +63,11 @@ describe('when running frames', () => {
     });
 
     describe('and the callback says it is done', () => {
-        let callback: ReturnType<typeof vi.fn>;
+        let callback: Mock<(now: number) => boolean>;
         let loop: ReturnType<typeof createSelfSuspendingFrameLoop>;
 
         beforeEach(() => {
-            callback = vi.fn(() => false);
+            callback = vi.fn<(now: number) => boolean>(() => false);
             loop = createSelfSuspendingFrameLoop(callback);
             loop.wake();
             runFrame();

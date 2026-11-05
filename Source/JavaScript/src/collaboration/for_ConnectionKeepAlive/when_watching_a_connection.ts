@@ -1,16 +1,16 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { ConnectionKeepAlive } from '../ConnectionKeepAlive.js';
 
 describe('when watching a connection', () => {
-    let onStale: ReturnType<typeof vi.fn>;
+    let onStale: Mock<() => void>;
     let keepAlive: ConnectionKeepAlive;
 
     beforeEach(() => {
         vi.useFakeTimers();
-        onStale = vi.fn();
+        onStale = vi.fn<() => void>();
         keepAlive = new ConnectionKeepAlive(1_000, onStale);
     });
 

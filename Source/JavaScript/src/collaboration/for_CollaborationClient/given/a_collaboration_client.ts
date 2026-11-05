@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
 import { CollaborationClient } from '../../CollaborationClient.js';
 import type { CollaboratorInfo } from '../../CollaboratorInfo.js';
 import { FakeCollaborationSocket } from '../../testing/FakeCollaborationSocket.js';
@@ -24,7 +24,7 @@ export const STARTING_SURFACE_ID = 'surface-1';
  */
 export class a_collaboration_client {
     readonly client: CollaborationClient;
-    readonly listener = vi.fn();
+    readonly listener: Mock<() => void> = vi.fn<() => void>();
     readonly consoleError = vi.spyOn(console, 'error');
     readonly consoleWarning = vi.spyOn(console, 'warn');
 

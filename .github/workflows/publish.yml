@@ -154,83 +154,61 @@ jobs:
       - name: Push NuGet packages
         run: dotnet nuget push --skip-duplicate '${{ env.NUGET_OUTPUT }}/*.nupkg' --timeout 900 --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
-  # @cratis/choreography ships with every release, at the release's version - the committed package.json always says
-  # 1.0.0. It publishes the way Arc's npm packages do: npm trusted publishing (OIDC), so no token is stored here. The
-  # package's trusted publisher on npmjs.com must name this repository and this workflow file.
   publish-npm-packages:
+    # Publishes @cratis/choreography with npm trusted publishing (OIDC): no token is stored. The trusted publisher
+    # for the package names this repository and this workflow file; see .ai-work/setup-npm-trusted-publishing.sh.
     if: needs.release.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [release, grain-compatibility]
+    needs: [release]
     permissions:
       contents: read
       id-token: write
-    defaults:
-      run:
-        working-directory: Source/JavaScript
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
+        uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Setup node
+        uses: actions/setup-node@v4
         with:
-          package-manager-cache: false
-          node-version: 24
-          registry-url: "https://registry.npmjs.org"
+          node-version: 24.x
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Configure npm for OIDC-based publishing
         run: |
           # setup-node writes a placeholder _authToken into .npmrc and exports NODE_AUTH_TOKEN with the same
-          # placeholder. npm uses it as-is for registry auth and the registry answers 404. Remove it so npm falls
-          # back to OIDC.
+          # placeholder. npm would use it as-is for registry auth and fail with a 404, so remove it and let npm
+          # fall back to OIDC.
           sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG"
           echo "NODE_AUTH_TOKEN=" >> "$GITHUB_ENV"
 
-      - name: Upgrade npm for trusted publishing (requires 11.5.1 or newer)
+      - name: Upgrade npm for trusted publishing (requires >= 11.5.1)
         run: |
           npm install -g npm@11
           node -e "
-            const [major, minor, patch] = require('child_process').execSync('npm --version').toString().trim().split('.').map(Number);
-            if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) {
-              console.error('npm 11.5.1 or newer is required for trusted publishing, got ' + [major, minor, patch].join('.'));
+            const v = process.argv[1].split('.').map(Number);
+            if (v[0] < 11 || (v[0] === 11 && (v[1] < 5 || (v[1] === 5 && v[2] < 1)))) {
+              console.error('npm >= 11.5.1 is required for trusted publishing, got ' + process.argv[1]);
               process.exit(1);
             }
-          "
+          " "$(npm --version)"
 
       - name: Install
+        working-directory: Source/JavaScript
         run: corepack enable && yarn install --immutable
 
-      - name: Type check, specs and build
+      - name: Verify
+        working-directory: Source/JavaScript
         run: yarn ci
 
-      - name: Stamp the release version
+      - name: Publish @cratis/choreography
+        working-directory: Source/JavaScript
         env:
-          VERSION: ${{ needs.release.outputs.version }}
-        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
-
-      - name: Publish to npm
-        run: npm publish --access public
-
-      - name: Wait until the version is visible on npm
-        env:
-          VERSION: ${{ needs.release.outputs.version }}
+          NODE_AUTH_TOKEN: ""
         run: |
-          set -euo pipefail
-          for attempt in $(seq 1 40); do
-            if curl -fsS "https://registry.npmjs.org/@cratis%2fchoreography" | node -e "
-              let body = ''; process.stdin.on('data', chunk => body += chunk).on('end', () => process.exit(Object.hasOwn(JSON.parse(body).versions ?? {}, process.env.VERSION) ? 0 : 1));
-            "; then
-              echo "@cratis/choreography $VERSION is visible on npm."
-              exit 0
-            fi
-            sleep 15
-          done
-          echo "::error::@cratis/choreography $VERSION did not become visible on npm."
-          exit 1
+          npm version "${{ needs.release.outputs.version }}" --no-git-tag-version --allow-same-version
+          npm publish --access public
 
   verify-published:
     # A merged pull request that publishes nothing is the failure mode that silently costs a release: the release
