@@ -10,6 +10,24 @@
 # Review every diff: identity or signature changes can break wire compatibility during rolling upgrades.
 # Details: https://aka.ms/orleans/OrleansContracts.txt
 
+# Cratis.Choreography.Collaboration.CollaborationRoomGrain
+class [GrainType("cratis-choreography-collaboration-room")] Cratis.Choreography.Collaboration.CollaborationRoomGrain
+
+interface [GrainInterfaceType("Cratis.Choreography.Collaboration.ICollaborationRoomGrain")] Cratis.Choreography.Collaboration.ICollaborationRoomGrain [Version(0)]
+  3182512E: Idle(string, bool, System.Guid) -> Task
+  04212285: Join(Cratis.Choreography.Collaboration.Collaborator, System.Guid, System.Guid) -> Task<System.Collections.Generic.IReadOnlyList<Cratis.Choreography.Collaboration.Collaborator>>
+  497801C8: Leave(string, System.Guid, System.Guid) -> Task
+  151207BD: Presence(string, double, double, string, string, System.Guid) -> Task
+  E98547BE: Refresh(System.Guid, System.Collections.Generic.IReadOnlyList<string>) -> Task<System.Collections.Generic.IReadOnlyList<string>>
+  2B31F021: Subscribe(Cratis.Choreography.Collaboration.ICollaborationRoomObserver) -> Task
+  B1EB5B4B: Unsubscribe(Cratis.Choreography.Collaboration.ICollaborationRoomObserver) -> Task
+
+interface [GrainInterfaceType("Cratis.Choreography.Collaboration.ICollaborationRoomObserver")] Cratis.Choreography.Collaboration.ICollaborationRoomObserver [Version(0)]
+  37407DF7: OnIdle(string, string, bool, System.Guid) -> void
+  A5BC84F9: OnJoined(string, Cratis.Choreography.Collaboration.Collaborator, System.Guid) -> void
+  C7DF47F1: OnLeft(string, string, System.Guid) -> void
+  96F1BB84: OnPresence(string, string, double, double, string, string, System.Guid) -> void
+
 interface [GrainInterfaceType("Cratis.Choreography.Jobs.IJob")] Cratis.Choreography.Jobs.IJob [Version(1)]
   BC721DDF: OnStepFailed(Cratis.Choreography.Jobs.JobStepId, Cratis.Choreography.Jobs.JobStepResult) -> Task<Cratis.Monads.Result<Cratis.Choreography.Jobs.JobError>>
   8A2A07DD: OnStepStopped(Cratis.Choreography.Jobs.JobStepId, Cratis.Choreography.Jobs.JobStepResult) -> Task<Cratis.Monads.Result<Cratis.Choreography.Jobs.JobError>>
@@ -72,6 +90,7 @@ class [GrainType("cratis-orleans-null-job")] Cratis.Choreography.Jobs.NullJob
 interface [GrainInterfaceType("Cratis.Choreography.Patching.IPatchManager")] Cratis.Choreography.Patching.IPatchManager [Version(0)]
   0AB5CDA8: ApplyPatchesFor(Cratis.Choreography.Patching.SemanticVersion) -> Task<Cratis.Choreography.Patching.PatchOutcome>
 
+# Cratis.Choreography.Patching.PatchManager
 class [GrainType("cratis-choreography-patch-manager")] Cratis.Choreography.Patching.PatchManager
 
 interface [GrainInterfaceType("Cratis.Choreography.Workers.IGrainWithBackgroundTask")] Cratis.Choreography.Workers.IGrainWithBackgroundTask [Version(0)]
