@@ -154,6 +154,57 @@ jobs:
       - name: Push NuGet packages
         run: dotnet nuget push --skip-duplicate '${{ env.NUGET_OUTPUT }}/*.nupkg' --timeout 900 --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
+  # @cratis/choreography ships with every release, at the release's version - the committed package.json always says
+  # 1.0.0. It publishes through npm trusted publishing (OIDC), so no token is stored here; the package's trusted
+  # publisher on npmjs.com must name this repository and this workflow file. A NPM_TOKEN secret, when one is set,
+  # is used instead.
+  publish-npm-packages:
+    if: needs.release.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [release, grain-compatibility]
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: Source/JavaScript
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install
+        run: corepack enable && yarn install --immutable
+
+      - name: Type check, specs and build
+        run: yarn ci
+
+      - name: Stamp the release version
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Trusted publishing needs npm 11.5.1 or newer.
+          npm install --global npm@latest
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            unset NODE_AUTH_TOKEN
+          fi
+          npm publish --access public
+
   verify-published:
     # A merged pull request that publishes nothing is the failure mode that silently costs a release: the release
     # job succeeds, the publish job is skipped for want of should-publish, and the whole run reports green. Fail
