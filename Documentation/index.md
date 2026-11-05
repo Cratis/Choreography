@@ -32,6 +32,7 @@ New to Choreography? Build something and watch it survive a restart:
 | State machines | A grain has a lifecycle, plain or driven by Chronicle events | [State machines](state-machines/index.md) |
 | Operations | Users must see what they did and undo or redo it as new, recorded operations | [Operations and undo/redo](operations/index.md) |
 | Workers | One grain must run background work off its turn | [Workers](workers.md) |
+| Live collaboration | People open the same page and must see each other's cursors | [Live collaboration](collaboration/index.md) |
 | Hosting | You need the silo, its clustering and its options | [Hosting](hosting/index.md) |
 | Storage | Job and workflow state must persist in MongoDB, SQL or memory | [Storage](storage/index.md) |
 | Patching | A release must change stored data once, on start | [Patching](patching/index.md) |
@@ -49,7 +50,7 @@ Five packages carry the library. They target `net8.0`, `net9.0` and `net10.0`, e
 
 | Package | Holds |
 | --- | --- |
-| `Cratis.Choreography` | Jobs, workers, state machines, workflows, typed grain keys, serializers and silo hosting |
+| `Cratis.Choreography` | Jobs, workers, state machines, workflows, typed grain keys, serializers, live collaboration presence and silo hosting |
 | `Cratis.Choreography.Storage` | The jobs storage API and in-memory storage |
 | `Cratis.Choreography.Storage.MongoDB` | The MongoDB storage provider |
 | `Cratis.Choreography.Storage.Sql` | The SQL storage provider on EF Core for SQL Server, PostgreSQL and SQLite |

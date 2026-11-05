@@ -14,6 +14,8 @@
   href: operations/toc.yml
 - name: Workers
   href: workers.md
+- name: Live collaboration
+  href: collaboration/toc.yml
 - name: Hosting
   href: hosting/toc.yml
 - name: Storage

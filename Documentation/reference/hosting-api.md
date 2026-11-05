@@ -20,6 +20,16 @@ Namespace `Cratis.Choreography.Hosting`, package `Cratis.Choreography`. See [Hos
 | `AddCratisChoreographyPatching(configure?)` | `ISiloBuilder` | Everything `AddCratisChoreographyPatchingServices` registers, plus a lifecycle participant that applies patches when the silo becomes Active. | An `IPatchStorage`. Without one the start fails when the patch manager grain activates. |
 | `AddCratisChoreographyPatchingServices(configure?)` | `ISiloBuilder` | `PatchingOptions`, `TimeProvider`, `ITypes`, `IPatchRunner` and discovery of `ICanApplyPatch` implementations. | The Cratis serializers, for a host that calls `IPatchRunner` itself. |
 
+## Live collaboration
+
+Namespace `Cratis.Choreography.Hosting`. See [Set up the collaboration backend](../collaboration/backend.md).
+
+| Method | Receiver | Registers | Prerequisites |
+| --- | --- | --- | --- |
+| `AddCratisCollaboration<TResolver>(configure?)` | `IServiceCollection` | `CollaborationOptions`, `TResolver` as the scoped `ICollaborationParticipantResolver`, the single-replica `ICollaborationBackplane` and the singleton `ICollaborationHub`. | Call `UseWebSockets()` on the application. |
+| `AddCratisCollaborationOrleans()` | `IServiceCollection`, `ISiloBuilder` | Replaces the backplane with `OrleansCollaborationBackplane` and runs it as a hosted service. | `IGrainFactory` in the replica, and a call to `AddCratisCollaboration<TResolver>`. |
+| `MapCratisCollaboration()` | `WebApplication` | Maps the WebSocket endpoint on `CollaborationOptions.Path`, `/ws/collaboration` by default. | `AddCratisCollaboration<TResolver>` has run. |
+
 ## Job placement and parallelism
 
 Namespace `Cratis.Choreography.Hosting`, package `Cratis.Choreography`, receiver `ISiloBuilder`. See

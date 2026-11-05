@@ -6,6 +6,6 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
     test: {
         environment: 'jsdom',
-        include: ['src/**/for_*/**/when_*.{ts,tsx}']
+        include: ['src/**/for_*/**/when_*.{ts,tsx}', 'src/**/for_*/when_*/**/*.{ts,tsx}']
     }
 });

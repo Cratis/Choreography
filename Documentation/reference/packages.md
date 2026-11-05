@@ -10,11 +10,14 @@ services, and add `Cratis.Choreography.Chronicle` only when you use Cratis Chron
 
 | Package | Contains | Target frameworks |
 | --- | --- | --- |
-| `Cratis.Choreography` | Jobs, workers, state machines, workflows, patching, tenancy, typed grain keys, serializers and silo hosting | `net8.0`, `net9.0`, `net10.0` |
+| `Cratis.Choreography` | Jobs, workers, state machines, workflows, patching, tenancy, typed grain keys, serializers, live collaboration presence and silo hosting | `net8.0`, `net9.0`, `net10.0` |
 | `Cratis.Choreography.Storage` | The jobs and patch storage APIs and the in-memory providers | `net8.0`, `net9.0`, `net10.0` |
 | `Cratis.Choreography.Storage.MongoDB` | The MongoDB providers for jobs and patches | `net8.0`, `net9.0`, `net10.0` |
 | `Cratis.Choreography.Storage.Sql` | The SQL providers for jobs and patches, on EF Core for SQL Server, PostgreSQL and SQLite | `net10.0` |
 | `Cratis.Choreography.Chronicle` | Event-sourced state machines and workflows whose runs are kept as Chronicle events | `net8.0`, `net9.0`, `net10.0` |
+
+Live collaboration presence ships inside `Cratis.Choreography`: it is not a separate package. It uses the ASP.NET Core shared framework
+and the Orleans packages that `Cratis.Choreography` already references.
 
 The SQL provider targets `net10.0` only, because EF Core 10 ships for `net10.0` only. The other packages are packed
 for all three frameworks. A source build without packaging targets `net10.0`.
