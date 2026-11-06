@@ -39,6 +39,8 @@ were activated on the same silo, and it logs `Jobs recovery is incomplete` when 
 provider that lists every scope and namespace your jobs live in. The provider contract, an example and the full recovery
 behavior are in [Recover jobs after a silo is lost](../jobs/recovery.md).
 
+Workflow job keys participate in recovery when workflow services are enabled. Jobs-only silos do not need workflow services.
+
 :::caution[An interrupted step may run twice]
 Recovery cannot know whether a step finished its external effect before the silo died, so make external effects idempotent. A
 durable stop is the exception: recovery treats it as stopped work, not as interrupted work.

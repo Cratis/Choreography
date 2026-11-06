@@ -4,6 +4,8 @@
 using Cratis.Choreography.Jobs;
 using Cratis.Choreography.Storage;
 using Cratis.Choreography.Storage.Patching;
+using Cratis.Choreography.Workflows.Scopes;
+using Cratis.Choreography.Workflows.Sweeping;
 using Cratis.Types;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -169,6 +171,7 @@ public static class CratisChoreographySiloBuilderExtensions
         silo.Services.TryAddSingleton<JobsManagerKeys>();
         silo.Services.TryAddTransient<IInstancesOf<IJobsManagerKeys>>(services => new JobsManagerKeyProviders(
             services.GetRequiredService<ITypes>().FindMultiple<IJobsManagerKeys>()
+                .Where(type => type != typeof(WorkflowJobsManagerKeys) || services.GetRequiredService<IServiceProviderIsService>().IsService(typeof(IWorkflowExecutionScopes)))
                 .Select(type => (type, (Func<IJobsManagerKeys>)(() => (IJobsManagerKeys)ActivatorUtilities.GetServiceOrCreateInstance(services, type))))
                 .ToArray(),
             services.GetRequiredService<ILogger<JobsRecovery>>()));
