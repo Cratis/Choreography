@@ -25,11 +25,6 @@
         <PackageReference Include="Microsoft.Orleans.Sdk" />
         <PackageReference Include="Cratis.Chronicle" />
     </ItemGroup>
-    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-        <!-- Cratis.Chronicle's net9.0 assembly is compiled against System.Collections.Immutable 10 but its package does
-             not declare the dependency for net9.0, where the framework only has 9. -->
-        <PackageReference Include="System.Collections.Immutable" />
-    </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="../Choreography/Choreography.csproj" />
     </ItemGroup>

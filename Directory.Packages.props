@@ -44,8 +44,6 @@
     <PackageVersion Include="Cratis.Arc.MongoDB" Version="22.176.0" />
     <PackageVersion Include="Cratis.Chronicle" Version="19.142.1" />
     <PackageVersion Include="Cratis.Chronicle.XUnit.Integration" Version="19.14.0" />
-    <!-- Cratis.Chronicle's net9.0 assembly is compiled against System.Collections.Immutable 10 without declaring it for net9.0. -->
-    <PackageVersion Include="System.Collections.Immutable" Version="10.0.0" />
     <PackageVersion Include="Cratis.Fundamentals" Version="7.33.1" />
     <PackageVersion Include="Cratis.Metrics.Roslyn" Version="7.33.1" />
     <PackageVersion Include="Cratis.Specifications.XUnit.v3" Version="5.2.3" />
@@ -63,6 +61,4 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
   </ItemGroup>
-  <Import Project="$(MSBuildThisFileDirectory)/Directory.Packages.NET8.props" Condition=" '$(TargetFramework)' == 'net8.0' " />
-  <Import Project="$(MSBuildThisFileDirectory)/Directory.Packages.NET9.props" Condition=" '$(TargetFramework)' == 'net9.0' " />
 </Project>

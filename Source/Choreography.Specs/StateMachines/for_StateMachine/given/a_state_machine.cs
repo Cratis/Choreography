@@ -8,11 +8,7 @@ namespace Cratis.Choreography.StateMachines.for_StateMachine.given;
 
 public abstract class a_state_machine : Specification
 {
-#if NET8_0
-    static readonly object _lockObject = new();
-#else
     static readonly Lock _lockObject = new();
-#endif
     StateMachineForTesting? _stateMachinePrivate;
 
     protected StateMachineForTesting StateMachine

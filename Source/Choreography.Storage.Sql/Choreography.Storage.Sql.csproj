@@ -9,7 +9,7 @@
         <RepositoryType>git</RepositoryType>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <!-- EF Core 10 ships net10.0 only, so the SQL provider does too; the other packages keep the
-             repository-wide net8.0/net9.0/net10.0 packaging matrix. -->
+             repository-wide net10.0/net11.0 packaging matrix. -->
         <TargetFrameworks Condition="'$(IsPackaging)' == 'true'">net10.0</TargetFrameworks>
     </PropertyGroup>
     <ItemGroup>

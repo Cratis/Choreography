@@ -14,7 +14,7 @@ for project in Choreography.Storage Choreography; do
     dotnet pack "$repo/Source/$project/$project.csproj" -c Release -p:IsPackaging=true -p:Version="$version" --output "$work/packages"
 done
 
-for tfm in net8.0 net9.0 net10.0 net11.0; do
+for tfm in net10.0 net11.0; do
     echo "Checking packed Cratis.Choreography consumer for $tfm"
     dotnet restore "$work/consumer/Consumer.csproj" \
         --packages "$work/nuget" \
