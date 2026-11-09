@@ -26,6 +26,9 @@ public static partial class JobLogMessages
     [LoggerMessage(LogLevel.Warning, "Job was left running with all of its steps already completed - finalizing it instead of resuming")]
     public static partial void FinalizingJobLeftRunningAfterAllStepsCompleted(this ILogger<IJob> logger);
 
+    [LoggerMessage(LogLevel.Warning, "Job was left starting its steps with all of them already completed - finalizing it instead of resuming")]
+    public static partial void FinalizingJobLeftStartingStepsAfterAllStepsCompleted(this ILogger<IJob> logger);
+
     [LoggerMessage(LogLevel.Warning, "Job was stopped with all of its steps already completed - finalizing it instead of leaving it stopped")]
     public static partial void FinalizingStoppedJobWithNothingLeftToRun(this ILogger<IJob> logger);
 
