@@ -13,6 +13,7 @@ env:
   DOTNET8_VERSION: "8.0.410"
   DOTNET9_VERSION: "9.0.x"
   DOTNET_VERSION: "10.0.x"
+  DOTNET11_VERSION: "11.0.x"
 
 on:
   workflow_dispatch:
@@ -63,7 +64,7 @@ permissions:
 
 jobs:
   # Checked before the release job, so a packed Cratis.Choreography whose consumers resolve mixed Orleans versions
-  # (Reminders vs Server) or fail to restore or build for net8.0, net9.0 or net10.0 fails the run before a version
+  # (Reminders vs Server) or fail to restore or build for net8.0, net9.0, net10.0 or net11.0 fails the run before a version
   # is tagged, rather than after, when only the package push would be stopped.
   verify-packages:
     runs-on: ubuntu-latest
@@ -79,6 +80,8 @@ jobs:
             ${{ env.DOTNET8_VERSION }}
             ${{ env.DOTNET9_VERSION }}
             ${{ env.DOTNET_VERSION }}
+            ${{ env.DOTNET11_VERSION }}
+          dotnet-quality: preview
 
       - name: Verify packed Orleans dependencies for supported frameworks
         run: bash .github/package-smoke/verify.sh
@@ -132,6 +135,8 @@ jobs:
             ${{ env.DOTNET8_VERSION }}
             ${{ env.DOTNET9_VERSION }}
             ${{ env.DOTNET_VERSION }}
+            ${{ env.DOTNET11_VERSION }}
+          dotnet-quality: preview
 
       - name: Remove any existing artifacts
         run: rm -rf ${{ env.NUGET_OUTPUT }}
