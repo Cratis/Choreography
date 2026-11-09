@@ -35,12 +35,16 @@ public class with_more_jobs_than_the_cleanup_page : given.the_manager
         AddStoredJob(_recentTerminalJob, JobStatus.Failed, DateTimeOffset.UtcNow.AddMinutes(-30));
 
         _jobStepStorage.RemoveAllForJob(Arg.Any<JobId>()).Returns(Task.FromResult(Catch.Success()));
-        _jobStorage.RemoveTerminal(Arg.Any<JobId>()).Returns(Task.FromResult(Catch.Success(true)));
+        _jobStorage.RemoveTerminal(Arg.Any<JobId>()).Returns(call =>
+        {
+            _storedJobs.RemoveAll(job => job.Id == call.Arg<JobId>());
+            return Task.FromResult(Catch.Success(true));
+        });
     }
 
     Task Because() => _manager.CleanupDeadJobs();
 
-    [Fact] void should_select_a_bounded_oldest_first_terminal_page() => _jobStorage.Received(1).GetJobs(Arg.Is<JobQuery>(query => MatchesTerminalQuery(query)));
+    [Fact] void should_select_bounded_oldest_first_terminal_pages_until_one_is_not_full() => _jobStorage.Received(2).GetJobs(Arg.Is<JobQuery>(query => MatchesTerminalQuery(query)));
 
     static bool MatchesTerminalQuery(JobQuery query) =>
         query.Statuses.SequenceEqual(_terminalStatuses) &&
@@ -51,7 +55,7 @@ public class with_more_jobs_than_the_cleanup_page : given.the_manager
     [Fact] void should_remove_steps_for_the_second_oldest_terminal_job() => _jobStepStorage.Received(1).RemoveAllForJob(_secondOldestTerminalJob);
     [Fact] void should_remove_the_oldest_terminal_job_conditionally() => _jobStorage.Received(1).RemoveTerminal(_oldestTerminalJob);
     [Fact] void should_remove_the_second_oldest_terminal_job_conditionally() => _jobStorage.Received(1).RemoveTerminal(_secondOldestTerminalJob);
-    [Fact] void should_not_remove_a_terminal_job_outside_the_page() => _jobStorage.DidNotReceive().RemoveTerminal(_thirdOldestTerminalJob);
+    [Fact] void should_remove_the_terminal_job_on_the_next_page() => _jobStorage.Received(1).RemoveTerminal(_thirdOldestTerminalJob);
     [Fact] void should_not_remove_a_recent_terminal_job() => _jobStorage.DidNotReceive().RemoveTerminal(_recentTerminalJob);
     [Fact] void should_not_remove_a_running_job() => _jobStorage.DidNotReceive().RemoveTerminal(_runningJob);
     [Fact] void should_not_remove_a_preparing_job() => _jobStorage.DidNotReceive().RemoveTerminal(_preparingJob);

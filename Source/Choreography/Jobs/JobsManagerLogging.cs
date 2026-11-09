@@ -116,6 +116,9 @@ public static partial class JobsManagerLogMessages
     [LoggerMessage(LogLevel.Warning, "Failed to get jobs for cleanup")]
     public static partial void FailedToGetJobsForCleanup(this ILogger<JobsManager> logger, Exception exception);
 
+    [LoggerMessage(LogLevel.Information, "Found {Count} jobs left starting their steps with every step already completed")]
+    public static partial void FoundStartingJobsWithAllStepsCompleted(this ILogger<JobsManager> logger, int count);
+
     [LoggerMessage(LogLevel.Information, "Found {Count} terminal jobs to clean up")]
     public static partial void FoundTerminalJobs(this ILogger<JobsManager> logger, int count);
 

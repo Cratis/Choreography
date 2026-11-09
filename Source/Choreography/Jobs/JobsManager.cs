@@ -275,7 +275,32 @@ public class JobsManager(
     }
 
     /// <inheritdoc/>
-    public async Task CleanupDeadJobs()
+    public Task CleanupDeadJobs() => CleanupDeadJobs(drainTerminalBacklog: true);
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static IDisposable ObserveDeactivation(IGrainContext grainContext, CancellationTokenSource cancellation)
+    {
+        // Orleans 10.3.1: GrainLifecycleEvents is a diagnostic API which may change between minor versions.
+        // Keep its type references behind a non-inlined boundary so even JIT/type-loading failures are caught
+        // by SubscribeToDeactivation. Observe preparation and the drain, without pinning idle grains.
+        // Unlike OnDeactivateAsync, this fires before active requests finish, possibly off-scheduler.
+        // Only touch the thread-safe CTS here. Keep-alive prevents idle collection, not initiated deactivation
+        // (including migration), so all deactivation reasons must cancel dispatch.
+        return GrainLifecycleEvents.AllEvents
+            .OfType<GrainLifecycleEvents.Deactivating>()
+            .Where(notification => ReferenceEquals(notification.GrainContext, grainContext))
+            .Subscribe(_ => cancellation.Cancel());
+    }
+
+    /// <summary>
+    /// Cleans up dead, stranded and expired jobs.
+    /// </summary>
+    /// <param name="drainTerminalBacklog">
+    /// Whether to keep removing pages of expired terminal jobs while a whole page was removed, rather than one page per run.
+    /// Rehydration passes <see langword="false"/>: a backlog must not delay resuming the jobs that are still running.
+    /// </param>
+    /// <returns>Awaitable task.</returns>
+    async Task CleanupDeadJobs(bool drainTerminalBacklog)
     {
         using var scope = logger.BeginJobsManagerScope(_key);
 
@@ -298,6 +323,7 @@ public class JobsManager(
                 return Task.CompletedTask;
             });
 
+        await FinalizeStartingJobsWithAllStepsCompleted(deadJobCutoff);
         await CleanupOrphanedStepPlans();
 
         if (cleanupOptions.TerminalJobRetention == Timeout.InfiniteTimeSpan)
@@ -306,34 +332,36 @@ public class JobsManager(
         }
 
         var terminalJobCutoff = now - cleanupOptions.TerminalJobRetention;
-        var getTerminalJobs = await _jobStorage.GetJobs(new JobQuery
+        var pageSize = Math.Max(1, cleanupOptions.MaxTerminalJobsPerCleanup);
+        var seen = new HashSet<JobId>();
+        var fullPageRemoved = true;
+        while (fullPageRemoved)
         {
-            Statuses = _terminalStatuses,
-            CreatedBefore = terminalJobCutoff,
-            Take = Math.Max(1, cleanupOptions.MaxTerminalJobsPerCleanup)
-        });
-        await getTerminalJobs.Match(
-            CleanupTerminalJobs,
-            exception =>
+            var getTerminalJobs = await _jobStorage!.GetJobs(new JobQuery
             {
-                logger.FailedToGetJobsForCleanup(exception);
-                return Task.CompletedTask;
+                Statuses = _terminalStatuses,
+                CreatedBefore = terminalJobCutoff,
+                Take = pageSize
             });
-    }
+            fullPageRemoved = await getTerminalJobs.Match(
+                async terminalJobs =>
+                {
+                    // A job that survived removal comes back on the next page; seeing only those means no progress.
+                    var unseen = terminalJobs.Where(job => seen.Add(job.Id)).ToImmutableList();
+                    await CleanupTerminalJobs(unseen);
+                    return unseen.Count == pageSize;
+                },
+                exception =>
+                {
+                    logger.FailedToGetJobsForCleanup(exception);
+                    return Task.FromResult(false);
+                });
 
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    static IDisposable ObserveDeactivation(IGrainContext grainContext, CancellationTokenSource cancellation)
-    {
-        // Orleans 10.3.1: GrainLifecycleEvents is a diagnostic API which may change between minor versions.
-        // Keep its type references behind a non-inlined boundary so even JIT/type-loading failures are caught
-        // by SubscribeToDeactivation. Observe preparation and the drain, without pinning idle grains.
-        // Unlike OnDeactivateAsync, this fires before active requests finish, possibly off-scheduler.
-        // Only touch the thread-safe CTS here. Keep-alive prevents idle collection, not initiated deactivation
-        // (including migration), so all deactivation reasons must cancel dispatch.
-        return GrainLifecycleEvents.AllEvents
-            .OfType<GrainLifecycleEvents.Deactivating>()
-            .Where(notification => ReferenceEquals(notification.GrainContext, grainContext))
-            .Subscribe(_ => cancellation.Cancel());
+            if (!drainTerminalBacklog)
+            {
+                return;
+            }
+        }
     }
 
     void SubscribeToDeactivation()
@@ -367,7 +395,7 @@ public class JobsManager(
         {
             cancellationToken.ThrowIfCancellationRequested();
             logger.Rehydrating();
-            await CleanupDeadJobs().WaitAsync(cancellationToken);
+            await CleanupDeadJobs(drainTerminalBacklog: false).WaitAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var getRunningJobs = await _jobStorage!.GetJobsExcludingFinalizedStops(_rehydratedStatuses).WaitAsync(cancellationToken);
             await getRunningJobs.Match(
@@ -447,11 +475,45 @@ public class JobsManager(
 
             // Coalesce requests during a drain into a fresh full pass, not another concurrent drain.
             _rehydrationRequested = false;
-            await CleanupDeadJobs().WaitAsync(cancellationToken);
+            await CleanupDeadJobs(drainTerminalBacklog: false).WaitAsync(cancellationToken);
             var discovered = await _jobStorage!.GetJobsExcludingFinalizedStops(_rehydratedStatuses).WaitAsync(cancellationToken);
             discovered.RethrowError();
             runningJobs = discovered.AsT0.Where(_needsRehydration);
         }
+    }
+
+    /// <summary>
+    /// Finalizes the jobs that were left starting their steps although every step has already finished.
+    /// </summary>
+    /// <remarks>
+    /// The progress for the last step is written before the status that follows from it. A job left in between
+    /// is neither dead (it has its steps) nor terminal, so nothing else would ever finish it.
+    /// </remarks>
+    /// <param name="cutoff">Only jobs created before this are considered.</param>
+    /// <returns>Awaitable task.</returns>
+    async Task FinalizeStartingJobsWithAllStepsCompleted(DateTimeOffset cutoff)
+    {
+        var getStartingJobs = await _jobStorage!.GetJobs(new JobQuery
+        {
+            Statuses = [JobStatus.StartingSteps],
+            CreatedBefore = cutoff,
+            Take = Math.Max(1, options.Value.MaxTerminalJobsPerCleanup)
+        });
+        await getStartingJobs.Match(
+            async startingJobs =>
+            {
+                var completed = startingJobs.Where(job => job.Progress is { TotalSteps: > 0, IsCompleted: true }).ToList();
+                if (completed.Count > 0)
+                {
+                    logger.FoundStartingJobsWithAllStepsCompleted(completed.Count);
+                    await RunBounded(completed, options.Value.MaxConcurrentCleanup, job => ResumeJobAndHandleResult(job.Id));
+                }
+            },
+            exception =>
+            {
+                logger.FailedToGetJobsForCleanup(exception);
+                return Task.CompletedTask;
+            });
     }
 
     async Task CleanupDeadJobsInternal(IEnumerable<JobState> preparingJobs)
@@ -545,7 +607,7 @@ public class JobsManager(
             _ => false);
     }
 
-    async Task CleanupTerminalJobs(IImmutableList<JobState> terminalJobs)
+    async Task CleanupTerminalJobs(ImmutableList<JobState> terminalJobs)
     {
         if (terminalJobs.Count == 0)
         {

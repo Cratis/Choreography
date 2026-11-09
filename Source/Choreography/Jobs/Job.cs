@@ -237,6 +237,15 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
                 return ResumeJobSuccess.JobAlreadyRunning;
             }
 
+            // The same contradiction can be left in StartingSteps: the last step reported before the status moved on to
+            // Running. There is nothing left to run, so finalize it without asking whether it may run again.
+            if (State.Status is JobStatus.StartingSteps && State.Progress is { TotalSteps: > 0, IsCompleted: true })
+            {
+                _logger.FinalizingJobLeftStartingStepsAfterAllStepsCompleted();
+                _ = await HandleCompletionResult(await HandleCompletion());
+                return ResumeJobSuccess.JobIsCompleted;
+            }
+
             // An execution that continues or begins again - a resume, or a rehydration after a silo went away - is
             // asked about once, before anything of it runs.
             if (State.Status is JobStatus.PreparingJob or JobStatus.PreparingSteps or JobStatus.StartingSteps ||
