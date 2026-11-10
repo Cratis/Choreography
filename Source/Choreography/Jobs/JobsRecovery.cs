@@ -98,7 +98,7 @@ public sealed class JobsRecovery(
                 .Count(dead.Add);
 
             // Seen keys are silo-local: electing one survivor would lose the other survivors' catalogs.
-            if (newlyDead > 0 && (!hasHostProvider || IsElected(snapshot)))
+            if (ShouldRecover(newlyDead, hasHostProvider, snapshot))
             {
                 logger.RecoveringAfterMemberFailure(newlyDead);
                 hasHostProvider = await Recover(cancellationToken);
@@ -133,6 +133,16 @@ public sealed class JobsRecovery(
             pending.Providers.UnionWith(failures.Providers);
             pending.Keys.UnionWith(failures.Keys);
         }
+    }
+
+    bool ShouldRecover(int newlyDead, bool hasHostProvider, ClusterMembershipSnapshot snapshot)
+    {
+        if (newlyDead == 0)
+        {
+            return false;
+        }
+
+        return !hasHostProvider || IsElected(snapshot);
     }
 
     bool IsElected(ClusterMembershipSnapshot snapshot) => snapshot.Members.Values

@@ -78,6 +78,11 @@ public class JobTypes : IJobTypes, IJobTypesCatalog
             : IJobTypes.GetRequestClrTypeForError.CouldNotFindType;
     }
 
+    static bool IsDiscoverableJob(Type type) =>
+        type is { IsClass: true, IsAbstract: false, IsInterface: false, IsGenericType: false }
+        && !type.HasAttribute<GeneratedCodeAttribute>()
+        && type != typeof(NullJob);
+
     void InitializeMap(ITypes types)
     {
         PopulateJobTypes(types);
@@ -87,8 +92,7 @@ public class JobTypes : IJobTypes, IJobTypesCatalog
     void PopulateJobTypes(ITypes types)
     {
         foreach (var jobClrType in types.FindMultiple<IJob>()
-                     .Where(type => type is { IsClass: true, IsAbstract: false, IsInterface: false, IsGenericType: false }
-                                    && !type.HasAttribute<GeneratedCodeAttribute>() && type != typeof(NullJob)))
+                     .Where(IsDiscoverableJob))
         {
             var jobTypeAttribute = jobClrType.GetCustomAttribute<JobTypeAttribute>();
             var jobType = jobTypeAttribute?.JobType ?? jobClrType;

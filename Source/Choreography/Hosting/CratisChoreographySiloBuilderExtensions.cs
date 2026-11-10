@@ -59,100 +59,11 @@ public static class CratisChoreographySiloBuilderExtensions
 
         builder.Host.UseOrleans(silo =>
         {
-            // Orleans 10 registers its propagation filters with AddSingleton, so preserve a host's existing registration.
-            // The filter type is internal to Orleans and can only be identified by its full name.
-            if (!silo.Services.Any(descriptor => descriptor.ServiceType == typeof(IIncomingGrainCallFilter) &&
-                descriptor.ImplementationType?.FullName == "Orleans.Runtime.ActivityPropagationIncomingGrainCallFilter"))
-            {
-                silo.AddActivityPropagation();
-            }
-
-            silo.Configure<ClusterOptions>(clusterOptions =>
-            {
-                clusterOptions.ClusterId = options.ClusterId;
-                clusterOptions.ServiceId = options.ServiceId;
-            });
-
-            // Serializable types in client-facing assemblies can make Orleans' configuration analyzer fail at
-            // startup on types this silo never serializes. Skip the analysis unless it is asked for.
-            silo.Services.Configure<TypeManifestOptions>(typeManifestOptions => typeManifestOptions.EnableConfigurationAnalysis = false);
-
-            // Serializers for ConceptAs types crossing grain boundaries - job ids, names, statuses and the
-            // like. Registering them here means a host never has to know about them.
-            silo.Services.AddCratisChoreographySerializers();
-
-            // The job system's own collaborators: type discovery, the job type registry, the step throttle and
-            // the options both read. TryAdd keeps host registrations in charge where they exist.
-            silo.Services.TryAddSingleton<ITypes>(_ => new Cratis.Types.Types());
-            silo.Services.TryAddSingleton<IJobTypes, JobTypes>();
-            silo.Services.TryAddSingleton<IJobs, Jobs.Jobs>();
-            silo.Services.TryAddSingleton<IJobStepThrottle, JobStepThrottle>();
-            silo.Services.TryAddSingleton<IOptions<JobsOptions>>(_ => Options.Create(new JobsOptions()));
-            silo.AddCratisChoreographyJobsRecovery();
-
-            if (options.Storage == GrainStorageMode.MongoDB || options.Clustering == ClusteringMode.MongoDB)
-            {
-                silo.UseMongoDBClient(options.ConnectionString);
-            }
-
-            if (options.Clustering == ClusteringMode.MongoDB)
-            {
-                silo.UseMongoDBClustering(membershipOptions =>
-                {
-                    membershipOptions.DatabaseName = options.DatabaseName;
-                    membershipOptions.Strategy = MongoDBMembershipStrategy.SingleDocument;
-                });
-            }
-            else
-            {
-                silo.UseLocalhostClustering();
-            }
-
-            if (options.Storage == GrainStorageMode.MongoDB)
-            {
-                // Durable grain state for the job system - a running job survives a silo going away mid-flight.
-                silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.Jobs, grainStorageOptions => grainStorageOptions.DatabaseName = options.DatabaseName);
-                silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.JobSteps, grainStorageOptions => grainStorageOptions.DatabaseName = options.DatabaseName);
-                if (options.Workflows)
-                {
-                    silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.Workflows, grainStorageOptions => grainStorageOptions.DatabaseName = options.DatabaseName);
-                }
-            }
-            else
-            {
-                // The local configuration: jobs, steps and workflow runs live in memory of the one silo.
-                silo.Services.TryAddSingleton<IJobsStorage, InMemoryJobsStorage>();
-                if (options.Workflows)
-                {
-                    silo.AddMemoryGrainStorage(WellKnownGrainStorageProviders.Workflows);
-                }
-            }
-
-            // Never the 9.x MongoDB reminder table on the 10.x runtime - it hangs the reminder service outright
-            // (see the remarks on this method).
-            silo.UseInMemoryReminderService();
-
-            // The job system's grain storage providers resolve jobs storage per scope and namespace through
-            // IJobsStorage - the MongoDB jobs storage package registers that. Register the providers under the
-            // names the job grains ask for by name.
-            silo.Services.AddGrainStorage<Jobs.JobGrainStorageProvider>(WellKnownGrainStorageProviders.Jobs, (serviceProvider, _) =>
-                new(serviceProvider.GetRequiredService<IJobsStorage>(), serviceProvider.GetRequiredService<ILogger<Jobs.JobGrainStorageProvider>>()));
-            silo.Services.AddGrainStorage<Jobs.JobStepGrainStorageProvider>(WellKnownGrainStorageProviders.JobSteps, (serviceProvider, _) =>
-                new(serviceProvider.GetRequiredService<IJobsStorage>()));
-
-            if (options.Workflows)
-            {
-                silo.AddCratisChoreographyWorkflows(options.ConfigureWorkflows);
-            }
-
-            if (options.Patching)
-            {
-                silo.AddCratisChoreographyPatching(options.ConfigurePatching);
-                if (options.Storage == GrainStorageMode.InMemory)
-                {
-                    silo.Services.TryAddSingleton<IPatchStorage, InMemoryPatchStorage>();
-                }
-            }
+            AddCoreServices(silo, options);
+            ConfigureClustering(silo, options);
+            ConfigureGrainStorage(silo, options);
+            AddJobStorageProviders(silo);
+            AddOptionalFeatures(silo, options);
         });
 
         return builder;
@@ -191,5 +102,115 @@ public static class CratisChoreographySiloBuilderExtensions
     {
         silo.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IJobAdmission, TAdmission>());
         return silo;
+    }
+
+    static void AddCoreServices(ISiloBuilder silo, CratisChoreographyOptions options)
+    {
+        // Orleans 10 registers its propagation filters with AddSingleton, so preserve a host's existing registration.
+        // The filter type is internal to Orleans and can only be identified by its full name.
+        if (!silo.Services.Any(descriptor => descriptor.ServiceType == typeof(IIncomingGrainCallFilter) &&
+            descriptor.ImplementationType?.FullName == "Orleans.Runtime.ActivityPropagationIncomingGrainCallFilter"))
+        {
+            silo.AddActivityPropagation();
+        }
+
+        silo.Configure<ClusterOptions>(clusterOptions =>
+        {
+            clusterOptions.ClusterId = options.ClusterId;
+            clusterOptions.ServiceId = options.ServiceId;
+        });
+
+        // Serializable types in client-facing assemblies can make Orleans' configuration analyzer fail at
+        // startup on types this silo never serializes. Skip the analysis unless it is asked for.
+        silo.Services.Configure<TypeManifestOptions>(typeManifestOptions => typeManifestOptions.EnableConfigurationAnalysis = false);
+
+        // Serializers for ConceptAs types crossing grain boundaries - job ids, names, statuses and the
+        // like. Registering them here means a host never has to know about them.
+        silo.Services.AddCratisChoreographySerializers();
+
+        // The job system's own collaborators: type discovery, the job type registry, the step throttle and
+        // the options both read. TryAdd keeps host registrations in charge where they exist.
+        silo.Services.TryAddSingleton<ITypes>(_ => new Cratis.Types.Types());
+        silo.Services.TryAddSingleton<IJobTypes, JobTypes>();
+        silo.Services.TryAddSingleton<IJobs, Jobs.Jobs>();
+        silo.Services.TryAddSingleton<IJobStepThrottle, JobStepThrottle>();
+        silo.Services.TryAddSingleton<IOptions<JobsOptions>>(_ => Options.Create(new JobsOptions()));
+        silo.AddCratisChoreographyJobsRecovery();
+    }
+
+    static void ConfigureClustering(ISiloBuilder silo, CratisChoreographyOptions options)
+    {
+        if (options.Storage == GrainStorageMode.MongoDB || options.Clustering == ClusteringMode.MongoDB)
+        {
+            silo.UseMongoDBClient(options.ConnectionString);
+        }
+
+        if (options.Clustering == ClusteringMode.MongoDB)
+        {
+            silo.UseMongoDBClustering(membershipOptions =>
+            {
+                membershipOptions.DatabaseName = options.DatabaseName;
+                membershipOptions.Strategy = MongoDBMembershipStrategy.SingleDocument;
+            });
+        }
+        else
+        {
+            silo.UseLocalhostClustering();
+        }
+    }
+
+    static void ConfigureGrainStorage(ISiloBuilder silo, CratisChoreographyOptions options)
+    {
+        if (options.Storage == GrainStorageMode.MongoDB)
+        {
+            // Durable grain state for the job system - a running job survives a silo going away mid-flight.
+            silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.Jobs, grainStorageOptions => grainStorageOptions.DatabaseName = options.DatabaseName);
+            silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.JobSteps, grainStorageOptions => grainStorageOptions.DatabaseName = options.DatabaseName);
+            if (options.Workflows)
+            {
+                silo.AddMongoDBGrainStorage(WellKnownGrainStorageProviders.Workflows, grainStorageOptions => grainStorageOptions.DatabaseName = options.DatabaseName);
+            }
+        }
+        else
+        {
+            // The local configuration: jobs, steps and workflow runs live in memory of the one silo.
+            silo.Services.TryAddSingleton<IJobsStorage, InMemoryJobsStorage>();
+            if (options.Workflows)
+            {
+                silo.AddMemoryGrainStorage(WellKnownGrainStorageProviders.Workflows);
+            }
+        }
+
+        // Never the 9.x MongoDB reminder table on the 10.x runtime - it hangs the reminder service outright
+        // (see the remarks on AddCratisChoreography).
+        silo.UseInMemoryReminderService();
+    }
+
+    static void AddJobStorageProviders(ISiloBuilder silo)
+    {
+        // The job system's grain storage providers resolve jobs storage per scope and namespace through
+        // IJobsStorage - the MongoDB jobs storage package registers that. Register the providers under the
+        // names the job grains ask for by name.
+        silo.Services.AddGrainStorage<Jobs.JobGrainStorageProvider>(WellKnownGrainStorageProviders.Jobs, (serviceProvider, _) =>
+            new(serviceProvider.GetRequiredService<IJobsStorage>(), serviceProvider.GetRequiredService<ILogger<Jobs.JobGrainStorageProvider>>()));
+        silo.Services.AddGrainStorage<Jobs.JobStepGrainStorageProvider>(WellKnownGrainStorageProviders.JobSteps, (serviceProvider, _) =>
+            new(serviceProvider.GetRequiredService<IJobsStorage>()));
+    }
+
+    static void AddOptionalFeatures(ISiloBuilder silo, CratisChoreographyOptions options)
+    {
+        if (options.Workflows)
+        {
+            silo.AddCratisChoreographyWorkflows(options.ConfigureWorkflows);
+        }
+
+        if (options.Patching)
+        {
+            silo.AddCratisChoreographyPatching(options.ConfigurePatching);
+            if (options.Storage == GrainStorageMode.InMemory)
+            {
+                silo.Services.TryAddSingleton<IPatchStorage, InMemoryPatchStorage>();
+            }
+        }
     }
 }

@@ -31,7 +31,7 @@ public class OperationEngine(
         }
 
         using var guard = await locks.Acquire(scope, actor);
-        var result = await Run(scope, actor, definition.Kind, OperationRole.Forward, null, command, definition.SerializeIntent(command));
+        var result = await Run(new RunRequest(scope, actor, definition.Kind, OperationRole.Forward, null, command, definition.SerializeIntent(command)));
         if (result.Outcome.Kind != OperationOutcomeKind.Succeeded)
         {
             return result.Outcome;
@@ -59,13 +59,8 @@ public class OperationEngine(
         }
 
         var inverse = await definition!.CreateUndo(target, services);
-        var result = await Run(scope, actor, target.Kind, OperationRole.Undo, target.Id, inverse, JsonSerializer.Serialize(inverse, inverse.GetType(), OperationJson.Options));
-        if (result.Outcome.Kind == OperationOutcomeKind.Succeeded)
-        {
-            await history.Transition(target.Id, OperationStatus.Undone);
-        }
-
-        return result.Outcome;
+        var result = await Run(new RunRequest(scope, actor, target.Kind, OperationRole.Undo, target.Id, inverse, JsonSerializer.Serialize(inverse, inverse.GetType(), OperationJson.Options)));
+        return await TransitionOnSuccess(result.Outcome, target, OperationStatus.Undone);
     }
 
     /// <inheritdoc/>
@@ -86,13 +81,8 @@ public class OperationEngine(
         }
 
         var forward = await definition!.CreateRedo(target, services);
-        var result = await Run(scope, actor, target.Kind, OperationRole.Redo, target.Id, forward, definition.SerializeIntent(forward));
-        if (result.Outcome.Kind == OperationOutcomeKind.Succeeded)
-        {
-            await history.Transition(target.Id, OperationStatus.Redone);
-        }
-
-        return result.Outcome;
+        var result = await Run(new RunRequest(scope, actor, target.Kind, OperationRole.Redo, target.Id, forward, definition.SerializeIntent(forward)));
+        return await TransitionOnSuccess(result.Outcome, target, OperationStatus.Redone);
     }
 
     /// <inheritdoc/>
@@ -185,6 +175,16 @@ public class OperationEngine(
         return (definition, await definition.EvaluateRedo(target, services));
     }
 
+    async Task<OperationOutcome> TransitionOnSuccess(OperationOutcome outcome, OperationEntry target, OperationStatus status)
+    {
+        if (outcome.Kind == OperationOutcomeKind.Succeeded)
+        {
+            await history.Transition(target.Id, status);
+        }
+
+        return outcome;
+    }
+
     async Task DiscardRedoStack(OperationScope scope, OperationActor actor)
     {
         var entries = await history.GetFor(scope, actor);
@@ -194,15 +194,9 @@ public class OperationEngine(
         }
     }
 
-    async Task<(OperationOutcome Outcome, OperationId Id)> Run(
-        OperationScope scope,
-        OperationActor actor,
-        OperationKind kind,
-        OperationRole role,
-        OperationId? target,
-        object command,
-        string intent)
+    async Task<(OperationOutcome Outcome, OperationId Id)> Run(RunRequest request)
     {
+        var (scope, actor, kind, role, target, command, intent) = request;
         var entry = await history.Begin(scope, actor, kind, role, target, intent);
         OperationExecutionResult result;
         try
@@ -230,4 +224,13 @@ public class OperationEngine(
         await history.Complete(entry.Id, memento);
         return (OperationOutcome.Succeeded(entry.Id), entry.Id);
     }
+
+    sealed record RunRequest(
+        OperationScope Scope,
+        OperationActor Actor,
+        OperationKind Kind,
+        OperationRole Role,
+        OperationId? Target,
+        object Command,
+        string Intent);
 }
