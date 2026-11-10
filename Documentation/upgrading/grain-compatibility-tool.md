@@ -5,7 +5,7 @@ description: Run the GrainCompatibility tool to compare two OrleansContracts.txt
 
 `GrainCompatibility` answers one question: can silos of the previous release and silos of this build share a cluster? It compares the `OrleansContracts.txt` of a baseline (normally the latest release) with the one of the build under test, and fails on anything that is not purely additive. The rules behind it are in [Upgrading with two releases in one cluster](index.md).
 
-The tool is a build tool, not a package. It lives in `Source/Tools/GrainCompatibility` of the Choreography repository and targets `net10.0`, so build it from a checkout.
+The tool is a build tool, not a package. It lives in `Source/Tools/GrainCompatibility` of the Choreography repository and targets `net11.0`, so build it from a checkout.
 
 ## Run it
 

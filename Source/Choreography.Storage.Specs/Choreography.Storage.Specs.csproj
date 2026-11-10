@@ -6,8 +6,8 @@
         <IsPackable>false</IsPackable>
         <!-- xUnit v3 test projects are executables -->
         <OutputType>Exe</OutputType>
-        <!-- Test projects always target net10.0 only, also in the packaging build. -->
-        <TargetFrameworks>net10.0</TargetFrameworks>
+        <!-- Test projects always target net11.0 only, also in the packaging build. -->
+        <TargetFrameworks>net11.0</TargetFrameworks>
     </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="Moq" />

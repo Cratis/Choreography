@@ -8,7 +8,7 @@ application with one call, so you do not build an Orleans host and then wire the
 
 ## Prerequisites
 
-- The .NET SDK that matches the target framework of your application. The packages target .NET 8, 9 and 10.
+- The .NET SDK that matches the target framework of your application. The packages target .NET 10 and 11.
 - A MongoDB server, if you use MongoDB clustering, grain storage or jobs storage.
 - A jobs storage registration, unless you host with in-memory storage. See [Storage](../storage/index.md).
 

@@ -7,7 +7,7 @@ concurrency:
 env:
   NUGET_OUTPUT: ./Artifacts/NuGet
   NUGET_SOURCE: https://nuget.pkg.github.com/cratis/index.json
-  DOTNET_VERSION: "10.0.x"
+  DOTNET_VERSION: "11.0.x"
 
 on:
   pull_request_target:
@@ -68,20 +68,19 @@ jobs:
         with:
           dotnet-version: |
             ${{ env.DOTNET_VERSION }}
-            11.0.x
-          dotnet-quality: preview
+            10.0.x
 
       - name: Remove any existing artifacts
         run: rm -rf ${{ env.NUGET_OUTPUT }}
 
       - name: Build
-        run: dotnet build --configuration Debug
+        run: dotnet build --configuration Debug -p:IsPackaging=true
 
       - name: Add GitHub Package Registry to NuGet
         run: dotnet nuget add source --name github --username cratis --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text ${{ env.NUGET_SOURCE }}
 
       - name: Create NuGet packages
-        run: dotnet pack --no-build --configuration Debug -o ${{ env.NUGET_OUTPUT }} -p:PackageVersion=${{ needs.release.outputs.version }}
+        run: dotnet pack --no-build --configuration Debug -o ${{ env.NUGET_OUTPUT }} -p:IsPackaging=true -p:PackageVersion=${{ needs.release.outputs.version }}
 
       - name: Push NuGet packages
         run: dotnet nuget push '${{ env.NUGET_OUTPUT }}/*.nupkg' --skip-duplicate --timeout 900 --api-key ${{ secrets.GITHUB_TOKEN }} --source "github"

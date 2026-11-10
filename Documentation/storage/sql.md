@@ -5,7 +5,7 @@ description: Register SQL Server, PostgreSQL or SQLite for job state and patch r
 
 The SQL provider ships in the `Cratis.Choreography.Storage.Sql` package and uses EF Core. It is provider-agnostic: your
 resolver returns `DbContextOptions`, so you choose SQL Server, PostgreSQL or SQLite and the connection. The package targets
-`net10.0` when packaged, because EF Core 10 ships only for it.
+`net10.0` and `net11.0` when packaged, using EF Core 10 on both frameworks to stay within Npgsql's supported EF Core range.
 
 ## Register jobs storage
 

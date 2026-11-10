@@ -67,7 +67,7 @@ for ((i = 0; i < count; i++)); do echo "    $name$i"; done
     for (const [path, assembly] of all) {
         const name = path.split('/').pop().replace('.csproj', '');
         writeFileSync(join(directory, 'discovered', name), String(discovered[name] ?? counts[name] ?? 1));
-        const output = join(directory, dirname(path), 'bin/Debug/net10.0');
+        const output = join(directory, dirname(path), 'bin/Debug/net11.0');
         mkdirSync(output, { recursive: true });
         if (path === omitProject || assembly === missing) continue;
         const document = documents[name] ?? trx(counts[name] ?? 1, name);
