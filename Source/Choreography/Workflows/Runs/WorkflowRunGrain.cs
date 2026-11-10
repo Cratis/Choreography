@@ -124,7 +124,7 @@ public class WorkflowRunGrain(
     {
         await ExpireDueWaits(now);
         await StartDueRetries(now);
-        if (_state.IsAdmitted && (_state.PendingJobStops.Count > 0 || (!_state.IsOver && now - _lastActivity > options.Value.IdleBeforeResume)))
+        if (ShouldResume(now))
         {
             await Resume();
         }
@@ -192,16 +192,11 @@ public class WorkflowRunGrain(
             if (decision.Events.Any())
             {
                 var appended = await journal.Append(_key, _tail, [.. decision.Events]);
-                if (!appended.IsSuccess)
+                if (ShouldRetryAppend(appended, attempt))
                 {
-                    if (appended.HasConflict && attempt == 1)
-                    {
-                        logger.RunMovedOn(_key.Run.Value);
-                        await Load();
-                        continue;
-                    }
-
-                    throw new WorkflowRunCouldNotBeRecorded(_key, appended.HasConflict ? "the run moved on twice while it was being decided" : appended.Problems);
+                    logger.RunMovedOn(_key.Run.Value);
+                    await Load();
+                    continue;
                 }
 
                 _tail = appended.Tail;
@@ -218,6 +213,22 @@ public class WorkflowRunGrain(
             await Settle();
             return;
         }
+    }
+
+    bool ShouldResume(DateTimeOffset now) =>
+        _state.IsAdmitted && (_state.PendingJobStops.Count > 0 || (!_state.IsOver && now - _lastActivity > options.Value.IdleBeforeResume));
+
+    bool ShouldRetryAppend(WorkflowJournalAppendResult result, int attempt)
+    {
+        if (result.IsSuccess)
+        {
+            return false;
+        }
+        if (result.HasConflict && attempt == 1)
+        {
+            return true;
+        }
+        throw new WorkflowRunCouldNotBeRecorded(_key, result.HasConflict ? "the run moved on twice while it was being decided" : result.Problems);
     }
 
     async Task StartWave(CoordinatorDecision decision)

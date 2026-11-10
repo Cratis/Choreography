@@ -15,6 +15,8 @@ public class a_journal : IWorkflowRunJournal
 
     public bool ConflictOnFirstAppend { get; set; }
 
+    public Func<WorkflowJournalPosition, WorkflowJournalAppendResult>? RejectAppend { get; set; }
+
     public Task<WorkflowRunJournalSnapshot> Load(WorkflowRunKey key)
     {
         Reads++;
@@ -24,6 +26,11 @@ public class a_journal : IWorkflowRunJournal
     public Task<WorkflowJournalAppendResult> Append(WorkflowRunKey key, WorkflowJournalPosition expectedTail, IReadOnlyList<object> facts)
     {
         Appends++;
+        if (RejectAppend is { } reject)
+        {
+            return Task.FromResult(reject(expectedTail));
+        }
+
         if (ConflictOnFirstAppend && Appends == 1)
         {
             // Someone else got there first: the journal has moved on from what the caller decided from.
