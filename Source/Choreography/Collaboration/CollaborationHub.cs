@@ -17,7 +17,7 @@ namespace Cratis.Choreography.Collaboration;
 /// <remarks>
 /// Register the hub as a singleton; <c language="csharp">AddCratisCollaboration</c> does so.
 /// </remarks>
-public class CollaborationHub : ICollaborationHub, ILocalCollaborationDelivery
+public partial class CollaborationHub : ICollaborationHub, ILocalCollaborationDelivery
 {
     static readonly TimeSpan _idleAfter = TimeSpan.FromSeconds(30);
     static readonly TimeSpan _pingInterval = TimeSpan.FromSeconds(20);
@@ -188,26 +188,29 @@ public class CollaborationHub : ICollaborationHub, ILocalCollaborationDelivery
         }, moved);
     }
 
+    static async Task<WebSocketReceiveResult?> TryReceive(Connection connection, byte[] buffer, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await connection.Socket.ReceiveAsync(buffer, cancellationToken);
+        }
+        catch (WebSocketException)
+        {
+            return null; // client vanished - the finally block broadcasts the leave
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
     async Task ReceiveLoop(string groupKey, ConcurrentDictionary<string, Connection> group, Connection connection, CancellationToken cancellationToken)
     {
         var buffer = new byte[4 * 1024];
         while (connection.Socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
         {
-            WebSocketReceiveResult received;
-            try
-            {
-                received = await connection.Socket.ReceiveAsync(buffer, cancellationToken);
-            }
-            catch (WebSocketException)
-            {
-                return; // client vanished - the finally block broadcasts the leave
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-
-            if (received.MessageType == WebSocketMessageType.Close)
+            var received = await TryReceive(connection, buffer, cancellationToken);
+            if (received is null || received.MessageType == WebSocketMessageType.Close)
             {
                 return;
             }
@@ -220,28 +223,38 @@ public class CollaborationHub : ICollaborationHub, ILocalCollaborationDelivery
                 continue; // pongs and unknown types need no handling
             }
 
-            var (state, moved) = ApplyPresence(connection.State, message);
-            connection.State = state;
-            if (moved)
+            if (!await HandlePresence(groupKey, group, connection, message))
             {
-                connection.LastActive = DateTimeOffset.UtcNow;
-            }
-
-            await BroadcastLocal(group, exceptSessionId: connection.State.SessionId, new
-            {
-                type = "presence",
-                sessionId = connection.State.SessionId,
-                x = message.X,
-                y = message.Y,
-                area = connection.State.Area,
-                surfaceId = connection.State.SurfaceId,
-            });
-            if (!await _backplane.Presence(groupKey, connection.State.SessionId, message.X, message.Y, connection.State.Area, connection.State.SurfaceId))
-            {
-                await connection.Reconnect();
                 return;
             }
         }
+    }
+
+    async Task<bool> HandlePresence(string groupKey, ConcurrentDictionary<string, Connection> group, Connection connection, PresenceMessage message)
+    {
+        var (state, moved) = ApplyPresence(connection.State, message);
+        connection.State = state;
+        if (moved)
+        {
+            connection.LastActive = DateTimeOffset.UtcNow;
+        }
+
+        await BroadcastLocal(group, exceptSessionId: connection.State.SessionId, new
+        {
+            type = "presence",
+            sessionId = connection.State.SessionId,
+            x = message.X,
+            y = message.Y,
+            area = connection.State.Area,
+            surfaceId = connection.State.SurfaceId,
+        });
+        if (await _backplane.Presence(groupKey, connection.State.SessionId, message.X, message.Y, connection.State.Area, connection.State.SurfaceId))
+        {
+            return true;
+        }
+
+        await connection.Reconnect();
+        return false;
     }
 
     /// <summary>
@@ -261,24 +274,9 @@ public class CollaborationHub : ICollaborationHub, ILocalCollaborationDelivery
             using var timer = new PeriodicTimer(_pingInterval);
             while (await timer.WaitForNextTickAsync(cancellationToken))
             {
-                if (DateTimeOffset.UtcNow - connection.LastReceived > _silentAfter)
+                if (!await PingOnce(groupKey, group, connection))
                 {
-                    await connection.Reconnect();
                     return;
-                }
-
-                await Send(connection, new { type = "ping" });
-
-                var shouldBeIdle = DateTimeOffset.UtcNow - connection.LastActive > _idleAfter;
-                if (shouldBeIdle != connection.State.IsIdle)
-                {
-                    connection.State = connection.State with { IsIdle = shouldBeIdle };
-                    await BroadcastLocal(group, exceptSessionId: connection.State.SessionId, new { type = "idle", sessionId = connection.State.SessionId, isIdle = shouldBeIdle });
-                    if (!await _backplane.Idle(groupKey, connection.State.SessionId, shouldBeIdle))
-                    {
-                        await connection.Reconnect();
-                        return;
-                    }
                 }
             }
         }
@@ -286,6 +284,33 @@ public class CollaborationHub : ICollaborationHub, ILocalCollaborationDelivery
         {
             // session ended - nothing to do
         }
+    }
+
+    async Task<bool> PingOnce(string groupKey, ConcurrentDictionary<string, Connection> group, Connection connection)
+    {
+        if (DateTimeOffset.UtcNow - connection.LastReceived > _silentAfter)
+        {
+            await connection.Reconnect();
+            return false;
+        }
+
+        await Send(connection, new { type = "ping" });
+
+        var shouldBeIdle = DateTimeOffset.UtcNow - connection.LastActive > _idleAfter;
+        if (shouldBeIdle == connection.State.IsIdle)
+        {
+            return true;
+        }
+
+        connection.State = connection.State with { IsIdle = shouldBeIdle };
+        await BroadcastLocal(group, exceptSessionId: connection.State.SessionId, new { type = "idle", sessionId = connection.State.SessionId, isIdle = shouldBeIdle });
+        if (await _backplane.Idle(groupKey, connection.State.SessionId, shouldBeIdle))
+        {
+            return true;
+        }
+
+        await connection.Reconnect();
+        return false;
     }
 
     async Task BroadcastLocal(ConcurrentDictionary<string, Connection> group, string exceptSessionId, object message)
@@ -306,85 +331,4 @@ public class CollaborationHub : ICollaborationHub, ILocalCollaborationDelivery
         _groups.TryGetValue(groupKey, out var group) ? BroadcastLocal(group, exceptSessionId, message) : Task.CompletedTask;
 
     sealed record PresenceMessage(string Type, double X, double Y, string? Area, string? SurfaceId);
-
-    sealed class Connection(WebSocket socket, Collaborator state) : IDisposable
-    {
-        readonly SemaphoreSlim _sendLock = new(1, 1);
-
-        public WebSocket Socket => socket;
-
-        public Collaborator State { get; set; } = state;
-
-        public DateTimeOffset LastActive { get; set; } = DateTimeOffset.UtcNow;
-
-        public DateTimeOffset LastReceived { get; set; } = DateTimeOffset.UtcNow;
-
-        public bool Joined { get; set; }
-
-        public void Dispose() => _sendLock.Dispose();
-
-        public async Task SendRaw(byte[] payload)
-        {
-            if (Socket.State != WebSocketState.Open)
-            {
-                return;
-            }
-
-            await _sendLock.WaitAsync();
-            try
-            {
-                await Socket.SendAsync(payload, WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None);
-            }
-            catch (WebSocketException)
-            {
-                // dead socket - the receive loop notices and leaves
-            }
-            catch (ObjectDisposedException)
-            {
-                // socket torn down concurrently with a broadcast - same outcome as a dead socket
-            }
-            finally
-            {
-                _sendLock.Release();
-            }
-        }
-
-        public async Task Reconnect()
-        {
-            try
-            {
-                if (Socket.State == WebSocketState.Open)
-                {
-                    await Socket.CloseOutputAsync(WebSocketCloseStatus.EndpointUnavailable, "Collaboration is reconnecting", CancellationToken.None);
-                }
-            }
-            catch (WebSocketException)
-            {
-                // The client already disconnected and will use its normal reconnect path.
-            }
-            finally
-            {
-                Socket.Abort();
-            }
-        }
-
-        public async Task CloseSilently()
-        {
-            try
-            {
-                if (Socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
-                {
-                    await Socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "closed", CancellationToken.None);
-                }
-            }
-            catch (WebSocketException)
-            {
-                // already gone
-            }
-            catch (ObjectDisposedException)
-            {
-                // already gone
-            }
-        }
-    }
 }

@@ -162,31 +162,15 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
     {
         using var scope = _logger.BeginJobScope(JobId, JobKey);
         _logger.Starting();
-        if (State.Status is JobStatus.Failed)
+        if (StartRefusedByState() is { } refused)
         {
-            return StartJobError.Unknown;
-        }
-        if (State.Status is JobStatus.CompletedSuccessfully or JobStatus.CompletedWithFailures)
-        {
-            return StartJobError.AlreadyCompleted;
-        }
-        if (JobIsPrepared() || State.Status is JobStatus.PreparingJob or JobStatus.PreparingSteps)
-        {
-            return StartJobError.AlreadyBeenPrepared;
+            return refused;
         }
 
         // Nothing is changed or written before the owner has been asked: a refused job leaves no trace.
-        switch (await Admit(request, "Start"))
+        if (await AnswerStartFromAdmission(request) is { } notAdmitted)
         {
-            case Admission.Refused:
-                if (ExecutionGeneration() == 0)
-                {
-                    DeactivateOnIdleDuringShutdown();
-                }
-
-                return StartJobError.NotAdmitted;
-            case Admission.Failed:
-                return StartJobError.Unknown;
+            return notAdmitted;
         }
 
         State.Created = DateTimeOffset.UtcNow;
@@ -231,153 +215,13 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
         var stoppedProgress = SnapshotStoppedProgress();
         try
         {
-            if (State.Status is JobStatus.Failed)
-            {
-                return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.Unknown);
-            }
-
-            // A drain is not settled yet; nothing of the job may run until it is.
-            if (State.DrainPending)
-            {
-                _logger.NotResumingWhileDrainIsPending();
-                return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.JobCannotBeResumed);
-            }
-
-            if (_startStepsTimer is not null)
-            {
-                return ResumeJobSuccess.JobAlreadyRunning;
-            }
-
-            // The same contradiction can be left in StartingSteps: the last step reported before the status moved on to
-            // Running. There is nothing left to run, so finalize it without asking whether it may run again.
-            if (State.Status is JobStatus.StartingSteps && State.Progress is { TotalSteps: > 0, IsCompleted: true })
-            {
-                _logger.FinalizingJobLeftStartingStepsAfterAllStepsCompleted();
-                _ = await HandleCompletionResult(await HandleCompletion());
-                return ResumeJobSuccess.JobIsCompleted;
-            }
-
             // An execution that continues or begins again - a resume, or a rehydration after a silo went away - is
             // asked about once, before anything of it runs.
-            if (ResumeNeedsAdmission)
-            {
-                switch (await Admit(State.Request, "Resume"))
-                {
-                    case Admission.Refused:
-                        return await RefuseResume();
-                    case Admission.Failed:
-                        return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.Unknown);
-                }
-            }
-
-            // A job can be left persisted as running with every one of its steps already accounted for: the
-            // progress for the last step is written before the status that follows from it, so a silo that stops
-            // in between - or a completion handler that fails - leaves a state that contradicts itself. Nothing
-            // revisited it, and reporting it as already running kept it that way: the job stayed Running forever
-            // and its observer could never resubscribe (#3944). Resume is where both the kernel's rehydration and
-            // an observer's subscribe reach the job, so finalize it here rather than leaving it wedged.
-            if (State.Status is JobStatus.Running && State.Progress.IsCompleted)
-            {
-                _logger.FinalizingJobLeftRunningAfterAllStepsCompleted();
-                _ = await HandleCompletionResult(await HandleCompletion());
-                return ResumeJobSuccess.JobIsCompleted;
-            }
-
-            if (State.Status is JobStatus.Running && await ResumeStagesLeftBetween() is { } resumedStages)
-            {
-                return resumedStages;
-            }
-
-            if (State.Status is JobStatus.PreparingJob or JobStatus.PreparingSteps)
-            {
-                return await RecoverStepPreparation();
-            }
-
-            if (State.Status is JobStatus.StartingSteps)
-            {
-                return await RecoverStepStartup();
-            }
-
-            if (State.Status is JobStatus.Running)
-            {
-                return await ResumeInterruptedSteps();
-            }
-
-            if (State.Status is JobStatus.CompletedSuccessfully or JobStatus.CompletedWithFailures)
-            {
-                return ResumeJobSuccess.JobIsCompleted;
-            }
-
-            if (!await CanResume())
-            {
-                return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.JobCannotBeResumed);
-            }
-
-            if (!JobIsPrepared())
-            {
-                return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.JobIsNotPrepared);
-            }
-
-            // Steps in a stage that never started are still tracked after the running ones stopped, so a job with
-            // stages always reloads what is left from the steps themselves.
-            if (ResumeNeedsStepReload)
-            {
-                _jobStepGrains = await GetIdAndGrainReferenceForNonCompletedJobSteps();
-            }
-
-            // A prepared job with nothing left to start cannot make progress on its own, so resuming it only puts
-            // it back into Running for the next resume to find. That is the same permanent wedge as the state
-            // above, reached when the progress for a completed step was never persisted (#3944). The steps
-            // themselves are the record of what happened, so recount from them before finalizing.
-            if (_jobStepGrains is null or { Count: 0 })
-            {
-                _logger.FinalizingJobLeftRunningAfterAllStepsCompleted();
-                await ReconcileProgressFromJobSteps();
-                return await FinalizeInsteadOfResuming();
-            }
-
-            // A job with stages resumes at the stage it had reached - unless the stage before it failed as a barrier
-            // and a stop left that unacted on, in which case there is nothing to resume.
-            if (await PrepareStagesForResume())
-            {
-                return await FinalizeInsteadOfResuming();
-            }
-
-            _logger.Resuming();
-            var stoppedSteps = State.Progress.StoppedSteps;
-            var countedSteps = (Stopped: State.StoppedStepsCounted, Completed: State.CompletedStepsCounted.ToList());
-
-            // The new execution has counted no stops; that is written with it, so no activation can mistake a stop of
-            // the new execution for one it already counted.
-            ForgetCountedStops();
-
-            // Resuming begins a new execution; its steps carry this change's position, so none may start unless it is durable.
-            if (!await TryWriteStatusChanged(JobStatus.Running))
-            {
-                State.Progress.StoppedSteps = stoppedSteps;
-                (State.StoppedStepsCounted, State.CompletedStepsCounted) = countedSteps;
-                if (stoppedProgress is not null)
-                {
-                    State.Progress = stoppedProgress;
-
-                    // The write may have reached storage despite its failed acknowledgement. A fresh activation
-                    // must read the durable outcome rather than serve this activation's restored counters.
-                    DeactivateOnIdleDuringShutdown();
-                }
-                return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.Unknown);
-            }
-
-            if (!await TryRunResumeHook(stoppedProgress, countedSteps.Stopped, countedSteps.Completed))
-            {
-                return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.Unknown);
-            }
-
-            // Only a successful hook begins dispatch. Until then, late drained reports must stay accounted for.
-            // _outcomesCounted is kept, backed by the durable record across activations, so an earlier-counted outcome cannot count twice.
-            _accountedByDrain.Clear();
-            _started.Clear();
-            _inFlight.Clear();
-            return await ResumeCurrentStage(StepsInCurrentStage(), reportAlreadyRunning: false);
+            return await AnswerResumeFromEntryState()
+                ?? await AnswerResumeFromAdmission()
+                ?? await AnswerResumeFromStatus()
+                ?? await AnswerResumeFromSteps()
+                ?? await BeginResumedExecution(stoppedProgress);
         }
         catch (Exception ex)
         {
@@ -727,24 +571,9 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
     {
         try
         {
-            if (_completionRetryTimer is not null)
+            if (CompletionNotReady() is { } notReady)
             {
-                return JobError.PersistStateError;
-            }
-            if (_completionFinalized || State.Status is JobStatus.CompletedSuccessfully or JobStatus.CompletedWithFailures or JobStatus.Failed)
-            {
-                return HandleCompletionSuccess.NotClearedState;
-            }
-            if (State.Progress is { IsCompleted: false, IsStopped: false })
-            {
-                return HandleCompletionSuccess.AllStepsNotCompletedYet;
-            }
-
-            // A stage that could not be asked about yet, or that waits for the resume hook, counts as stopped as it
-            // stands, but the job is still running.
-            if (IsWaitingToAdmitNextStage || IsHoldingNextStageForResumeHook)
-            {
-                return HandleCompletionSuccess.AllStepsNotCompletedYet;
+                return notReady;
             }
 
             // When all steps have been stopped or completed
@@ -770,11 +599,7 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
             // Removing retains its existing clear-only behavior.
             if (State.Status is JobStatus.Removing)
             {
-                await ClearStateAsync();
-                ClearStepNotificationRetries();
-                ClearRemovalRetry();
-                DeactivateOnIdleDuringShutdown();
-                return HandleCompletionSuccess.ClearedState;
+                return await ClearRemovedJob();
             }
 
             _clearCompletedState = ShouldClearCompletedState;
@@ -788,6 +613,40 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
             ScheduleRemovalRetry();
             return JobError.UnknownError;
         }
+    }
+
+    Result<HandleCompletionSuccess, JobError>? CompletionNotReady()
+    {
+        if (_completionRetryTimer is not null)
+        {
+            return JobError.PersistStateError;
+        }
+        if (_completionFinalized || State.Status is JobStatus.CompletedSuccessfully or JobStatus.CompletedWithFailures or JobStatus.Failed)
+        {
+            return HandleCompletionSuccess.NotClearedState;
+        }
+        if (State.Progress is { IsCompleted: false, IsStopped: false })
+        {
+            return HandleCompletionSuccess.AllStepsNotCompletedYet;
+        }
+
+        // A stage that could not be asked about yet, or that waits for the resume hook, counts as stopped as it
+        // stands, but the job is still running.
+        if (IsWaitingToAdmitNextStage || IsHoldingNextStageForResumeHook)
+        {
+            return HandleCompletionSuccess.AllStepsNotCompletedYet;
+        }
+
+        return null;
+    }
+
+    async Task<Result<HandleCompletionSuccess, JobError>> ClearRemovedJob()
+    {
+        await ClearStateAsync();
+        ClearStepNotificationRetries();
+        ClearRemovalRetry();
+        DeactivateOnIdleDuringShutdown();
+        return HandleCompletionSuccess.ClearedState;
     }
 
     void RecordCompletionStatus(Catch result)
