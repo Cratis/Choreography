@@ -9,7 +9,7 @@ durable business processes on Microsoft Orleans. Its job system is the smallest 
 them in parallel on grains, keeps their progress in storage and finishes them after a restart.
 
 By the end of this page you have a web service that starts a two-step job, shows its progress, and resumes a job you
-killed mid-flight. You need a .NET SDK; the packages target `net8.0`, `net9.0` and `net10.0`. The restart part also
+killed mid-flight. You need a .NET SDK; the packages target `net10.0` and `net11.0`. The restart part also
 needs MongoDB on `mongodb://localhost:27017`.
 
 ## Create the project

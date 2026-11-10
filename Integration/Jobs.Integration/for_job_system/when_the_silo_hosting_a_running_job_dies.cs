@@ -30,7 +30,8 @@ public class when_the_silo_hosting_a_running_job_dies : Specification
         _resume = (ResumeJobSuccess)await job.Resume();
     }
 
-    [Fact] void should_recover_the_original_job_once_on_a_surviving_silo()
+    [Fact]
+    void should_recover_the_original_job_once_on_a_surviving_silo()
     {
         _survivor.ShouldNotEqual(_fixture.VictimAddress);
         _state.Status.ShouldEqual(JobStatus.CompletedSuccessfully);

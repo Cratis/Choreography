@@ -6,9 +6,9 @@
         <IsPackable>false</IsPackable>
         <!-- xUnit v3 test projects are executables -->
         <OutputType>Exe</OutputType>
-        <!-- Test projects always target net10.0 only. The plural form overrides the packaging build's multi-targeting
+        <!-- Test projects always target net11.0 only. The plural form overrides the packaging build's multi-targeting
              and is needed for the VSTest adapter to land beside the test assembly. -->
-        <TargetFrameworks>net10.0</TargetFrameworks>
+        <TargetFrameworks>net11.0</TargetFrameworks>
     </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="coverlet.collector" />

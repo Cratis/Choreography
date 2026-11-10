@@ -45,7 +45,8 @@ public class when_the_silo_dies_in_the_start_hook : Specification
         _state = await job.Inspect();
     }
 
-    [Fact] void should_recover_without_replanning_or_replaying_the_start_hook()
+    [Fact]
+    void should_recover_without_replanning_or_replaying_the_start_hook()
     {
         _survivor.ShouldNotEqual(_fixture.VictimAddress);
         _state.Status.ShouldEqual(JobStatus.CompletedSuccessfully);

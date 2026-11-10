@@ -29,7 +29,8 @@ public class when_rehydrating_a_legacy_start_without_a_plan : given.the_manager
         await WaitForRehydration();
     }
 
-    [Fact] void should_log_the_specific_reason() => _logger.ReceivedCalls().Any(call =>
+    [Fact]
+    void should_log_the_specific_reason() => _logger.ReceivedCalls().Any(call =>
         call.GetMethodInfo().Name == nameof(ILogger.Log) &&
         call.GetArguments()[2]!.ToString()!.Contains("without a saved step plan", StringComparison.Ordinal)).ShouldBeTrue();
     [Fact] void should_not_delete_the_legacy_starting_job() => _job.Verify(job => job.Remove(), Times.Never);

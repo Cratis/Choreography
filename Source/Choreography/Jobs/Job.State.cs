@@ -8,6 +8,10 @@ public abstract partial class Job<TRequest, TJobState>
 {
     bool _stateMayBeUnsaved;
 
+    bool CanRemoveStoredStepPlan => State.StoredStepPlanIncarnation is not null &&
+        (State.Status is JobStatus.CompletedSuccessfully or JobStatus.CompletedWithFailures or JobStatus.Failed ||
+        (State.Status is JobStatus.Stopped && State.StopFinalized));
+
     /// <summary>
     /// Writes persisted state.
     /// </summary>
@@ -19,9 +23,7 @@ public abstract partial class Job<TRequest, TJobState>
         {
             await WriteStateAsync();
             _stateMayBeUnsaved = false;
-            if (State.StoredStepPlanIncarnation is not null &&
-                (State.Status is JobStatus.CompletedSuccessfully or JobStatus.CompletedWithFailures or JobStatus.Failed ||
-                (State.Status is JobStatus.Stopped && State.StopFinalized)))
+            if (CanRemoveStoredStepPlan)
             {
                 await RemoveStoredStepPlan();
             }
@@ -137,14 +139,16 @@ public abstract partial class Job<TRequest, TJobState>
         for (var position = changes.Count; position > 0; position--)
         {
             var status = changes[position - 1].Status;
-            if (status is JobStatus.PreparingJob ||
-                (status is JobStatus.Running && position > 1 && changes[position - 2].Status is JobStatus.Stopped or JobStatus.Removing or JobStatus.CompletedWithFailures))
+            if (status is JobStatus.PreparingJob || ResumesExecution(status, position))
             {
                 return position;
             }
         }
         return 0;
     }
+
+    bool ResumesExecution(JobStatus status, int position) =>
+        status is JobStatus.Running && position > 1 && State.StatusChanges[position - 2].Status is JobStatus.Stopped or JobStatus.Removing or JobStatus.CompletedWithFailures;
 
     bool StoppedStepsPredateLastRunning()
     {

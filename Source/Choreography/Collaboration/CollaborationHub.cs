@@ -163,6 +163,31 @@ public class CollaborationHub : ICollaborationHub, ILocalCollaborationDelivery
     static Task Send(Connection connection, object message) =>
         connection.SendRaw(JsonSerializer.SerializeToUtf8Bytes(message, _json));
 
+    static PresenceMessage? ReadPresence(ReadOnlySpan<byte> payload)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<PresenceMessage>(payload, _json);
+        }
+        catch (JsonException)
+        {
+            return null; // malformed frame - ignore rather than dropping the session
+        }
+    }
+
+    static (Collaborator State, bool Moved) ApplyPresence(Collaborator state, PresenceMessage message)
+    {
+        var moved = state.X != message.X || state.Y != message.Y;
+        return (state with
+        {
+            X = message.X,
+            Y = message.Y,
+            Area = message.Area ?? string.Empty,
+            SurfaceId = message.SurfaceId ?? string.Empty,
+            IsIdle = !moved && state.IsIdle,
+        }, moved);
+    }
+
     async Task ReceiveLoop(string groupKey, ConcurrentDictionary<string, Connection> group, Connection connection, CancellationToken cancellationToken)
     {
         var buffer = new byte[4 * 1024];
@@ -188,30 +213,15 @@ public class CollaborationHub : ICollaborationHub, ILocalCollaborationDelivery
             }
 
             connection.LastReceived = DateTimeOffset.UtcNow;
-            PresenceMessage? message;
-            try
-            {
-                message = JsonSerializer.Deserialize<PresenceMessage>(buffer.AsSpan(0, received.Count), _json);
-            }
-            catch (JsonException)
-            {
-                continue; // malformed frame - ignore rather than dropping the session
-            }
+            var message = ReadPresence(buffer.AsSpan(0, received.Count));
 
             if (message?.Type != "presence")
             {
                 continue; // pongs and unknown types need no handling
             }
 
-            var moved = connection.State.X != message.X || connection.State.Y != message.Y;
-            connection.State = connection.State with
-            {
-                X = message.X,
-                Y = message.Y,
-                Area = message.Area ?? string.Empty,
-                SurfaceId = message.SurfaceId ?? string.Empty,
-                IsIdle = !moved && connection.State.IsIdle,
-            };
+            var (state, moved) = ApplyPresence(connection.State, message);
+            connection.State = state;
             if (moved)
             {
                 connection.LastActive = DateTimeOffset.UtcNow;

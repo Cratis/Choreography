@@ -29,6 +29,8 @@ public abstract partial class Job<TRequest, TJobState>
 
     bool WatchdogIsEnabled => WatchdogInterval > TimeSpan.Zero && WatchdogInterval != Timeout.InfiniteTimeSpan;
 
+    bool ShouldWatchRunningJob => State.Status is JobStatus.Running && !State.DrainPending && JobIsPrepared();
+
     TimeSpan WatchdogStartupDelay => WatchdogInterval > TimeSpan.Zero && WatchdogInterval != Timeout.InfiniteTimeSpan
         ? TimeSpan.FromTicks(Math.Min(WatchdogInterval.Ticks, _watchdogStartupDelay.Ticks))
         : WatchdogInterval;
@@ -59,7 +61,7 @@ public abstract partial class Job<TRequest, TJobState>
             return;
         }
 
-        if (State.Status is not JobStatus.Running || State.DrainPending || !JobIsPrepared())
+        if (!ShouldWatchRunningJob)
         {
             DisposeWatchdog();
             return;
@@ -119,7 +121,11 @@ public abstract partial class Job<TRequest, TJobState>
         counts = new Dictionary<JobStepStatus, int>();
         try
         {
-            if (counted.TryGetException(out _) || !counted.TryGetResult(out var result) || result is null)
+            if (counted.TryGetException(out _))
+            {
+                return false;
+            }
+            if (!counted.TryGetResult(out var result) || result is null)
             {
                 return false;
             }
@@ -141,6 +147,11 @@ public abstract partial class Job<TRequest, TJobState>
             ?? DateTimeOffset.MinValue;
         return now - lastSign >= leaseTimeout;
     }
+
+    static bool LeaseTimeoutIsEnabled(TimeSpan leaseTimeout) => leaseTimeout > TimeSpan.Zero && leaseTimeout != Timeout.InfiniteTimeSpan;
+
+    static bool LeaseOwnerIsGone(JobStepState step, ISet<string>? activeSilos) =>
+        step.Lease is null || activeSilos?.Contains(step.Lease.Owner) == false;
 
     void EnsureWatchdog(TimeSpan dueTime)
     {
@@ -247,7 +258,7 @@ public abstract partial class Job<TRequest, TJobState>
     async Task RestartStepsWhoseOwnerIsGone()
     {
         var leaseTimeout = JobsOptionsOrDefault.StepLeaseTimeout;
-        if (leaseTimeout <= TimeSpan.Zero || leaseTimeout == Timeout.InfiniteTimeSpan)
+        if (!LeaseTimeoutIsEnabled(leaseTimeout))
         {
             return;
         }
@@ -268,7 +279,7 @@ public abstract partial class Job<TRequest, TJobState>
 
         var activeSilos = expired.Exists(_ => _.Lease is not null) ? await GetActiveSilos() : null;
         var restartable = expired
-            .Where(step => step.Lease is null || activeSilos?.Contains(step.Lease.Owner) == false)
+            .Where(step => LeaseOwnerIsGone(step, activeSilos))
             .ToDictionary(step => step.Id.JobStepId, GetJobStepGrain);
         if (restartable.Count == 0)
         {

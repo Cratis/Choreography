@@ -139,6 +139,13 @@ public abstract partial class Job<TRequest, TJobState>
     /// <returns>Collection of <see cref="JobStepDetails"/> .</returns>
     protected abstract Task<IImmutableList<JobStepDetails>> PrepareSteps(TRequest request);
 
+    static bool PreparationWasIncomplete(Result<bool, OneOf.Types.None> result) => result.TryGetResult(out var allPrepared) && !allPrepared;
+
+    static StartJobError GetFailedStartError(int failedSteps, int totalSteps, int stepsLeftWaiting) =>
+        failedSteps == totalSteps && stepsLeftWaiting == 0
+            ? StartJobError.AllJobStepsFailedStarting
+            : StartJobError.FailedStartingSomeJobSteps;
+
     async Task<Result<JobError>> PerformStepEventHandling(JobStepId stepId, JobStepResult jobStepResult, bool stopDuringRemoval = false)
     {
         _hasLiveStepTracking = true;
@@ -154,7 +161,7 @@ public abstract partial class Job<TRequest, TJobState>
 
             // A removing step deletes itself once its stop is acknowledged, so the acknowledgement must mean the stop
             // is saved: otherwise the step reports again, and the job saves it then.
-            if (stopDuringRemoval && written.TryGetException(out _) && State.Status is JobStatus.Removing && JobIsPrepared())
+            if (StopMustBeSavedBeforeRemoval(stopDuringRemoval, written))
             {
                 _logger.StopNotSavedWhileRemoving(stepId);
                 return JobError.PersistStateError;
@@ -167,6 +174,9 @@ public abstract partial class Job<TRequest, TJobState>
             return JobError.UnknownError;
         }
     }
+
+    bool StopMustBeSavedBeforeRemoval(bool stopDuringRemoval, Catch written) =>
+        stopDuringRemoval && written.TryGetException(out _) && State.Status is JobStatus.Removing && JobIsPrepared();
 
     async Task<Result<JobError>> HandleJobStepCompletedOrStopped(JobStepId stepId, JobStepResult result)
     {
@@ -358,7 +368,7 @@ public abstract partial class Job<TRequest, TJobState>
         _jobStepGrains = jobStepGrainAndRequests.ToDictionary(_ => _.Key, _ => _.Value.Grain);
         var prepareAllJobStepsResult = await TryPrepareAllJobSteps(jobStepGrainAndRequests);
 
-        if (prepareAllJobStepsResult.TryGetResult(out var preparedAllJobSteps) && !preparedAllJobSteps)
+        if (PreparationWasIncomplete(prepareAllJobStepsResult))
         {
 #pragma warning disable CA2201
             _ = await WriteStatusChanged(JobStatus.Failed, new("Failed while preparing job steps. Could not prepare all steps."));
@@ -468,6 +478,12 @@ public abstract partial class Job<TRequest, TJobState>
             return Result<StartJobError>.Success();
         }
         await RecordJobStepsAsFailed(failedJobStepIds, jobStepGrains);
+        CountFailedStarts(failedJobStepIds);
+        return GetFailedStartError(failedJobStepIds.Count, totalJobSteps, stepsLeftWaiting);
+    }
+
+    void CountFailedStarts(List<JobStepId> failedJobStepIds)
+    {
         State.Progress.FailedSteps += failedJobStepIds.Count;
         foreach (var failedJobStepId in failedJobStepIds)
         {
@@ -479,9 +495,6 @@ public abstract partial class Job<TRequest, TJobState>
                 _jobStepGrains?.Remove(failedJobStepId);
             }
         }
-        return failedJobStepIds.Count == totalJobSteps && stepsLeftWaiting == 0
-            ? StartJobError.AllJobStepsFailedStarting
-            : StartJobError.FailedStartingSomeJobSteps;
     }
 
     async Task RecordJobStepsAsFailed(List<JobStepId> jobStepIds, Dictionary<JobStepId, IJobStep> jobStepGrains)

@@ -95,7 +95,7 @@ public static class WorkflowPlanner
 
         foreach (var execution in analysis.Activations)
         {
-            if (state.Executions.ContainsKey(execution) || state.UnroutedFailure is not null || IsInClosedBranch(state, execution))
+            if (IsSettledOrBlocked(state, execution))
             {
                 continue;
             }
@@ -116,9 +116,7 @@ public static class WorkflowPlanner
         var state = work.State;
         if (execution.Visit > node.Policy.MaxVisits)
         {
-            var reason = new WorkflowFailureReason($"'{node.Id}' was reached {execution.Visit} times, more than the {node.Policy.MaxVisits} it allows");
-            work.Record(new WorkflowNodeAttemptFailed(execution, WorkflowAttempt.First, WorkflowFailureKind.VisitLimitExceeded, reason));
-            work.Record(new WorkflowNodeFailed(execution, WorkflowAttempt.First, WorkflowFailureKind.VisitLimitExceeded, reason, FailureRouting.For(state.Graph, node.Id, WorkflowFailureKind.VisitLimitExceeded)));
+            FailVisitLimit(work, node, execution);
             return true;
         }
 
@@ -152,6 +150,16 @@ public static class WorkflowPlanner
             default:
                 return false;
         }
+    }
+
+    static bool IsSettledOrBlocked(WorkflowRunState state, NodeExecutionKey execution) =>
+        state.Executions.ContainsKey(execution) || state.UnroutedFailure is not null || IsInClosedBranch(state, execution);
+
+    static void FailVisitLimit(CoordinatorWork work, WorkflowNode node, NodeExecutionKey execution)
+    {
+        var reason = new WorkflowFailureReason($"'{node.Id}' was reached {execution.Visit} times, more than the {node.Policy.MaxVisits} it allows");
+        work.Record(new WorkflowNodeAttemptFailed(execution, WorkflowAttempt.First, WorkflowFailureKind.VisitLimitExceeded, reason));
+        work.Record(new WorkflowNodeFailed(execution, WorkflowAttempt.First, WorkflowFailureKind.VisitLimitExceeded, reason, FailureRouting.For(work.State.Graph, node.Id, WorkflowFailureKind.VisitLimitExceeded)));
     }
 
     static bool IsInClosedBranch(WorkflowRunState state, NodeExecutionKey execution) =>

@@ -36,7 +36,8 @@ public class a_controller_dies_during_a_job : Specification
     }
 
     [Fact] void should_resume_the_job_on_the_remaining_controller() => _controllerAfter.ShouldEqual(_fixture.AddressOf("Primary"));
-    [Fact] void should_never_run_a_step_on_a_controller() =>
+    [Fact]
+    void should_never_run_a_step_on_a_controller() =>
         _entries.Exists(silo => silo.Equals(_fixture.AddressOf("Primary"))).ShouldBeFalse();
     [Fact] void should_complete_the_job() => _state.Status.ShouldEqual(JobStatus.CompletedSuccessfully);
 

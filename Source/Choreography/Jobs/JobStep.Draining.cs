@@ -8,6 +8,13 @@ namespace Cratis.Choreography.Jobs;
 
 public abstract partial class JobStep<TRequest, TResult, TState>
 {
+    bool HasSettledTerminalState =>
+        _run is not { IsSettled: false } && State.Status is JobStepStatus.CompletedSuccessfully or JobStepStatus.CompletedWithFailure or JobStepStatus.Failed or JobStepStatus.Stopped;
+
+    bool IsAlreadyStopped => State.Status is JobStepStatus.Stopped && _run is not { IsSettled: false };
+
+    bool ParentLookupFailed => _job is null && State.IsPrepared;
+
     /// <inheritdoc/>
     /// <remarks>
     /// Cancels the work and waits for it and its activation callbacks to settle, bounded by
@@ -99,7 +106,7 @@ public abstract partial class JobStep<TRequest, TResult, TState>
 
     async Task<JobStepDrainResult> DrainRun(long generation, TimeSpan timeout)
     {
-        if (_run is not { IsSettled: false } && State.Status is JobStepStatus.CompletedSuccessfully or JobStepStatus.CompletedWithFailure or JobStepStatus.Failed or JobStepStatus.Stopped)
+        if (HasSettledTerminalState)
         {
             return new(true, State.Status, _run?.Outcome);
         }
@@ -172,7 +179,7 @@ public abstract partial class JobStep<TRequest, TResult, TState>
         {
             return Result.Success<JobStepError>();
         }
-        if (!removing && State.Status is JobStepStatus.Stopped && _run is not { IsSettled: false })
+        if (!removing && IsAlreadyStopped)
         {
             logger.AlreadyStopped();
             TryDeactivateOnIdle();
@@ -188,7 +195,7 @@ public abstract partial class JobStep<TRequest, TResult, TState>
 
         if (!await ClaimWithinDeadline(run, deadline))
         {
-            return _job is null && State.IsPrepared ? JobStepError.FailedToReportToJob : JobStepError.StopTimedOut;
+            return ParentLookupFailed ? JobStepError.FailedToReportToJob : JobStepError.StopTimedOut;
         }
 
         return run.StopError is { } error ? error : Result.Success<JobStepError>();
@@ -226,7 +233,7 @@ public abstract partial class JobStep<TRequest, TResult, TState>
         var status = StatusOf(run.Outcome);
 
         // A step that was never prepared has no record to write; there is nothing of it to persist.
-        if (!run.OutcomePersisted && State.Status != status && State.IsPrepared)
+        if (OutcomeNeedsPersisting(run, status))
         {
             run.Outcome!.TryGetError(out var failure);
             if ((await WriteStatusChange(status, failure?.ErrorMessages, failure?.ExceptionStackTrace)).TryGetError(out _))
@@ -253,7 +260,7 @@ public abstract partial class JobStep<TRequest, TResult, TState>
         {
             // A cold drain accounts for its returned outcome itself and needs no parent. An ordinary stop must
             // find its parent before claiming anything, but must never wait for the parent's callback here.
-            if (parentLookupDeadline is { } deadline && State.IsPrepared && !await PrepareStopDelivery(run, deadline))
+            if (NeedsParentLookup(parentLookupDeadline) && !await PrepareStopDelivery(run, parentLookupDeadline!.Value))
             {
                 return;
             }
@@ -305,6 +312,11 @@ public abstract partial class JobStep<TRequest, TResult, TState>
             }
         }
     }
+
+    bool OutcomeNeedsPersisting(JobStepRun run, JobStepStatus status) =>
+        !run.OutcomePersisted && State.Status != status && State.IsPrepared;
+
+    bool NeedsParentLookup(CancellationToken? deadline) => deadline.HasValue && State.IsPrepared;
 
     bool IsOfEarlierExecution(long? generation) =>
         generation is { } stop &&

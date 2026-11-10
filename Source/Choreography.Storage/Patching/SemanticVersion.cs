@@ -106,32 +106,17 @@ public record SemanticVersion(int Major, int Minor, int Patch, string PreRelease
             return 1;
         }
 
-        var majorComparison = Major.CompareTo(other.Major);
-        if (majorComparison != 0)
+        var coreComparison = (Major, Minor, Patch).CompareTo((other.Major, other.Minor, other.Patch));
+        if (coreComparison != 0)
         {
-            return majorComparison;
+            return coreComparison;
         }
 
-        var minorComparison = Minor.CompareTo(other.Minor);
-        if (minorComparison != 0)
+        // A version without pre-release identifiers ranks above one that has them.
+        var hasPreRelease = !string.IsNullOrEmpty(PreRelease);
+        if (hasPreRelease != !string.IsNullOrEmpty(other.PreRelease))
         {
-            return minorComparison;
-        }
-
-        var patchComparison = Patch.CompareTo(other.Patch);
-        if (patchComparison != 0)
-        {
-            return patchComparison;
-        }
-
-        if (string.IsNullOrEmpty(PreRelease) && !string.IsNullOrEmpty(other.PreRelease))
-        {
-            return 1;
-        }
-
-        if (!string.IsNullOrEmpty(PreRelease) && string.IsNullOrEmpty(other.PreRelease))
-        {
-            return -1;
+            return hasPreRelease ? -1 : 1;
         }
 
         return ComparePreRelease(PreRelease, other.PreRelease);
@@ -200,46 +185,41 @@ public record SemanticVersion(int Major, int Minor, int Patch, string PreRelease
     {
         result = NotSet;
 
-        var rest = version;
-        var buildMetadata = string.Empty;
-        var plus = rest.IndexOf('+', StringComparison.Ordinal);
-        if (plus >= 0)
-        {
-            buildMetadata = rest[(plus + 1)..];
-            rest = rest[..plus];
-            if (!AllIdentifiers(buildMetadata, IsBuildIdentifier))
-            {
-                return false;
-            }
-        }
-
-        var preRelease = string.Empty;
-        var dash = rest.IndexOf('-', StringComparison.Ordinal);
-        if (dash >= 0)
-        {
-            preRelease = rest[(dash + 1)..];
-            rest = rest[..dash];
-            if (!AllIdentifiers(preRelease, IsPreReleaseIdentifier))
-            {
-                return false;
-            }
-        }
-
-        var numbers = rest.Split('.');
-        if (numbers.Length != 3 || !numbers.All(IsNumeric))
-        {
-            return false;
-        }
-
-        if (!int.TryParse(numbers[0], NumberStyles.None, CultureInfo.InvariantCulture, out var major) ||
-            !int.TryParse(numbers[1], NumberStyles.None, CultureInfo.InvariantCulture, out var minor) ||
-            !int.TryParse(numbers[2], NumberStyles.None, CultureInfo.InvariantCulture, out var patch))
+        if (!TrySplitSuffix(version, '+', IsBuildIdentifier, out var rest, out var buildMetadata) ||
+            !TrySplitSuffix(rest, '-', IsPreReleaseIdentifier, out rest, out var preRelease) ||
+            !TryReadCore(rest, out var major, out var minor, out var patch))
         {
             return false;
         }
 
         result = new SemanticVersion(major, minor, patch, preRelease, buildMetadata);
         return true;
+    }
+
+    static bool TrySplitSuffix(string value, char separator, Func<string, bool> isValid, out string rest, out string suffix)
+    {
+        var index = value.IndexOf(separator, StringComparison.Ordinal);
+        if (index < 0)
+        {
+            rest = value;
+            suffix = string.Empty;
+            return true;
+        }
+
+        suffix = value[(index + 1)..];
+        rest = value[..index];
+        return AllIdentifiers(suffix, isValid);
+    }
+
+    static bool TryReadCore(string core, out int major, out int minor, out int patch)
+    {
+        major = minor = patch = 0;
+        var numbers = core.Split('.');
+        return numbers.Length == 3 &&
+            numbers.All(IsNumeric) &&
+            int.TryParse(numbers[0], NumberStyles.None, CultureInfo.InvariantCulture, out major) &&
+            int.TryParse(numbers[1], NumberStyles.None, CultureInfo.InvariantCulture, out minor) &&
+            int.TryParse(numbers[2], NumberStyles.None, CultureInfo.InvariantCulture, out patch);
     }
 
     static bool AllIdentifiers(string identifiers, Func<string, bool> isValid) => identifiers.Split('.').All(isValid);

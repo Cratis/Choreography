@@ -18,7 +18,9 @@ public class and_work_is_already_running_in_this_activation : given.a_job_step_l
     {
         _jobStep.HoldPerformOpen = true;
         _first = await _jobStep.Start(GrainId.Create("job", _jobId.ToString()));
-        await Task.WhenAny(_jobStep.Performed.Task, Task.Delay(TimeSpan.FromSeconds(5), TimeProvider.System));
+        using var timeout = new CancellationTokenSource();
+        await Task.WhenAny(_jobStep.Performed.Task, Task.Delay(TimeSpan.FromSeconds(5), TimeProvider.System, timeout.Token));
+        await timeout.CancelAsync();
         _second = await _jobStep.Start(GrainId.Create("job", _jobId.ToString()));
         _jobStep.Gate.TrySetResult();
     }

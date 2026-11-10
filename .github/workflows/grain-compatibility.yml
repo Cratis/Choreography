@@ -21,7 +21,7 @@ on:
         default: ''
 
 env:
-  DOTNET_VERSION: "10.0.x"
+  DOTNET_VERSION: "11.0.x"
   # Every project that declares grain interfaces, and so carries an OrleansContracts.txt.
   CONTRACT_PROJECTS: Source/Choreography/Choreography.csproj Source/Choreography.Chronicle/Choreography.Chronicle.csproj
 
@@ -44,7 +44,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            ${{ env.DOTNET_VERSION }}
+            10.0.x
 
       - name: Determine baseline release
         id: baseline

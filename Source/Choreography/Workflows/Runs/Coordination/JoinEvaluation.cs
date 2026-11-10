@@ -1,6 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Cratis.Choreography.Workflows.Contracts;
 using Cratis.Choreography.Workflows.Graphs;
@@ -56,18 +57,36 @@ public static class JoinEvaluation
         var configuration = JoinConfiguration.From(node.Configuration) ?? new(forEach.Node, JoinMode.All, 0);
         var results = fanOut.Branches.Select(branch => (branch.Key, Result: ResultOf(state, analysis, branch.Key))).ToList();
         var succeeded = results.Count(result => CountsAsSucceeded(result.Result.Status));
-        var satisfied = configuration.Mode switch
-        {
-            JoinMode.Any => succeeded >= 1,
-            JoinMode.AtLeast => succeeded >= configuration.Threshold,
-            _ => succeeded == results.Count
-        };
+        var satisfied = IsSatisfied(configuration, succeeded, results.Count);
 
-        if (!satisfied && results.Exists(result => string.Equals(result.Result.Status, Running, StringComparison.Ordinal)))
+        if (IsAwaitingBranches(satisfied, results))
         {
             return false;
         }
 
+        var data = new WorkflowData(OutputOf(state, results).ToJsonString());
+        if (data.ExceedsLimit || !data.IsValidJson)
+        {
+            OutcomeRecording.RejectData(work, execution, WorkflowAttempt.First, "The joined output exceeds the bounded JSON contract");
+            return true;
+        }
+
+        work.Record(new WorkflowBranchesJoined(execution, satisfied ? WellKnownOutlets.Completed : WellKnownOutlets.Partial, data));
+        return true;
+    }
+
+    static bool IsAwaitingBranches(bool satisfied, List<(WorkflowBranchKey Key, (string Status, string Outlet, JsonNode? Output) Result)> results) =>
+        !satisfied && results.Exists(result => string.Equals(result.Result.Status, Running, StringComparison.Ordinal));
+
+    static bool IsSatisfied(JoinConfiguration configuration, int succeeded, int total) => configuration.Mode switch
+    {
+        JoinMode.Any => succeeded >= 1,
+        JoinMode.AtLeast => succeeded >= configuration.Threshold,
+        _ => succeeded == total
+    };
+
+    static JsonObject OutputOf(WorkflowRunState state, List<(WorkflowBranchKey Key, (string Status, string Outlet, JsonNode? Output) Result)> results)
+    {
         var output = new JsonObject();
         foreach (var (key, result) in results)
         {
@@ -80,28 +99,35 @@ public static class JoinEvaluation
             };
         }
 
-        var data = new WorkflowData(output.ToJsonString());
-        if (data.ExceedsLimit || !data.IsValidJson)
+        return output;
+    }
+
+    static bool IsRunning(WorkflowRunState state, ActivationAnalysis analysis, WorkflowBranchKey branch, List<NodeExecution> executions)
+    {
+        var pending = analysis.Activations.Any(activation => activation.Branch == branch && !state.Executions.ContainsKey(activation));
+        return pending || executions.Exists(execution => execution.IsInFlight);
+    }
+
+    static bool TryFindCleanArrival(WorkflowRunState state, ActivationAnalysis analysis, WorkflowBranchKey branch, List<NodeExecution> executions, [NotNullWhen(true)] out NodeExecution? arrived)
+    {
+        arrived = null;
+        if (HasFailureOrAmbiguity(executions) || analysis.ArrivalOf(branch) is not { } arrival)
         {
-            OutcomeRecording.RejectData(work, execution, WorkflowAttempt.First, "The joined output exceeds the bounded JSON contract");
-            return true;
+            return false;
         }
 
-        work.Record(new WorkflowBranchesJoined(execution, satisfied ? WellKnownOutlets.Completed : WellKnownOutlets.Partial, data));
-        return true;
+        return state.Executions.TryGetValue(arrival, out arrived);
     }
 
     static (string Status, string Outlet, JsonNode? Output) ResultOf(WorkflowRunState state, ActivationAnalysis analysis, WorkflowBranchKey branch)
     {
         var executions = state.Executions.Values.Where(execution => execution.Key.Branch == branch).ToList();
-        var pending = analysis.Activations.Any(activation => activation.Branch == branch && !state.Executions.ContainsKey(activation));
-        if (pending || executions.Exists(execution => execution.IsInFlight))
+        if (IsRunning(state, analysis, branch, executions))
         {
             return (Running, string.Empty, null);
         }
 
-        if (!executions.Exists(execution => execution.Status is NodeExecutionStatus.Failed or NodeExecutionStatus.ReconciliationRequired)
-            && analysis.ArrivalOf(branch) is { } arrival && state.Executions.TryGetValue(arrival, out var arrived))
+        if (TryFindCleanArrival(state, analysis, branch, executions, out var arrived))
         {
             return (Succeeded, arrived.Outlet.Value, ParseOrNull(arrived.Output.Value));
         }
@@ -109,6 +135,9 @@ public static class JoinEvaluation
         var last = executions.LastOrDefault(execution => execution.Status != NodeExecutionStatus.Succeeded) ?? executions.LastOrDefault();
         return (StatusOf(executions), last?.Outlet.Value ?? string.Empty, last is null ? null : ParseOrNull(last.Output.Value));
     }
+
+    static bool HasFailureOrAmbiguity(List<NodeExecution> executions) =>
+        executions.Exists(execution => execution.Status is NodeExecutionStatus.Failed or NodeExecutionStatus.ReconciliationRequired);
 
     static string StatusOf(List<NodeExecution> executions)
     {

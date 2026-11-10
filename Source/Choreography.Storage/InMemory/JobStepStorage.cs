@@ -19,49 +19,22 @@ public sealed class JobStepStorage : IJobStepStorage
     readonly ConcurrentDictionary<JobStepIdentifier, JobStepState> _failedSteps = new();
 
     /// <inheritdoc/>
-    public Task<Catch> RemoveAllForJob(JobId jobId)
+    public Task<Catch> RemoveAllForJob(JobId jobId) => Attempt(() =>
     {
-        try
-        {
-            RemoveAll(_steps, jobId);
-            RemoveAll(_failedSteps, jobId);
-            return Task.FromResult(Catch.Success());
-        }
-        catch (Exception ex)
-        {
-            return Task.FromResult<Catch>(ex);
-        }
-    }
+        RemoveAll(_steps, jobId);
+        RemoveAll(_failedSteps, jobId);
+    });
 
     /// <inheritdoc/>
-    public Task<Catch> RemoveAllNonFailedForJob(JobId jobId)
-    {
-        try
-        {
-            RemoveAll(_steps, jobId);
-            return Task.FromResult(Catch.Success());
-        }
-        catch (Exception ex)
-        {
-            return Task.FromResult<Catch>(ex);
-        }
-    }
+    public Task<Catch> RemoveAllNonFailedForJob(JobId jobId) => Attempt(() => RemoveAll(_steps, jobId));
 
     /// <inheritdoc/>
-    public Task<Catch> Remove(JobId jobId, JobStepId jobStepId)
+    public Task<Catch> Remove(JobId jobId, JobStepId jobStepId) => Attempt(() =>
     {
-        try
-        {
-            var key = new JobStepIdentifier(jobId, jobStepId);
-            _steps.TryRemove(key, out _);
-            _failedSteps.TryRemove(key, out _);
-            return Task.FromResult(Catch.Success());
-        }
-        catch (Exception ex)
-        {
-            return Task.FromResult<Catch>(ex);
-        }
-    }
+        var key = new JobStepIdentifier(jobId, jobStepId);
+        _steps.TryRemove(key, out _);
+        _failedSteps.TryRemove(key, out _);
+    });
 
     /// <inheritdoc/>
     public Task<Catch<IImmutableList<JobStepState>>> GetForJob(JobId jobId, params JobStepStatus[] statuses)
@@ -207,6 +180,19 @@ public sealed class JobStepStorage : IJobStepStorage
     }
 
     static bool ShouldBeStoredInFailedCollection(JobStepStatus status) => status is JobStepStatus.Failed or JobStepStatus.CompletedWithFailure;
+
+    static Task<Catch> Attempt(Action action)
+    {
+        try
+        {
+            action();
+            return Task.FromResult(Catch.Success());
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult<Catch>(ex);
+        }
+    }
 
     static void RemoveAll(ConcurrentDictionary<JobStepIdentifier, JobStepState> collection, JobId jobId)
     {

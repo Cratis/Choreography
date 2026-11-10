@@ -76,19 +76,27 @@ public class WorkflowNodePerformance(IWorkflowRun run, WorkflowWaveItem item, No
         }
 
         var (outcome, timedOut) = await Invoke(token => staged.PerformOperation(Invocation, operations[index], previous, token), cancellationToken);
-        if (!timedOut && index < operations.Count - 1 && outcome.Status == WorkflowNodeOutcomeStatus.Succeeded)
+        var isLastOperation = index == operations.Count - 1;
+        if (CompletesOperationOnly(outcome, timedOut, isLastOperation))
         {
-            if (outcome.Output.ExceedsLimit || !outcome.Output.IsValidJson)
-            {
-                await run.FailAttempt(execution, attempt, WorkflowFailureKind.InvalidOutput, "The operation output is not bounded valid JSON");
-                return;
-            }
-
-            await run.CompleteOperation(execution, attempt, operations[index], outcome.Output.IsEmpty ? WorkflowNodeStep.CompletedWithoutOutput : outcome.Output);
+            await CompleteOperation(operations[index], outcome);
             return;
         }
 
         await Report(outcome, timedOut);
+    }
+
+    bool CompletesOperationOnly(WorkflowNodeOutcome outcome, bool timedOut, bool isLastOperation) =>
+        !timedOut && !isLastOperation && outcome.Status == WorkflowNodeOutcomeStatus.Succeeded;
+
+    Task CompleteOperation(WorkflowOperationName operation, WorkflowNodeOutcome outcome)
+    {
+        if (outcome.Output.ExceedsLimit || !outcome.Output.IsValidJson)
+        {
+            return run.FailAttempt(execution, attempt, WorkflowFailureKind.InvalidOutput, "The operation output is not bounded valid JSON");
+        }
+
+        return run.CompleteOperation(execution, attempt, operation, outcome.Output.IsEmpty ? WorkflowNodeStep.CompletedWithoutOutput : outcome.Output);
     }
 
     async Task<(WorkflowNodeOutcome Outcome, bool TimedOut)> Invoke(Func<CancellationToken, Task<WorkflowNodeOutcome>> perform, CancellationToken cancellationToken)

@@ -19,7 +19,8 @@ public class with_an_unknown_type : given.jobs_in_storage
     [Fact] void should_succeed() => _result.IsSuccess.ShouldBeTrue();
     [Fact] void should_return_both_registered_jobs_with_the_requested_status() => _result.AsT0.Select(job => job.Id).ShouldContainOnly(_firstJob.Id, _secondJob.Id);
     [Fact] void should_deserialize_the_known_requests() => _result.AsT0.Select(job => job.Request).ShouldContainOnly(_firstJob.Request, _secondJob.Request);
-    [Fact] async Task should_leave_all_stored_jobs_untouched()
+    [Fact]
+    async Task should_leave_all_stored_jobs_untouched()
     {
         await using var context = CreateContext();
         (await context.Jobs.CountAsync(TestContext.Current.CancellationToken)).ShouldEqual(4);

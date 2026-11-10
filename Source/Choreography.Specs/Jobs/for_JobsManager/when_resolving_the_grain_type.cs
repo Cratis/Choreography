@@ -30,7 +30,8 @@ public class when_resolving_the_grain_type : Specification
 
     [Fact] void should_find_the_grains_it_is_meant_to_be_guarding() => _grains.ShouldNotBeEmpty();
 
-    [Fact] void should_have_every_grain_name_itself_explicitly() => _grains
+    [Fact]
+    void should_have_every_grain_name_itself_explicitly() => _grains
         .Where(grain => !grain.GetCustomAttributesData().Any(_ => _.AttributeType.Name == "GrainTypeAttribute"))
         .ShouldBeEmpty();
 }

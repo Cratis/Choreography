@@ -20,7 +20,8 @@ public class when_listing_jobs_of_a_type : given.a_job_storage
 
     [Fact] void should_succeed() => _result.IsSuccess.ShouldBeTrue();
     [Fact] void should_return_the_registered_job() => _result.AsT0.Select(job => job.Id).ShouldContainOnly(_firstJob.Id);
-    [Fact] void should_filter_by_type_and_status_in_the_database() => _collection.Received(1).FindAsync(
+    [Fact]
+    void should_filter_by_type_and_status_in_the_database() => _collection.Received(1).FindAsync(
         Arg.Is<FilterDefinition<JobState>>(filter => filter.Render(new RenderArgs<JobState>(BsonSerializer.LookupSerializer<JobState>(), BsonSerializer.SerializerRegistry)).Equals(
             JobStorage.TypeAndStatusFilter<JobState>(KnownJobType, new[] { JobStatus.Running }).Render(new RenderArgs<JobState>(BsonSerializer.LookupSerializer<JobState>(), BsonSerializer.SerializerRegistry)))),
         Arg.Any<FindOptions<JobState, BsonDocument>>(),

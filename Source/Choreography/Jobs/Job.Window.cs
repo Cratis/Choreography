@@ -22,6 +22,8 @@ public abstract partial class Job<TRequest, TJobState>
 
     int? EffectiveMaxActiveSteps => MaxActiveSteps is { } max ? Math.Max(1, max) : null;
 
+    bool CanFillWindow => EffectiveMaxActiveSteps is not null && !State.DrainPending && State.Status is JobStatus.Running or JobStatus.StartingSteps;
+
     /// <summary>
     /// Picks the steps that may be started now: the ones already started or found running in storage, and as many of
     /// the rest as the window has room for.
@@ -32,24 +34,16 @@ public abstract partial class Job<TRequest, TJobState>
     {
         if (EffectiveMaxActiveSteps is not { } max)
         {
-            foreach (var id in candidates.Keys)
-            {
-                _started.Add(id);
-            }
+            _started.UnionWith(candidates.Keys);
             return candidates;
         }
 
         var tracked = _jobStepGrains ?? [];
         var active = tracked.Keys.Count(id => _started.Contains(id) || _inFlight.Contains(id));
         var room = Math.Max(0, max - active);
-        var selected = new Dictionary<JobStepId, IJobStep>();
-        foreach (var candidate in candidates)
-        {
-            if (_started.Contains(candidate.Key) || _inFlight.Contains(candidate.Key))
-            {
-                selected[candidate.Key] = candidate.Value;
-            }
-        }
+        var selected = candidates
+            .Where(candidate => _started.Contains(candidate.Key) || _inFlight.Contains(candidate.Key))
+            .ToDictionary(candidate => candidate.Key, candidate => candidate.Value);
         foreach (var candidate in candidates.Where(candidate => !selected.ContainsKey(candidate.Key)))
         {
             if (room-- <= 0)
@@ -59,10 +53,7 @@ public abstract partial class Job<TRequest, TJobState>
             selected[candidate.Key] = candidate.Value;
         }
 
-        foreach (var id in selected.Keys)
-        {
-            _started.Add(id);
-        }
+        _started.UnionWith(selected.Keys);
         return selected;
     }
 
@@ -90,7 +81,7 @@ public abstract partial class Job<TRequest, TJobState>
 
     async Task FillWindowOfAnActivationThatMayDispatch()
     {
-        if (EffectiveMaxActiveSteps is null || State.DrainPending || State.Status is not (JobStatus.Running or JobStatus.StartingSteps))
+        if (!CanFillWindow)
         {
             return;
         }

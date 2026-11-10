@@ -62,7 +62,7 @@ esac
 paths=()
 executables=()
 while IFS=$'\t' read -r path assembly; do
-    executable="$root/${path%/*}/bin/$configuration/net10.0/$assembly$suffix"
+    executable="$root/${path%/*}/bin/$configuration/net11.0/$assembly$suffix"
     if [[ ! -x $executable ]]; then
         echo "::error::Missing specification executable: $executable"
         exit 2
