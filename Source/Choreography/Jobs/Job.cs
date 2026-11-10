@@ -215,9 +215,7 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
 
         // Stopped is written before workers report their stops. Only an already accounted execution may be
         // restored if the hook rejects this resume; stage preparation must not change this entry-time decision.
-        var stoppedProgress = State.Status is JobStatus.Stopped && !State.DrainPending && State.Progress.IsStopped
-            ? State.Progress with { Stages = State.Progress.Stages.Select(stage => stage with { }).ToList() }
-            : null;
+        var stoppedProgress = SnapshotStoppedProgress();
         try
         {
             if (State.Status is JobStatus.Failed)
@@ -248,8 +246,7 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
 
             // An execution that continues or begins again - a resume, or a rehydration after a silo went away - is
             // asked about once, before anything of it runs.
-            if (State.Status is JobStatus.PreparingJob or JobStatus.PreparingSteps or JobStatus.StartingSteps ||
-                (JobIsPrepared() && State.Status is JobStatus.Running or JobStatus.Stopped or JobStatus.Removing))
+            if (ResumeNeedsAdmission)
             {
                 switch (await Admit(State.Request, "Resume"))
                 {
@@ -310,7 +307,7 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
 
             // Steps in a stage that never started are still tracked after the running ones stopped, so a job with
             // stages always reloads what is left from the steps themselves.
-            if (_jobStepGrains is null or { Count: 0 } || IsStaged || EffectiveMaxActiveSteps is not null)
+            if (ResumeNeedsStepReload)
             {
                 _jobStepGrains = await GetIdAndGrainReferenceForNonCompletedJobSteps();
             }
@@ -375,6 +372,17 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
             return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.Unknown);
         }
     }
+
+    JobProgress? SnapshotStoppedProgress() =>
+        State.Status is JobStatus.Stopped && !State.DrainPending && State.Progress.IsStopped
+            ? State.Progress with { Stages = State.Progress.Stages.Select(stage => stage with { }).ToList() }
+            : null;
+
+    bool ResumeNeedsAdmission =>
+        State.Status is JobStatus.PreparingJob or JobStatus.PreparingSteps or JobStatus.StartingSteps ||
+        (JobIsPrepared() && State.Status is JobStatus.Running or JobStatus.Stopped or JobStatus.Removing);
+
+    bool ResumeNeedsStepReload => _jobStepGrains is null or { Count: 0 } || IsStaged || EffectiveMaxActiveSteps is not null;
 
     /// <inheritdoc/>
     public async Task<Result<StopJobError>> Stop()
@@ -750,14 +758,7 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
             }
 
             var onCompletedResult = await Complete();
-            if (onCompletedResult.TryGetException(out var onCompletedError))
-            {
-                StatusChanged(JobStatus.Failed, onCompletedError);
-            }
-            else if (State.Status is not JobStatus.Removing)
-            {
-                StatusChanged(State.Progress.HasFailures ? JobStatus.CompletedWithFailures : JobStatus.CompletedSuccessfully);
-            }
+            RecordCompletionStatus(onCompletedResult);
 
             // Removing retains its existing clear-only behavior.
             if (State.Status is JobStatus.Removing)
@@ -769,12 +770,7 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
                 return HandleCompletionSuccess.ClearedState;
             }
 
-            _clearCompletedState = State.Status switch
-            {
-                JobStatus.Failed => false,
-                JobStatus.CompletedWithFailures => !KeepAfterCompletedWithFailures,
-                _ => !KeepAfterCompleted
-            };
+            _clearCompletedState = ShouldClearCompletedState;
             return await FinalizeCompletion();
         }
         catch (Exception ex)
@@ -786,6 +782,25 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
             return JobError.UnknownError;
         }
     }
+
+    void RecordCompletionStatus(Catch result)
+    {
+        if (result.TryGetException(out var error))
+        {
+            StatusChanged(JobStatus.Failed, error);
+        }
+        else if (State.Status is not JobStatus.Removing)
+        {
+            StatusChanged(State.Progress.HasFailures ? JobStatus.CompletedWithFailures : JobStatus.CompletedSuccessfully);
+        }
+    }
+
+    bool ShouldClearCompletedState => State.Status switch
+    {
+        JobStatus.Failed => false,
+        JobStatus.CompletedWithFailures => !KeepAfterCompletedWithFailures,
+        _ => !KeepAfterCompleted
+    };
 
     void DeactivateOnIdleDuringShutdown()
     {

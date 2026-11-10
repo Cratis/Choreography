@@ -1,6 +1,6 @@
 ---
 title: Show live collaborators in React
-description: Draw other users' live cursors over a pan and zoom canvas and a who-is-here indicator with the collaboration entry points of @cratis/choreography, with theming through CSS variables.
+description: Show live collaborator cursors over a pan and zoom canvas and a who-is-here indicator with @cratis/choreography React entry points, themed with CSS variables.
 ---
 
 The `@cratis/choreography` package ships the browser side of live collaboration: a resilient WebSocket client, a store that shares one connection per page, hooks, the remote cursors, and a who-is-here indicator. It depends on React only for the `/collaboration/react` entry point, and not on a design system, a component library or a CSS framework.

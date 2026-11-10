@@ -127,7 +127,7 @@ public abstract partial class Job<TRequest, TJobState>
     {
         // An empty plan stays inline: a stored plan is never empty, so an empty answer from the store means it is missing.
         var size = plan.Count == 0 ? 0 : JsonSerializer.SerializeToUtf8Bytes(plan, StepPlanSerializerOptions).Length;
-        if (plan.Count == 0 || size <= JobsOptionsOrDefault.MaxInlineStepPlanSize || Storage.StepPlans is not { } store)
+        if (StepPlanFitsInline(plan.Count, size) || Storage.StepPlans is not { } store)
         {
             State.StepPlan = plan;
             State.HasStoredStepPlan = false;
@@ -151,6 +151,8 @@ public abstract partial class Job<TRequest, TJobState>
         State.StepPlan = null;
         State.HasStoredStepPlan = true;
     }
+
+    bool StepPlanFitsInline(int stepCount, int size) => stepCount == 0 || size <= JobsOptionsOrDefault.MaxInlineStepPlanSize;
 
     bool JobStepPlanStorageIsSupportedByEverySilo()
     {
@@ -211,24 +213,8 @@ public abstract partial class Job<TRequest, TJobState>
         return await RecoverStepStartup();
     }
 
-    async Task<Result<ResumeJobSuccess, ResumeJobError>> RecoverStepStartup()
+    void ReconcileStagesFromPlan(IReadOnlyList<PlannedJobStep> plan, IReadOnlyDictionary<JobStepId, JobStepState> byId)
     {
-        if (await LoadStepPlan() is not { } plan)
-        {
-            return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.MissingStepPlan);
-        }
-
-        // StartingSteps is durable only after every step was prepared. Successful steps may already have deleted
-        // their state during a partial dispatch; never recreate them from the plan.
-        var stored = await Storage.JobSteps.GetForJob(JobId);
-        stored.RethrowError();
-        var steps = stored.AsT0;
-        var byId = steps.ToDictionary(step => step.Id.JobStepId);
-        State.Progress.TotalSteps = plan.Count;
-        State.Progress.SuccessfulSteps = plan.Count(step => !byId.TryGetValue(step.Id, out var state) || state.Status is JobStepStatus.CompletedSuccessfully);
-        State.Progress.FailedSteps = steps.Count(step => step.Status is JobStepStatus.Failed or JobStepStatus.CompletedWithFailure);
-        State.Progress.UnreachableSteps = steps.Count(step => step.Status is JobStepStatus.Unreachable);
-        ForgetCountedStops();
         State.Progress.Stages = JobStages.Plan(plan.Select(step => step.Stage));
         foreach (var step in plan)
         {
@@ -251,6 +237,27 @@ public abstract partial class Job<TRequest, TJobState>
                 stage.UnreachableSteps++;
             }
         }
+    }
+
+    async Task<Result<ResumeJobSuccess, ResumeJobError>> RecoverStepStartup()
+    {
+        if (await LoadStepPlan() is not { } plan)
+        {
+            return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.MissingStepPlan);
+        }
+
+        // StartingSteps is durable only after every step was prepared. Successful steps may already have deleted
+        // their state during a partial dispatch; never recreate them from the plan.
+        var stored = await Storage.JobSteps.GetForJob(JobId);
+        stored.RethrowError();
+        var steps = stored.AsT0;
+        var byId = steps.ToDictionary(step => step.Id.JobStepId);
+        State.Progress.TotalSteps = plan.Count;
+        State.Progress.SuccessfulSteps = plan.Count(step => !byId.TryGetValue(step.Id, out var state) || state.Status is JobStepStatus.CompletedSuccessfully);
+        State.Progress.FailedSteps = steps.Count(step => step.Status is JobStepStatus.Failed or JobStepStatus.CompletedWithFailure);
+        State.Progress.UnreachableSteps = steps.Count(step => step.Status is JobStepStatus.Unreachable);
+        ForgetCountedStops();
+        ReconcileStagesFromPlan(plan, byId);
         _jobStepGrains = steps.Where(step => !IsDone(step.Status)).ToDictionary(step => step.Id.JobStepId, GetJobStepGrain);
 
         // Reconstructed terminal outcomes are already in the counters. Delayed reports must not count them again.

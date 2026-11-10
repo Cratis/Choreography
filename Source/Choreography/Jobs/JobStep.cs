@@ -106,6 +106,9 @@ public abstract partial class JobStep<TRequest, TResult, TState>(
 
     bool LeasesAreOn => _options.StepLeaseTimeout > TimeSpan.Zero && _options.StepLeaseTimeout != Timeout.InfiniteTimeSpan;
 
+    bool ShouldScheduleCheckpointTimer(TimeSpan flushInterval) =>
+        flushInterval > TimeSpan.Zero && ((_checkpoints.BatchInterval > 1 && !CheckpointAfterEveryBatch) || LeasesAreOn);
+
     bool LeaseNeedsRenewal =>
         LeasesAreOn &&
         State.Status is JobStepStatus.Running &&
@@ -147,7 +150,7 @@ public abstract partial class JobStep<TRequest, TResult, TState>(
 
         // A step that checkpoints after every batch never leaves one pending, so the timer would only ever find
         // nothing to do - unless it also renews the lease, which a step that checkpoints rarely would otherwise not.
-        if (flushInterval > TimeSpan.Zero && ((_checkpoints.BatchInterval > 1 && !CheckpointAfterEveryBatch) || LeasesAreOn))
+        if (ShouldScheduleCheckpointTimer(flushInterval))
         {
             this.RegisterGrainTimer(
                 _ => UnderGate(FlushDebouncedCheckpoint),

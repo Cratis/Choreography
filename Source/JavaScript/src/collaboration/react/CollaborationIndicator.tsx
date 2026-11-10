@@ -1,7 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { CollaborationConnectionState } from '../CollaborationConnectionState.js';
 import type { CollaborationStoreOptions } from '../CollaborationStoreOptions.js';
 import { fillCount } from '../fillCount.js';
@@ -60,6 +60,56 @@ const UsersIcon = () => (
     </svg>
 );
 
+/** Closes the open panel on a press outside the container or on Escape; listens only while the panel is open. */
+const useCloseOnOutsidePressOrEscape = (
+    isOpen: boolean,
+    setIsOpen: (isOpen: boolean) => void,
+    containerRef: RefObject<HTMLDivElement | null>) => {
+    useEffect(() => {
+        if (!isOpen) return undefined;
+
+        const closeOnOutsidePress = (event: Event) => {
+            if (event.target instanceof Node && !containerRef.current?.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setIsOpen(false);
+        };
+        document.addEventListener('pointerdown', closeOnOutsidePress);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('pointerdown', closeOnOutsidePress);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [isOpen]);
+};
+
+interface CollaboratorPanelItemProperties {
+    person: ReturnType<typeof groupCollaborators>[number];
+    text: typeof defaultCollaborationIndicatorLabels;
+    areaLabel: string | undefined;
+    avatar: ReactNode;
+}
+
+const CollaboratorPanelItem = ({ person, text, areaLabel, avatar }: CollaboratorPanelItemProperties) => (
+    <div className={`collaboration-indicator__item${person.isIdle ? ' collaboration-indicator__item--idle' : ''}`}>
+        <span className='collaboration-indicator__avatar'>{avatar}</span>
+        <div className='collaboration-indicator__item-info'>
+            <span className='collaboration-indicator__item-name'>
+                {person.displayName}
+                {person.tabs > 1 && (
+                    <span className='collaboration-indicator__item-note'>{fillCount(text.tabs, person.tabs)}</span>
+                )}
+                {person.isIdle && (
+                    <span className='collaboration-indicator__item-note'>{text.idle}</span>
+                )}
+            </span>
+            {areaLabel && <span className='collaboration-indicator__item-area'>{areaLabel}</span>}
+        </div>
+    </div>
+);
+
 /**
  * Shows who else is here: a button with a count badge that opens a panel listing the people, one entry per
  * person with the area they are in and how many tabs they have open. It does not depend on a design system -
@@ -91,24 +141,7 @@ export const CollaborationIndicator = ({
     const containerRef = useRef<HTMLDivElement>(null);
     const [isOpen, setIsOpen] = useState(false);
 
-    useEffect(() => {
-        if (!isOpen) return undefined;
-
-        const closeOnOutsidePress = (event: Event) => {
-            if (event.target instanceof Node && !containerRef.current?.contains(event.target)) {
-                setIsOpen(false);
-            }
-        };
-        const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') setIsOpen(false);
-        };
-        document.addEventListener('pointerdown', closeOnOutsidePress);
-        document.addEventListener('keydown', closeOnEscape);
-        return () => {
-            document.removeEventListener('pointerdown', closeOnOutsidePress);
-            document.removeEventListener('keydown', closeOnEscape);
-        };
-    }, [isOpen]);
+    useCloseOnOutsidePressOrEscape(isOpen, setIsOpen, containerRef);
 
     const button = collaborationButton(connectionState, text.title, text.reconnecting);
     const toggle = () => setIsOpen(current => !current);
@@ -164,29 +197,12 @@ export const CollaborationIndicator = ({
                     ) : (
                         <div className='collaboration-indicator__list'>
                             {people.map(person => (
-                                <div
+                                <CollaboratorPanelItem
                                     key={person.userId}
-                                    className={`collaboration-indicator__item${person.isIdle ? ' collaboration-indicator__item--idle' : ''}`}>
-                                    <span className='collaboration-indicator__avatar'>
-                                        {avatar(person, PANEL_AVATAR_SIZE)}
-                                    </span>
-                                    <div className='collaboration-indicator__item-info'>
-                                        <span className='collaboration-indicator__item-name'>
-                                            {person.displayName}
-                                            {person.tabs > 1 && (
-                                                <span className='collaboration-indicator__item-note'>{fillCount(text.tabs, person.tabs)}</span>
-                                            )}
-                                            {person.isIdle && (
-                                                <span className='collaboration-indicator__item-note'>{text.idle}</span>
-                                            )}
-                                        </span>
-                                        {person.area && (
-                                            <span className='collaboration-indicator__item-area'>
-                                                {areaLabels?.[person.area] ?? person.area}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
+                                    person={person}
+                                    text={text}
+                                    areaLabel={person.area ? areaLabels?.[person.area] ?? person.area : undefined}
+                                    avatar={avatar(person, PANEL_AVATAR_SIZE)} />
                             ))}
                         </div>
                     )}

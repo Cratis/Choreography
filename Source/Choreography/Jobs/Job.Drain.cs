@@ -16,6 +16,12 @@ public abstract partial class Job<TRequest, TJobState>
     bool _drainReconcilesFromSteps;
     IGrainTimer? _drainTimer;
 
+    bool DrainHasAlreadySettled => State.Status is JobStatus.Stopped && State.Progress.IsStopped && _drainTargets!.Count == 0;
+
+    bool DrainStepsAreAccountedFor => State.Progress.IsStopped || State.Progress.IsCompleted;
+
+    bool DrainNeedsRecount => _drainReconcilesFromSteps || !DrainStepsAreAccountedFor;
+
     TimeSpan StepStopTimeout =>
         ServiceProvider.GetService<IOptions<JobsOptions>>()?.Value?.StepStopTimeout ?? new JobsOptions().StepStopTimeout;
 
@@ -84,7 +90,7 @@ public abstract partial class Job<TRequest, TJobState>
             await FindStepsToDrain();
 
             // Asked again after the drain settled: nothing has changed, so nothing is written or run again.
-            if (State.Status is JobStatus.Stopped && State.Progress.IsStopped && _drainTargets!.Count == 0)
+            if (DrainHasAlreadySettled)
             {
                 _drainTargets = null;
                 return JobDrainStatus.Drained;
@@ -248,14 +254,13 @@ public abstract partial class Job<TRequest, TJobState>
     async Task<JobDrainStatus> SettleDrain()
     {
         // Counts kept by an activation that did not see every step's outcome are recounted from what the steps persisted.
-        if ((_drainReconcilesFromSteps || !(State.Progress.IsStopped || State.Progress.IsCompleted)) &&
-            await ReconcileProgressFromJobSteps(countStopped: true) is null)
+        if (DrainNeedsRecount && await ReconcileProgressFromJobSteps(countStopped: true) is null)
         {
             return await DrainNotSettled();
         }
 
         // Drained promises that the stopped hook ran, which it does only for progress with nothing left to run.
-        if (!(State.Progress.IsStopped || State.Progress.IsCompleted))
+        if (!DrainStepsAreAccountedFor)
         {
             _logger.DrainLeftStepsUnaccounted();
             return await DrainNotSettled();

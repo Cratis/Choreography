@@ -164,9 +164,9 @@ export class CollaborationClient {
 
     #flushPresence(): void {
         this.#presenceFlushTimer = undefined;
-        if (!this.#joined || !this.#pendingPresence || this.#socket?.readyState !== WebSocket.OPEN) return;
+        if (!this.#joined || !this.#pendingPresence || !this.#isSocketOpen()) return;
         this.#lastPresenceSentAt = performance.now();
-        this.#socket.send(JSON.stringify({ type: 'presence', ...this.#pendingPresence }));
+        this.#socket?.send(JSON.stringify({ type: 'presence', ...this.#pendingPresence }));
         this.#pendingPresence = undefined;
     }
 
@@ -256,69 +256,95 @@ export class CollaborationClient {
     #handle(message: ServerMessage): void {
         switch (message.type) {
             case 'roster':
-                this.#joined = true;
-                this.#reconnectAttempt = 0;
-                if (this.#reconnectingIndicatorTimer) clearTimeout(this.#reconnectingIndicatorTimer);
-                this.#reconnectingIndicatorTimer = undefined;
-                this.#connectionState = CollaborationConnectionState.Connected;
-                this.#flushPresence();
-                this.#collaborators.clear();
-                this.#selfUserId = message.userId ?? this.#selfUserId;
-                for (const collaborator of message.collaborators ?? []) {
-                    this.#collaborators.set(collaborator.sessionId, collaborator);
-                }
-                this.#publish();
+                this.#handleRoster(message);
                 break;
             case 'joined':
-                if (message.collaborator) {
-                    this.#collaborators.set(message.collaborator.sessionId, message.collaborator);
-                    this.#publish();
-                }
+                this.#handleJoined(message);
                 break;
             case 'left':
-                if (message.sessionId && this.#collaborators.delete(message.sessionId)) {
-                    this.#publish();
-                }
+                this.#handleLeft(message);
                 break;
-            case 'presence': {
-                const existing = message.sessionId ? this.#collaborators.get(message.sessionId) : undefined;
-                if (existing) {
-                    const x = message.x ?? existing.x;
-                    const y = message.y ?? existing.y;
-                    const area = message.area ?? existing.area;
-                    const surfaceId = message.surfaceId ?? existing.surfaceId;
-
-                    // Only moving the cursor is activity (the server's rule too): a repeated position - the
-                    // replay after a reconnect, a zoom - must not flip a really idle collaborator to active.
-                    const moved = x !== existing.x || y !== existing.y;
-                    const isIdle = moved ? false : existing.isIdle;
-
-                    // A dragging collaborator's stream is almost never a true no-op, but skipping an
-                    // occasional redundant tick still trims publishes - and every publish is a snapshot
-                    // rebuild plus a re-render of every subscriber.
-                    if (!moved && area === existing.area && surfaceId === existing.surfaceId && isIdle === existing.isIdle) {
-                        break;
-                    }
-                    this.#collaborators.set(existing.sessionId, { ...existing, x, y, area, surfaceId, isIdle });
-                    this.#publish();
-                }
+            case 'presence':
+                this.#handlePresence(message);
                 break;
-            }
-            case 'idle': {
-                const idleTarget = message.sessionId ? this.#collaborators.get(message.sessionId) : undefined;
-                if (idleTarget && idleTarget.isIdle !== message.isIdle) {
-                    this.#collaborators.set(idleTarget.sessionId, { ...idleTarget, isIdle: message.isIdle ?? false });
-                    this.#publish();
-                }
+            case 'idle':
+                this.#handleIdle(message);
                 break;
-            }
             case 'ping':
-                // Activity was already recorded; answer so intermediaries see two-way traffic.
-                if (this.#socket?.readyState === WebSocket.OPEN) {
-                    this.#socket.send(JSON.stringify({ type: 'pong' }));
-                }
+                this.#handlePing();
                 break;
         }
+    }
+
+    #handleRoster(message: ServerMessage): void {
+        this.#joined = true;
+        this.#reconnectAttempt = 0;
+        if (this.#reconnectingIndicatorTimer) clearTimeout(this.#reconnectingIndicatorTimer);
+        this.#reconnectingIndicatorTimer = undefined;
+        this.#connectionState = CollaborationConnectionState.Connected;
+        this.#flushPresence();
+        this.#collaborators.clear();
+        this.#selfUserId = message.userId ?? this.#selfUserId;
+        for (const collaborator of message.collaborators ?? []) {
+            this.#collaborators.set(collaborator.sessionId, collaborator);
+        }
+        this.#publish();
+    }
+
+    #handleJoined(message: ServerMessage): void {
+        if (message.collaborator) {
+            this.#collaborators.set(message.collaborator.sessionId, message.collaborator);
+            this.#publish();
+        }
+    }
+
+    #handleLeft(message: ServerMessage): void {
+        if (message.sessionId && this.#collaborators.delete(message.sessionId)) {
+            this.#publish();
+        }
+    }
+
+    #handlePresence(message: ServerMessage): void {
+        const existing = message.sessionId ? this.#collaborators.get(message.sessionId) : undefined;
+        if (!existing) return;
+
+        const x = message.x ?? existing.x;
+        const y = message.y ?? existing.y;
+        const area = message.area ?? existing.area;
+        const surfaceId = message.surfaceId ?? existing.surfaceId;
+
+        // Only moving the cursor is activity (the server's rule too): a repeated position - the
+        // replay after a reconnect, a zoom - must not flip a really idle collaborator to active.
+        const moved = x !== existing.x || y !== existing.y;
+        const isIdle = moved ? false : existing.isIdle;
+
+        // A dragging collaborator's stream is almost never a true no-op, but skipping an
+        // occasional redundant tick still trims publishes - and every publish is a snapshot
+        // rebuild plus a re-render of every subscriber.
+        const unchanged = !moved && area === existing.area && surfaceId === existing.surfaceId && isIdle === existing.isIdle;
+        if (unchanged) return;
+
+        this.#collaborators.set(existing.sessionId, { ...existing, x, y, area, surfaceId, isIdle });
+        this.#publish();
+    }
+
+    #handleIdle(message: ServerMessage): void {
+        const idleTarget = message.sessionId ? this.#collaborators.get(message.sessionId) : undefined;
+        if (idleTarget && idleTarget.isIdle !== message.isIdle) {
+            this.#collaborators.set(idleTarget.sessionId, { ...idleTarget, isIdle: message.isIdle ?? false });
+            this.#publish();
+        }
+    }
+
+    #handlePing(): void {
+        // Activity was already recorded; answer so intermediaries see two-way traffic.
+        if (this.#isSocketOpen()) {
+            this.#socket?.send(JSON.stringify({ type: 'pong' }));
+        }
+    }
+
+    #isSocketOpen(): boolean {
+        return this.#socket?.readyState === WebSocket.OPEN;
     }
 
     #publish(): void {

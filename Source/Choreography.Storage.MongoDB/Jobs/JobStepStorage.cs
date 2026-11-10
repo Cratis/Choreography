@@ -40,50 +40,26 @@ public class JobStepStorage(IMongoDatabase database, TransientRetry retry) : IJo
     IMongoCollection<JobStepState> FailedCollection => database.GetCollection<JobStepState>(WellKnownCollectionNames.FailedJobSteps);
 
     /// <inheritdoc/>
-    public async Task<Catch> RemoveAllForJob(JobId jobId)
+    public Task<Catch> RemoveAllForJob(JobId jobId) => Attempt(async () =>
     {
-        try
-        {
-            await EnsureIndexes().ConfigureAwait(false);
-            await Collection.DeleteManyAsync(GetJobIdFilter<JobStepState>(jobId)).ConfigureAwait(false);
-            await FailedCollection.DeleteManyAsync(GetJobIdFilter<JobStepState>(jobId)).ConfigureAwait(false);
-            return Catch.Success();
-        }
-        catch (Exception ex)
-        {
-            return ex;
-        }
-    }
+        await EnsureIndexes().ConfigureAwait(false);
+        await DeleteAllForJob(Collection, jobId).ConfigureAwait(false);
+        await DeleteAllForJob(FailedCollection, jobId).ConfigureAwait(false);
+    });
 
     /// <inheritdoc/>
-    public async Task<Catch> RemoveAllNonFailedForJob(JobId jobId)
+    public Task<Catch> RemoveAllNonFailedForJob(JobId jobId) => Attempt(async () =>
     {
-        try
-        {
-            await EnsureIndexes().ConfigureAwait(false);
-            await Collection.DeleteManyAsync(GetJobIdFilter<JobStepState>(jobId)).ConfigureAwait(false);
-            return Catch.Success();
-        }
-        catch (Exception ex)
-        {
-            return ex;
-        }
-    }
+        await EnsureIndexes().ConfigureAwait(false);
+        await DeleteAllForJob(Collection, jobId).ConfigureAwait(false);
+    });
 
     /// <inheritdoc/>
-    public async Task<Catch> Remove(JobId jobId, JobStepId jobStepId)
+    public Task<Catch> Remove(JobId jobId, JobStepId jobStepId) => Attempt(async () =>
     {
-        try
-        {
-            await Collection.DeleteOneAsync(GetIdFilter<JobStepState>(jobId, jobStepId)).ConfigureAwait(false);
-            await FailedCollection.DeleteOneAsync(GetIdFilter<JobStepState>(jobId, jobStepId)).ConfigureAwait(false);
-            return Catch.Success();
-        }
-        catch (Exception ex)
-        {
-            return ex;
-        }
-    }
+        await Collection.DeleteOneAsync(GetIdFilter<JobStepState>(jobId, jobStepId)).ConfigureAwait(false);
+        await FailedCollection.DeleteOneAsync(GetIdFilter<JobStepState>(jobId, jobStepId)).ConfigureAwait(false);
+    });
 
     /// <inheritdoc/>
     public async Task<Catch<IImmutableList<JobStepState>>> GetForJob(JobId jobId, params JobStepStatus[] statuses)
@@ -289,6 +265,22 @@ public class JobStepStorage(IMongoDatabase database, TransientRetry retry) : IJo
             return ex;
         }
     }
+
+    static async Task<Catch> Attempt(Func<Task> action)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+            return Catch.Success();
+        }
+        catch (Exception ex)
+        {
+            return ex;
+        }
+    }
+
+    static Task<DeleteResult> DeleteAllForJob(IMongoCollection<JobStepState> collection, JobId jobId) =>
+        collection.DeleteManyAsync(GetJobIdFilter<JobStepState>(jobId));
 
     static async Task AddCounts(
         IMongoCollection<JobStepState> collection,

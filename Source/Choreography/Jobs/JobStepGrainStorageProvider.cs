@@ -18,6 +18,17 @@ namespace Cratis.Choreography.Jobs;
 /// <param name="jobsStorage"><see cref="IJobsStorage"/> for resolving underlying storage.</param>
 public class JobStepGrainStorageProvider(IJobsStorage jobsStorage) : IGrainStorage
 {
+    static readonly JobStepStatus[] _statusPrecedence =
+    [
+        JobStepStatus.Removing,
+        JobStepStatus.Failed,
+        JobStepStatus.CompletedWithFailure,
+        JobStepStatus.CompletedSuccessfully,
+        JobStepStatus.Stopped,
+        JobStepStatus.Running,
+        JobStepStatus.Scheduled
+    ];
+
     /// <inheritdoc/>
     public Task ClearStateAsync<T>(string stateName, GrainId grainId, IGrainState<T> grainState)
     {
@@ -83,23 +94,12 @@ public class JobStepGrainStorageProvider(IJobsStorage jobsStorage) : IGrainStora
                 await HandleCatchNone(jobStepStorage.Save(key.JobId, jobStepId, grainState.State), type, methodName);
                 break;
         }
-        return;
+    }
 
-        static JobStepStatus GetStatus(JobStepState state)
-        {
-            if (IsInState(JobStepStatus.Removing, state)) return JobStepStatus.Removing;
-            if (IsInState(JobStepStatus.Failed, state)) return JobStepStatus.Failed;
-            if (IsInState(JobStepStatus.CompletedWithFailure, state)) return JobStepStatus.CompletedWithFailure;
-            if (IsInState(JobStepStatus.CompletedSuccessfully, state)) return JobStepStatus.CompletedSuccessfully;
-            if (IsInState(JobStepStatus.Stopped, state)) return JobStepStatus.Stopped;
-            if (IsInState(JobStepStatus.Running, state)) return JobStepStatus.Running;
-            if (IsInState(JobStepStatus.Scheduled, state)) return JobStepStatus.Scheduled;
-
-            return JobStepStatus.Unknown;
-        }
-
-        static bool IsInState(JobStepStatus status, JobStepState state) =>
-            state.StatusChanges.Count > 0 && state.StatusChanges[^1].Status == status;
+    static JobStepStatus GetStatus(JobStepState state)
+    {
+        var latest = state.StatusChanges.Count > 0 ? state.StatusChanges[^1].Status : JobStepStatus.Unknown;
+        return _statusPrecedence.Contains(latest) ? latest : JobStepStatus.Unknown;
     }
 
     static void ThrowIfInvalidJobStateType(Type type, string operationName) => JobStepStateType

@@ -63,19 +63,26 @@ public static class ForEachExpansion
     public static bool HasCapacityFor(WorkflowRunState state, NodeExecutionKey execution)
     {
         if (!state.Branches.TryGetValue(execution.Branch, out var origin)
-            || state.Graph.NodeFor(origin.ForEach.Node) is not { } forEach
-            || ForEachConfiguration.From(forEach.Configuration) is not { } configuration)
+            || ConfigurationOf(state, origin) is not { } configuration)
         {
             return true;
         }
 
-        var inFlight = state.Executions.Values.Count(candidate =>
-            candidate.Status is NodeExecutionStatus.Scheduled or NodeExecutionStatus.RetryPending
-            && state.Branches.TryGetValue(candidate.Key.Branch, out var candidateOrigin)
-            && candidateOrigin.ForEach == origin.ForEach);
+        var inFlight = state.Executions.Values.Count(candidate => IsInFlightFor(state, candidate, origin));
 
         return inFlight < configuration.MaxParallelism;
     }
+
+    static ForEachConfiguration? ConfigurationOf(WorkflowRunState state, WorkflowBranchOrigin origin) =>
+        state.Graph.NodeFor(origin.ForEach.Node) is { } forEach ? ForEachConfiguration.From(forEach.Configuration) : null;
+
+    static bool IsInFlightFor(WorkflowRunState state, NodeExecution candidate, WorkflowBranchOrigin origin) =>
+        candidate.Status is NodeExecutionStatus.Scheduled or NodeExecutionStatus.RetryPending
+        && state.Branches.TryGetValue(candidate.Key.Branch, out var candidateOrigin)
+        && candidateOrigin.ForEach == origin.ForEach;
+
+    static string? KeyOf(JsonObject item) =>
+        item["key"] is JsonValue keyValue && keyValue.TryGetValue<string>(out var key) && !string.IsNullOrEmpty(key) ? key : null;
 
     static (IReadOnlyList<WorkflowBranch> Branches, string? Problem) BranchesFrom(NodeExecutionKey forEach, WorkflowData output, string property)
     {
@@ -98,10 +105,7 @@ public static class ForEachExpansion
         var keys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in array)
         {
-            if (item is not JsonObject itemObject
-                || itemObject["key"] is not JsonValue keyValue
-                || !keyValue.TryGetValue<string>(out var key)
-                || string.IsNullOrEmpty(key))
+            if (item is not JsonObject itemObject || KeyOf(itemObject) is not { } key)
             {
                 return ([], $"Every item of '{forEach}' must be an object with a string 'key'");
             }

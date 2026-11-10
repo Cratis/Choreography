@@ -1,6 +1,6 @@
 ---
 title: Set up the collaboration backend
-description: Add the Cratis Choreography presence hub to an ASP.NET Core application, write the participant resolver that supplies identity and tenancy, and map the WebSocket endpoint.
+description: Add the Choreography presence hub to an ASP.NET Core app, write the participant resolver that supplies identity and tenancy, and map the WebSocket endpoint.
 ---
 
 This page takes an ASP.NET Core application from nothing to a working presence endpoint. By the end, a browser can connect to

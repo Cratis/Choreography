@@ -15,6 +15,16 @@ describe('when running frames', () => {
         for (const [, frame] of frames) frame(timestamp);
     };
 
+    /** Wakes a loop whose callback acts on the loop itself and asks for more, then runs one frame. */
+    const runOneFrameWhere = (act: (loop: ReturnType<typeof createSelfSuspendingFrameLoop>) => void) => {
+        const loop: ReturnType<typeof createSelfSuspendingFrameLoop> = createSelfSuspendingFrameLoop(() => {
+            act(loop);
+            return true;
+        });
+        loop.wake();
+        runFrame();
+    };
+
     beforeEach(() => {
         pending = new Map();
         nextHandle = 1;
@@ -105,26 +115,14 @@ describe('when running frames', () => {
 
     describe('and the callback stops the loop while asking for more', () => {
         it('should not come back on its own', () => {
-            let loop!: ReturnType<typeof createSelfSuspendingFrameLoop>;
-            loop = createSelfSuspendingFrameLoop(() => {
-                loop.stop();
-                return true;
-            });
-            loop.wake();
-            runFrame();
+            runOneFrameWhere(loop => loop.stop());
             expect(pending.size).toBe(0);
         });
     });
 
     describe('and the callback wakes the loop itself while asking for more', () => {
         it('should not schedule two frames', () => {
-            let loop!: ReturnType<typeof createSelfSuspendingFrameLoop>;
-            loop = createSelfSuspendingFrameLoop(() => {
-                loop.wake();
-                return true;
-            });
-            loop.wake();
-            runFrame();
+            runOneFrameWhere(loop => loop.wake());
             expect(pending.size).toBe(1);
         });
     });

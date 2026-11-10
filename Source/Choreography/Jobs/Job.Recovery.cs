@@ -12,6 +12,13 @@ public abstract partial class Job<TRequest, TJobState>
     static bool IsAlreadyStarted(Result<StartJobStepError> result) =>
         result.TryGetError(out var error) && error is StartJobStepError.AlreadyStarted;
 
+    bool IsRunningAfterAStop => State.Status is JobStatus.Running && StoppedStepsPredateLastRunning();
+
+    static ResumeJobSuccess GetResumeSuccess(bool reportAlreadyRunning, int stepCount, bool allLive) =>
+        reportAlreadyRunning && stepCount > 0 && allLive
+            ? ResumeJobSuccess.JobAlreadyRunning
+            : ResumeJobSuccess.Success;
+
     async Task<bool> TryRunResumeHook(JobProgress? stoppedProgress, IList<JobStepId> stopsCounted, IList<JobStepId> outcomesRecorded)
     {
         try
@@ -52,7 +59,7 @@ public abstract partial class Job<TRequest, TJobState>
             return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.JobIsNotPrepared);
         }
 
-        var restartStoppedSteps = State.Status is JobStatus.Running && StoppedStepsPredateLastRunning();
+        var restartStoppedSteps = IsRunningAfterAStop;
         var resumable = !_hasLiveStepTracking && restartStoppedSteps
             ? await GetIdAndGrainReferenceForNonCompletedJobSteps()
             : await GetIdAndGrainReferenceJobSteps(JobStepStatus.Scheduled, JobStepStatus.Running, JobStepStatus.Unknown);
@@ -156,8 +163,6 @@ public abstract partial class Job<TRequest, TJobState>
         {
             return Result<ResumeJobSuccess, ResumeJobError>.Failed(new FailedResumingJobSteps(failedSteps));
         }
-        return reportAlreadyRunning && steps.Count > 0 && allLive
-            ? ResumeJobSuccess.JobAlreadyRunning
-            : ResumeJobSuccess.Success;
+        return GetResumeSuccess(reportAlreadyRunning, steps.Count, allLive);
     }
 }
