@@ -25,7 +25,7 @@ public class and_it_is_alone : Specification
     async Task Because()
     {
         await _hub.Run("group", "session", "user-1", "Jane", "ff00ff", _socket, CancellationToken.None, hasAvatar: true);
-        _roster = JsonDocument.Parse(_socket.Sent[0]).RootElement;
+        _roster = JsonElement.Parse(_socket.Sent[0]);
     }
 
     [Fact] void should_send_a_roster_message_first() => _roster.GetProperty("type").GetString().ShouldEqual("roster");

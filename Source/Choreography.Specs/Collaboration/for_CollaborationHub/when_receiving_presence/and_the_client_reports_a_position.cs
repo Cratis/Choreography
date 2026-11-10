@@ -38,8 +38,8 @@ public class and_the_client_reports_a_position : Specification
     async Task Because()
     {
         await _hub.Run("group", "sender", "user-1", "Jane", "ff00ff", _sender, CancellationToken.None);
-        _joined = JsonDocument.Parse(_watcher.Sent.Single(message => message.Contains("\"joined\""))).RootElement;
-        _presence = JsonDocument.Parse(_watcher.Sent.Single(message => message.Contains("\"presence\""))).RootElement;
+        _joined = JsonElement.Parse(_watcher.Sent.Single(message => message.Contains("\"joined\"")));
+        _presence = JsonElement.Parse(_watcher.Sent.Single(message => message.Contains("\"presence\"")));
     }
 
     void Destroy()
