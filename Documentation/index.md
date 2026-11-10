@@ -45,7 +45,7 @@ are looking at, start with [Troubleshooting](reference/troubleshooting.md).
 
 ## Packages
 
-Five packages carry the library. They target `net8.0`, `net9.0` and `net10.0`, except the SQL provider, which targets
+Five packages carry the library. They target `net10.0` and `net11.0`, except the SQL provider, which targets
 `net10.0` only.
 
 | Package | Holds |

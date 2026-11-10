@@ -10,7 +10,7 @@ engine runs it on grains, records every step as a fact, and treats a repeated tr
 
 This lesson builds the smallest useful graph: a trigger, a node that reserves stock and a node that sends the
 confirmation. It runs on an in-memory silo, so you need no database and nothing survives the process. You need a .NET
-SDK; the packages target `net8.0`, `net9.0` and `net10.0`.
+SDK; the packages target `net10.0` and `net11.0`.
 
 ## Create the project
 

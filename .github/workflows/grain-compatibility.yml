@@ -44,7 +44,10 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            ${{ env.DOTNET_VERSION }}
+            11.0.x
+          dotnet-quality: preview
 
       - name: Determine baseline release
         id: baseline
