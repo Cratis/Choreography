@@ -153,41 +153,25 @@ public class OneOfSerializer : IGeneralizedCodec, IGeneralizedCopier, ITypeFilte
             return type;
         }
 
-        var current = type;
-        while (current != typeof(object) && current is not null)
-        {
-            if (current.IsGenericType && current.GetGenericTypeDefinition().Name.StartsWith("OneOfBase`", StringComparison.Ordinal))
-            {
-                return current;
-            }
-            current = current.BaseType;
-        }
-
-        throw new CannotReconstructOneOf(type);
+        return TypeAndBaseTypes(type).FirstOrDefault(IsOneOfBaseWithCases) ?? throw new CannotReconstructOneOf(type);
     }
 
-    static bool IsOneOfType(Type type)
+    static bool IsOneOfType(Type type) =>
+        type == _codecType ||
+        type.Namespace?.Equals(typeof(OneOf<,>).Namespace) == true ||
+        TypeAndBaseTypes(type).Any(IsOneOfBase);
+
+    static bool IsOneOfBaseWithCases(Type type) =>
+        type.IsGenericType && type.GetGenericTypeDefinition().Name.StartsWith("OneOfBase`", StringComparison.Ordinal);
+
+    static bool IsOneOfBase(Type type) =>
+        type.IsGenericType && type.GetGenericTypeDefinition().Name.Contains("OneOfBase");
+
+    static IEnumerable<Type> TypeAndBaseTypes(Type type)
     {
-        if (type == _codecType)
+        for (var current = type; current != typeof(object) && current is not null; current = current.BaseType)
         {
-            return true;
+            yield return current;
         }
-
-        if (type.Namespace?.Equals(typeof(OneOf<,>).Namespace) == true)
-        {
-            return true;
-        }
-
-        var current = type;
-        while (current != typeof(object) && current is not null)
-        {
-            if (current.IsGenericType && current.GetGenericTypeDefinition().Name.Contains("OneOfBase"))
-            {
-                return true;
-            }
-            current = current.BaseType;
-        }
-
-        return false;
     }
 }
