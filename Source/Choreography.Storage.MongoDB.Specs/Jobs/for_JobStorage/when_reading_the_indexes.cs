@@ -8,7 +8,7 @@ using MongoDB.Driver;
 
 namespace Cratis.Choreography.Storage.MongoDB.Jobs.for_JobStorage;
 
-public class when_reading_the_indexes : Specification
+public class when_reading_the_indexes : given.a_job_storage
 {
     CreateIndexModel<JobState> _index;
 
