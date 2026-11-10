@@ -2,6 +2,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Collections.Immutable;
+using System.Linq.Expressions;
 using System.Reactive.Subjects;
 using System.Text.Json;
 using Cratis.Choreography.Jobs;
@@ -23,38 +24,10 @@ namespace Cratis.Choreography.Storage.Sql.Jobs;
 public class JobStepStorage(Func<JobsDbContext> contextFactory) : IJobStepStorage
 {
     /// <inheritdoc/>
-    public async Task<Catch> RemoveAllForJob(JobId jobId)
-    {
-        try
-        {
-            await using var dbContext = contextFactory();
-            var jobSteps = dbContext.JobSteps.Where(js => js.JobId == jobId.Value);
-            dbContext.JobSteps.RemoveRange(jobSteps);
-            await dbContext.SaveChangesAsync();
-            return Catch.Success();
-        }
-        catch (Exception ex)
-        {
-            return ex;
-        }
-    }
+    public Task<Catch> RemoveAllForJob(JobId jobId) => RemoveWhere(js => js.JobId == jobId.Value);
 
     /// <inheritdoc/>
-    public async Task<Catch> RemoveAllNonFailedForJob(JobId jobId)
-    {
-        try
-        {
-            await using var dbContext = contextFactory();
-            var jobSteps = dbContext.JobSteps.Where(js => js.JobId == jobId.Value && js.Status != JobStepStatus.Failed);
-            dbContext.JobSteps.RemoveRange(jobSteps);
-            await dbContext.SaveChangesAsync();
-            return Catch.Success();
-        }
-        catch (Exception ex)
-        {
-            return ex;
-        }
-    }
+    public Task<Catch> RemoveAllNonFailedForJob(JobId jobId) => RemoveWhere(js => js.JobId == jobId.Value && js.Status != JobStepStatus.Failed);
 
     /// <inheritdoc/>
     public async Task<Catch> Remove(JobId jobId, JobStepId jobStepId)
@@ -82,14 +55,7 @@ public class JobStepStorage(Func<JobsDbContext> contextFactory) : IJobStepStorag
         try
         {
             await using var dbContext = contextFactory();
-            var query = dbContext.JobSteps.Where(js => js.JobId == jobId.Value);
-
-            if (statuses.Length > 0)
-            {
-                query = query.Where(js => statuses.Contains(js.Status));
-            }
-
-            var jobSteps = await query.ToListAsync();
+            var jobSteps = await StepsOfJob(dbContext, jobId, statuses).ToListAsync();
             return jobSteps.Select(js => js.ToJobStepState()).ToImmutableList();
         }
         catch (Exception ex)
@@ -104,14 +70,7 @@ public class JobStepStorage(Func<JobsDbContext> contextFactory) : IJobStepStorag
         try
         {
             await using var dbContext = contextFactory();
-            var query = dbContext.JobSteps.Where(js => js.JobId == jobId.Value);
-
-            if (statuses.Length > 0)
-            {
-                query = query.Where(js => statuses.Contains(js.Status));
-            }
-
-            return await query.CountAsync();
+            return await StepsOfJob(dbContext, jobId, statuses).CountAsync();
         }
         catch (Exception ex)
         {
@@ -267,6 +226,27 @@ public class JobStepStorage(Func<JobsDbContext> contextFactory) : IJobStepStorag
             }
 
             return default(None);
+        }
+        catch (Exception ex)
+        {
+            return ex;
+        }
+    }
+
+    static IQueryable<JobStep> StepsOfJob(JobsDbContext dbContext, JobId jobId, JobStepStatus[] statuses)
+    {
+        var query = dbContext.JobSteps.Where(js => js.JobId == jobId.Value);
+        return statuses.Length > 0 ? query.Where(js => statuses.Contains(js.Status)) : query;
+    }
+
+    async Task<Catch> RemoveWhere(Expression<Func<JobStep, bool>> predicate)
+    {
+        try
+        {
+            await using var dbContext = contextFactory();
+            dbContext.JobSteps.RemoveRange(dbContext.JobSteps.Where(predicate));
+            await dbContext.SaveChangesAsync();
+            return Catch.Success();
         }
         catch (Exception ex)
         {
