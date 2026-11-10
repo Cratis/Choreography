@@ -124,6 +124,11 @@ jobs:
       - name: Verify packed Orleans dependencies for supported frameworks
         run: bash .github/package-smoke/verify.sh
 
+      # The build above compiles net11.0 only. Published libraries also target net10.0, so build them the way publish
+      # does, for every packaged target framework. This runs last so the specification outputs above stay untouched.
+      - name: Build packaged libraries for every target framework
+        run: dotnet build --configuration Release -p:IsPackaging=true -p:CratisProxiesOutputPath=
+
       - name: Upload specification results
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

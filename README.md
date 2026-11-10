@@ -121,12 +121,12 @@ It is consolidated here from [Chronicle](https://github.com/Cratis/Chronicle) (t
 | [`Cratis.Choreography`](http://nuget.org/packages/cratis.choreography) | The workflow engine, state machines, the job engine, Workers, typed grain keys, serializers, silo hosting |
 | [`Cratis.Choreography.Storage`](http://nuget.org/packages/cratis.choreography.storage) | The jobs and patch storage APIs, the scope resolver, the in-memory providers |
 | [`Cratis.Choreography.Storage.MongoDB`](http://nuget.org/packages/cratis.choreography.storage.mongodb) | The MongoDB jobs and patch storage provider |
-| [`Cratis.Choreography.Storage.Sql`](http://nuget.org/packages/cratis.choreography.storage.sql) | The SQL jobs and patch storage provider (EF Core; net10, matching EF Core 10) |
+| [`Cratis.Choreography.Storage.Sql`](http://nuget.org/packages/cratis.choreography.storage.sql) | The SQL jobs and patch storage provider (EF Core 10; net10 and net11) |
 | [`Cratis.Choreography.Chronicle`](http://nuget.org/packages/cratis.choreography.chronicle) | Event-sourced state machines and workflows driven by Chronicle events |
 
 ## 🚀 Getting Started
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and, for anything but the in-memory storage, a MongoDB server.
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) and, for anything but the in-memory storage, a MongoDB server.
 
 ```bash
 dotnet add package Cratis.Choreography
