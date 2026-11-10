@@ -139,6 +139,13 @@ public abstract partial class Job<TRequest, TJobState>
     /// <returns>Collection of <see cref="JobStepDetails"/> .</returns>
     protected abstract Task<IImmutableList<JobStepDetails>> PrepareSteps(TRequest request);
 
+    static bool PreparationWasIncomplete(Result<bool, OneOf.Types.None> result) => result.TryGetResult(out var allPrepared) && !allPrepared;
+
+    static StartJobError GetFailedStartError(int failedSteps, int totalSteps, int stepsLeftWaiting) =>
+        failedSteps == totalSteps && stepsLeftWaiting == 0
+            ? StartJobError.AllJobStepsFailedStarting
+            : StartJobError.FailedStartingSomeJobSteps;
+
     async Task<Result<JobError>> PerformStepEventHandling(JobStepId stepId, JobStepResult jobStepResult, bool stopDuringRemoval = false)
     {
         _hasLiveStepTracking = true;
@@ -397,8 +404,6 @@ public abstract partial class Job<TRequest, TJobState>
         return await TryEnterRunning() ? Result<StartJobError>.Success() : StartJobError.Unknown;
     }
 
-    static bool PreparationWasIncomplete(Result<bool, OneOf.Types.None> result) => result.TryGetResult(out var allPrepared) && !allPrepared;
-
     async Task<Result<bool, OneOf.Types.None>> TryPrepareAllJobSteps(ReadOnlyDictionary<JobStepId, JobStepGrainAndRequest> jobStepRequests)
     {
         foreach (var chunk in jobStepRequests.Chunk(MaxConcurrentJobStepStartups))
@@ -476,11 +481,6 @@ public abstract partial class Job<TRequest, TJobState>
         CountFailedStarts(failedJobStepIds);
         return GetFailedStartError(failedJobStepIds.Count, totalJobSteps, stepsLeftWaiting);
     }
-
-    static StartJobError GetFailedStartError(int failedSteps, int totalSteps, int stepsLeftWaiting) =>
-        failedSteps == totalSteps && stepsLeftWaiting == 0
-            ? StartJobError.AllJobStepsFailedStarting
-            : StartJobError.FailedStartingSomeJobSteps;
 
     void CountFailedStarts(List<JobStepId> failedJobStepIds)
     {

@@ -106,9 +106,6 @@ public abstract partial class JobStep<TRequest, TResult, TState>(
 
     bool LeasesAreOn => _options.StepLeaseTimeout > TimeSpan.Zero && _options.StepLeaseTimeout != Timeout.InfiniteTimeSpan;
 
-    bool ShouldScheduleCheckpointTimer(TimeSpan flushInterval) =>
-        flushInterval > TimeSpan.Zero && ((_checkpoints.BatchInterval > 1 && !CheckpointAfterEveryBatch) || LeasesAreOn);
-
     bool LeaseNeedsRenewal =>
         LeasesAreOn &&
         State.Status is JobStepStatus.Running &&
@@ -480,6 +477,9 @@ public abstract partial class JobStep<TRequest, TResult, TState>(
     /// </remarks>
     /// <returns>The result.</returns>
     protected abstract ValueTask<TResult?> CreateCancelledResultFromCurrentState(TState currentState);
+
+    bool ShouldScheduleCheckpointTimer(TimeSpan flushInterval) =>
+        flushInterval > TimeSpan.Zero && ((_checkpoints.BatchInterval > 1 && !CheckpointAfterEveryBatch) || LeasesAreOn);
 
     void RenewLease()
     {

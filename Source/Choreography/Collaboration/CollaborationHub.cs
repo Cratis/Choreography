@@ -163,6 +163,31 @@ public class CollaborationHub : ICollaborationHub, ILocalCollaborationDelivery
     static Task Send(Connection connection, object message) =>
         connection.SendRaw(JsonSerializer.SerializeToUtf8Bytes(message, _json));
 
+    static PresenceMessage? ReadPresence(ReadOnlySpan<byte> payload)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<PresenceMessage>(payload, _json);
+        }
+        catch (JsonException)
+        {
+            return null; // malformed frame - ignore rather than dropping the session
+        }
+    }
+
+    static (Collaborator State, bool Moved) ApplyPresence(Collaborator state, PresenceMessage message)
+    {
+        var moved = state.X != message.X || state.Y != message.Y;
+        return (state with
+        {
+            X = message.X,
+            Y = message.Y,
+            Area = message.Area ?? string.Empty,
+            SurfaceId = message.SurfaceId ?? string.Empty,
+            IsIdle = !moved && state.IsIdle,
+        }, moved);
+    }
+
     async Task ReceiveLoop(string groupKey, ConcurrentDictionary<string, Connection> group, Connection connection, CancellationToken cancellationToken)
     {
         var buffer = new byte[4 * 1024];
@@ -279,31 +304,6 @@ public class CollaborationHub : ICollaborationHub, ILocalCollaborationDelivery
 
     Task BroadcastToGroup(string groupKey, string exceptSessionId, object message) =>
         _groups.TryGetValue(groupKey, out var group) ? BroadcastLocal(group, exceptSessionId, message) : Task.CompletedTask;
-
-    static PresenceMessage? ReadPresence(ReadOnlySpan<byte> payload)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<PresenceMessage>(payload, _json);
-        }
-        catch (JsonException)
-        {
-            return null; // malformed frame - ignore rather than dropping the session
-        }
-    }
-
-    static (Collaborator State, bool Moved) ApplyPresence(Collaborator state, PresenceMessage message)
-    {
-        var moved = state.X != message.X || state.Y != message.Y;
-        return (state with
-        {
-            X = message.X,
-            Y = message.Y,
-            Area = message.Area ?? string.Empty,
-            SurfaceId = message.SurfaceId ?? string.Empty,
-            IsIdle = !moved && state.IsIdle,
-        }, moved);
-    }
 
     sealed record PresenceMessage(string Type, double X, double Y, string? Area, string? SurfaceId);
 

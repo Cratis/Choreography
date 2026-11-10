@@ -108,6 +108,19 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
     /// </summary>
     protected bool AllStepsCompletedSuccessfully => State.Progress.SuccessfulSteps == State.Progress.TotalSteps;
 
+    bool ResumeNeedsAdmission =>
+        State.Status is JobStatus.PreparingJob or JobStatus.PreparingSteps or JobStatus.StartingSteps ||
+        (JobIsPrepared() && State.Status is JobStatus.Running or JobStatus.Stopped or JobStatus.Removing);
+
+    bool ResumeNeedsStepReload => _jobStepGrains is null or { Count: 0 } || IsStaged || EffectiveMaxActiveSteps is not null;
+
+    bool ShouldClearCompletedState => State.Status switch
+    {
+        JobStatus.Failed => false,
+        JobStatus.CompletedWithFailures => !KeepAfterCompletedWithFailures,
+        _ => !KeepAfterCompleted
+    };
+
     /// <inheritdoc/>
     public override async Task OnActivateAsync(CancellationToken cancellationToken)
     {
@@ -316,7 +329,7 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
             // it back into Running for the next resume to find. That is the same permanent wedge as the state
             // above, reached when the progress for a completed step was never persisted (#3944). The steps
             // themselves are the record of what happened, so recount from them before finalizing.
-            if (_jobStepGrains.Count == 0)
+            if (_jobStepGrains is null or { Count: 0 })
             {
                 _logger.FinalizingJobLeftRunningAfterAllStepsCompleted();
                 await ReconcileProgressFromJobSteps();
@@ -372,17 +385,6 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
             return Result.Failed<ResumeJobSuccess, ResumeJobError>(CannotResumeJobError.Unknown);
         }
     }
-
-    JobProgress? SnapshotStoppedProgress() =>
-        State.Status is JobStatus.Stopped && !State.DrainPending && State.Progress.IsStopped
-            ? State.Progress with { Stages = State.Progress.Stages.Select(stage => stage with { }).ToList() }
-            : null;
-
-    bool ResumeNeedsAdmission =>
-        State.Status is JobStatus.PreparingJob or JobStatus.PreparingSteps or JobStatus.StartingSteps ||
-        (JobIsPrepared() && State.Status is JobStatus.Running or JobStatus.Stopped or JobStatus.Removing);
-
-    bool ResumeNeedsStepReload => _jobStepGrains is null or { Count: 0 } || IsStaged || EffectiveMaxActiveSteps is not null;
 
     /// <inheritdoc/>
     public async Task<Result<StopJobError>> Stop()
@@ -540,6 +542,11 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
     /// </summary>
     /// <returns>The <see cref="JobDetails"/>.</returns>
     protected virtual JobDetails GetJobDetails() => JobDetails.NotSet;
+
+    JobProgress? SnapshotStoppedProgress() =>
+        State.Status is JobStatus.Stopped && !State.DrainPending && State.Progress.IsStopped
+            ? State.Progress with { Stages = State.Progress.Stages.Select(stage => stage with { }).ToList() }
+            : null;
 
     /// <summary>
     /// Schedule preparing and starting the job's steps on the grain's own next turn, so <see cref="Start"/> can
@@ -794,13 +801,6 @@ public abstract partial class Job<TRequest, TJobState> : Grain<TJobState>, IJob<
             StatusChanged(State.Progress.HasFailures ? JobStatus.CompletedWithFailures : JobStatus.CompletedSuccessfully);
         }
     }
-
-    bool ShouldClearCompletedState => State.Status switch
-    {
-        JobStatus.Failed => false,
-        JobStatus.CompletedWithFailures => !KeepAfterCompletedWithFailures,
-        _ => !KeepAfterCompleted
-    };
 
     void DeactivateOnIdleDuringShutdown()
     {

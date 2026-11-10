@@ -22,6 +22,8 @@ public abstract partial class Job<TRequest, TJobState>
 
     int? EffectiveMaxActiveSteps => MaxActiveSteps is { } max ? Math.Max(1, max) : null;
 
+    bool CanFillWindow => EffectiveMaxActiveSteps is not null && !State.DrainPending && State.Status is JobStatus.Running or JobStatus.StartingSteps;
+
     /// <summary>
     /// Picks the steps that may be started now: the ones already started or found running in storage, and as many of
     /// the rest as the window has room for.
@@ -76,8 +78,6 @@ public abstract partial class Job<TRequest, TJobState>
             await FillWindowOfAnActivationThatMayDispatch();
         }
     }
-
-    bool CanFillWindow => EffectiveMaxActiveSteps is not null && !State.DrainPending && State.Status is (JobStatus.Running or JobStatus.StartingSteps);
 
     async Task FillWindowOfAnActivationThatMayDispatch()
     {

@@ -8,6 +8,13 @@ namespace Cratis.Choreography.Jobs;
 
 public abstract partial class JobStep<TRequest, TResult, TState>
 {
+    bool HasSettledTerminalState =>
+        _run is not { IsSettled: false } && State.Status is JobStepStatus.CompletedSuccessfully or JobStepStatus.CompletedWithFailure or JobStepStatus.Failed or JobStepStatus.Stopped;
+
+    bool IsAlreadyStopped => State.Status is JobStepStatus.Stopped && _run is not { IsSettled: false };
+
+    bool ParentLookupFailed => _job is null && State.IsPrepared;
+
     /// <inheritdoc/>
     /// <remarks>
     /// Cancels the work and waits for it and its activation callbacks to settle, bounded by
@@ -305,13 +312,6 @@ public abstract partial class JobStep<TRequest, TResult, TState>
             }
         }
     }
-
-    bool HasSettledTerminalState =>
-        _run is not { IsSettled: false } && State.Status is JobStepStatus.CompletedSuccessfully or JobStepStatus.CompletedWithFailure or JobStepStatus.Failed or JobStepStatus.Stopped;
-
-    bool IsAlreadyStopped => State.Status is JobStepStatus.Stopped && _run is not { IsSettled: false };
-
-    bool ParentLookupFailed => _job is null && State.IsPrepared;
 
     bool OutcomeNeedsPersisting(JobStepRun run, JobStepStatus status) =>
         !run.OutcomePersisted && State.Status != status && State.IsPrepared;

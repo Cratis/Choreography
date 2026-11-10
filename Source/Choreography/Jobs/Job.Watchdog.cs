@@ -148,6 +148,11 @@ public abstract partial class Job<TRequest, TJobState>
         return now - lastSign >= leaseTimeout;
     }
 
+    static bool LeaseTimeoutIsEnabled(TimeSpan leaseTimeout) => leaseTimeout > TimeSpan.Zero && leaseTimeout != Timeout.InfiniteTimeSpan;
+
+    static bool LeaseOwnerIsGone(JobStepState step, ISet<string>? activeSilos) =>
+        step.Lease is null || activeSilos?.Contains(step.Lease.Owner) == false;
+
     void EnsureWatchdog(TimeSpan dueTime)
     {
         if (_watchdogTimer is not null || !WatchdogIsEnabled)
@@ -249,11 +254,6 @@ public abstract partial class Job<TRequest, TJobState>
 
         _ = await HandleCompletionResult(await HandleCompletion());
     }
-
-    static bool LeaseTimeoutIsEnabled(TimeSpan leaseTimeout) => leaseTimeout > TimeSpan.Zero && leaseTimeout != Timeout.InfiniteTimeSpan;
-
-    static bool LeaseOwnerIsGone(JobStepState step, ISet<string>? activeSilos) =>
-        step.Lease is null || activeSilos?.Contains(step.Lease.Owner) == false;
 
     async Task RestartStepsWhoseOwnerIsGone()
     {

@@ -9,10 +9,10 @@ public abstract partial class Job<TRequest, TJobState>
 {
     readonly HashSet<JobStepId> _resumeStartFailures = [];
 
+    bool IsRunningAfterAStop => State.Status is JobStatus.Running && StoppedStepsPredateLastRunning();
+
     static bool IsAlreadyStarted(Result<StartJobStepError> result) =>
         result.TryGetError(out var error) && error is StartJobStepError.AlreadyStarted;
-
-    bool IsRunningAfterAStop => State.Status is JobStatus.Running && StoppedStepsPredateLastRunning();
 
     static ResumeJobSuccess GetResumeSuccess(bool reportAlreadyRunning, int stepCount, bool allLive) =>
         reportAlreadyRunning && stepCount > 0 && allLive

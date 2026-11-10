@@ -22,6 +22,22 @@ public abstract partial class Job<TRequest, TJobState>
 
     bool HasStepPlan => State.StepPlan is not null || State.HasStoredStepPlan;
 
+    static void CountStepInStage(JobStageProgress stage, JobStepState? state)
+    {
+        if (state is null || state.Status is JobStepStatus.CompletedSuccessfully)
+        {
+            stage.SuccessfulSteps++;
+        }
+        else if (state.Status is JobStepStatus.Failed or JobStepStatus.CompletedWithFailure)
+        {
+            stage.FailedSteps++;
+        }
+        else if (state.Status is JobStepStatus.Unreachable)
+        {
+            stage.UnreachableSteps++;
+        }
+    }
+
     List<PlannedJobStep> SaveStepPlan(IImmutableList<JobStepDetails> steps) => steps.Select(SavePlannedStep).ToList();
 
     PlannedJobStep SavePlannedStep(JobStepDetails step)
@@ -217,7 +233,7 @@ public abstract partial class Job<TRequest, TJobState>
         return await RecoverStepStartup();
     }
 
-    void ReconcileStagesFromPlan(IReadOnlyList<PlannedJobStep> plan, IReadOnlyDictionary<JobStepId, JobStepState> byId)
+    void ReconcileStagesFromPlan(IReadOnlyList<PlannedJobStep> plan, Dictionary<JobStepId, JobStepState> byId)
     {
         State.Progress.Stages = JobStages.Plan(plan.Select(step => step.Stage));
         foreach (var step in plan)
@@ -232,23 +248,7 @@ public abstract partial class Job<TRequest, TJobState>
         }
     }
 
-    static void CountStepInStage(JobStageProgress stage, JobStepState? state)
-    {
-        if (state is null || state.Status is JobStepStatus.CompletedSuccessfully)
-        {
-            stage.SuccessfulSteps++;
-        }
-        else if (state.Status is JobStepStatus.Failed or JobStepStatus.CompletedWithFailure)
-        {
-            stage.FailedSteps++;
-        }
-        else if (state.Status is JobStepStatus.Unreachable)
-        {
-            stage.UnreachableSteps++;
-        }
-    }
-
-    void RestoreProgressFromStorage(IReadOnlyList<PlannedJobStep> plan, IReadOnlyCollection<JobStepState> steps, IReadOnlyDictionary<JobStepId, JobStepState> byId)
+    void RestoreProgressFromStorage(IReadOnlyList<PlannedJobStep> plan, IReadOnlyCollection<JobStepState> steps, Dictionary<JobStepId, JobStepState> byId)
     {
         State.Progress.TotalSteps = plan.Count;
         State.Progress.SuccessfulSteps = plan.Count(step => !byId.TryGetValue(step.Id, out var state) || state.Status is JobStepStatus.CompletedSuccessfully);
