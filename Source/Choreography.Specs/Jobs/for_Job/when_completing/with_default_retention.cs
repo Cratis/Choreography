@@ -7,7 +7,8 @@ public class with_default_retention : given.a_job_ready_to_complete
 {
     Task Because() => _job.Resume();
 
-    [Fact] void should_write_the_terminal_status_before_clearing() => Received.InOrder(() =>
+    [Fact]
+    void should_write_the_terminal_status_before_clearing() => Received.InOrder(() =>
     {
         _stateStorage.WriteStateAsync();
         _stateStorage.ClearStateAsync();

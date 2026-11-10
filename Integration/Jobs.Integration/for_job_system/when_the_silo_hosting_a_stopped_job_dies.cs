@@ -39,7 +39,8 @@ public class when_the_silo_hosting_a_stopped_job_dies : Specification
         _state = await job.Inspect();
     }
 
-    [Fact] void should_preserve_the_durable_stop_during_automatic_recovery()
+    [Fact]
+    void should_preserve_the_durable_stop_during_automatic_recovery()
     {
         _state.Status.ShouldEqual(JobStatus.Stopped);
         _state.Progress.StoppedSteps.ShouldEqual(1);

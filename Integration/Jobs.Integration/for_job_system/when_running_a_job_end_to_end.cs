@@ -44,7 +44,8 @@ public class when_running_a_job_end_to_end : Specification
         }
     }
 
-    [Fact] void should_complete_the_job_with_all_steps_and_persisted_state()
+    [Fact]
+    void should_complete_the_job_with_all_steps_and_persisted_state()
     {
         _jobId.Value.ShouldNotEqual(Guid.Empty);
         _jobState.ShouldNotBeNull();

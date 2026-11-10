@@ -36,7 +36,8 @@ public class when_two_silos_recover_the_same_live_job : Specification
         _state = await job.Inspect();
     }
 
-    [Fact] void should_not_duplicate_live_work_or_corrupt_completion()
+    [Fact]
+    void should_not_duplicate_live_work_or_corrupt_completion()
     {
         _fixture.Signals.Performers.Count.ShouldEqual(1);
         _state.Status.ShouldEqual(JobStatus.CompletedSuccessfully);

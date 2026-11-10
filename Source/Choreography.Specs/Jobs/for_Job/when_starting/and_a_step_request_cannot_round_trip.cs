@@ -15,7 +15,8 @@ public class and_a_step_request_cannot_round_trip : given.a_job_with_a_durable_p
 
     async Task Because() => _start = await _job.Start(new());
 
-    [Fact] void should_fail_with_a_typed_reason()
+    [Fact]
+    void should_fail_with_a_typed_reason()
     {
         _start.TryGetError(out var error).ShouldBeTrue();
         error.ShouldEqual(StartJobError.InvalidStepPlan);

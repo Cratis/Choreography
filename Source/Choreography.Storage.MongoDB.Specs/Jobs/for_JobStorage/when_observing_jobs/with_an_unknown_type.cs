@@ -25,7 +25,8 @@ public class with_an_unknown_type : given.an_observed_job_storage
     [Fact] void should_continue_observing_registered_jobs() => _afterKnown.Select(job => job.Id).ShouldContainOnly(_firstJob.Id, _secondJob.Id, _thirdJob.Id);
     [Fact] void should_count_a_registered_insert() => _afterKnownTotal.ShouldEqual(3);
     [Fact] void should_deserialize_registered_requests() => _afterKnown.Select(job => job.Request).ShouldContainOnly(_firstJob.Request, _secondJob.Request, _thirdJob.Request);
-    [Fact] void should_filter_the_query_by_persisted_type_name_and_status() => _collection.Received(1).FindAsync(
+    [Fact]
+    void should_filter_the_query_by_persisted_type_name_and_status() => _collection.Received(1).FindAsync(
         Arg.Is<FilterDefinition<JobState>>(filter => Render(filter).Equals(new BsonDocument
         {
             { "type", new BsonDocument("$in", new BsonArray { "custom-job-name" }) },

@@ -48,7 +48,8 @@ public class when_the_silo_dies_while_resuming_a_stopped_job : Specification
         _state = await job.Inspect();
     }
 
-    [Fact] void should_recover_the_interrupted_resume_on_a_surviving_silo()
+    [Fact]
+    void should_recover_the_interrupted_resume_on_a_surviving_silo()
     {
         _survivor.ShouldNotEqual(_fixture.VictimAddress);
         _state.Status.ShouldEqual(JobStatus.CompletedSuccessfully);

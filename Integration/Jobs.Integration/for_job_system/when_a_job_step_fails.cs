@@ -85,9 +85,11 @@ public class when_a_job_step_fails : Specification
 
     [Fact] void should_keep_the_failed_step() => _failedJobSteps.Count.ShouldEqual(1);
 
-    [Fact] void should_return_the_failed_step_from_an_unfiltered_read() =>
+    [Fact]
+    void should_return_the_failed_step_from_an_unfiltered_read() =>
         _jobSteps.Count(_ => _.Status == JobStepStatus.CompletedWithFailure).ShouldEqual(1);
 
-    [Fact] void should_not_keep_the_successful_step() =>
+    [Fact]
+    void should_not_keep_the_successful_step() =>
         _jobSteps.Count(_ => _.Status == JobStepStatus.CompletedSuccessfully).ShouldEqual(0);
 }

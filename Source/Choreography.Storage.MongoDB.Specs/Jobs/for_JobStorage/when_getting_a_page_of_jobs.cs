@@ -31,14 +31,16 @@ public class when_getting_a_page_of_jobs : given.a_job_storage
 
     [Fact] void should_succeed() => _result.IsSuccess.ShouldBeTrue();
 
-    [Fact] void should_apply_type_status_and_retention_filters_in_storage() => _collection.Received(1).FindAsync(
+    [Fact]
+    void should_apply_type_status_and_retention_filters_in_storage() => _collection.Received(1).FindAsync(
         Arg.Is<FilterDefinition<JobState>>(filter => filter.Render(new RenderArgs<JobState>(BsonSerializer.LookupSerializer<JobState>(), BsonSerializer.SerializerRegistry)).Equals(
             ExpectedFilter().Render(new RenderArgs<JobState>(BsonSerializer.LookupSerializer<JobState>(), BsonSerializer.SerializerRegistry)))),
 
         Arg.Any<FindOptions<JobState, BsonDocument>>(),
         Arg.Any<CancellationToken>());
 
-    [Fact] void should_apply_paging_in_storage() => _collection.Received(1).FindAsync(
+    [Fact]
+    void should_apply_paging_in_storage() => _collection.Received(1).FindAsync(
         Arg.Any<FilterDefinition<JobState>>(),
         Arg.Is<FindOptions<JobState, BsonDocument>>(options =>
             options.Skip == _query.Skip &&

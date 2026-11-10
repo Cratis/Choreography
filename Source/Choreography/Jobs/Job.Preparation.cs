@@ -208,7 +208,8 @@ public abstract partial class Job<TRequest, TJobState>
             step.Id,
             new(JobId, JobKey.Scope, JobKey.Namespace),
             JsonSerializer.Deserialize(step.RequestJson, Type.GetType(step.RequestType, throwOnError: true)!, StepPlanSerializerOptions)!,
-            typeof(object)) { Stage = step.Stage }).ToImmutableList();
+            typeof(object))
+        { Stage = step.Stage }).ToImmutableList();
 
         // No step can have executed in PreparingSteps. Missing state here is an unprepared step, not a success.
         State.Progress.TotalSteps = plan.Count;
