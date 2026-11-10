@@ -164,10 +164,14 @@ export class CollaborationClient {
 
     #flushPresence(): void {
         this.#presenceFlushTimer = undefined;
-        if (!this.#joined || !this.#pendingPresence || !this.#isSocketOpen()) return;
+        if (!this.#canSendPresence()) return;
         this.#lastPresenceSentAt = performance.now();
         this.#socket?.send(JSON.stringify({ type: 'presence', ...this.#pendingPresence }));
         this.#pendingPresence = undefined;
+    }
+
+    #canSendPresence(): boolean {
+        return this.#joined && !!this.#pendingPresence && this.#isSocketOpen();
     }
 
     #connect(): void {
@@ -308,6 +312,14 @@ export class CollaborationClient {
         const existing = message.sessionId ? this.#collaborators.get(message.sessionId) : undefined;
         if (!existing) return;
 
+        const updated = this.#mergePresence(existing, message);
+        if (!updated) return;
+
+        this.#collaborators.set(existing.sessionId, updated);
+        this.#publish();
+    }
+
+    #mergePresence(existing: CollaboratorInfo, message: ServerMessage): CollaboratorInfo | undefined {
         const x = message.x ?? existing.x;
         const y = message.y ?? existing.y;
         const area = message.area ?? existing.area;
@@ -322,10 +334,7 @@ export class CollaborationClient {
         // occasional redundant tick still trims publishes - and every publish is a snapshot
         // rebuild plus a re-render of every subscriber.
         const unchanged = !moved && area === existing.area && surfaceId === existing.surfaceId && isIdle === existing.isIdle;
-        if (unchanged) return;
-
-        this.#collaborators.set(existing.sessionId, { ...existing, x, y, area, surfaceId, isIdle });
-        this.#publish();
+        return unchanged ? undefined : { ...existing, x, y, area, surfaceId, isIdle };
     }
 
     #handleIdle(message: ServerMessage): void {

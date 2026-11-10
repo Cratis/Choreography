@@ -42,48 +42,10 @@ public class OperationEngine(
     }
 
     /// <inheritdoc/>
-    public async Task<OperationOutcome> Undo(OperationScope scope, OperationActor actor)
-    {
-        using var guard = await locks.Acquire(scope, actor);
-        var entries = await history.GetFor(scope, actor);
-        var target = FindUndoTarget(entries);
-        if (target is null)
-        {
-            return OperationOutcome.NothingToUndo;
-        }
-
-        var (definition, reason) = await EvaluateUndo(target);
-        if (reason is not null)
-        {
-            return OperationOutcome.Blocked(reason);
-        }
-
-        var inverse = await definition!.CreateUndo(target, services);
-        var result = await Run(new RunRequest(scope, actor, target.Kind, OperationRole.Undo, target.Id, inverse, JsonSerializer.Serialize(inverse, inverse.GetType(), OperationJson.Options)));
-        return await TransitionOnSuccess(result.Outcome, target, OperationStatus.Undone);
-    }
+    public Task<OperationOutcome> Undo(OperationScope scope, OperationActor actor) => Reverse(scope, actor, OperationRole.Undo);
 
     /// <inheritdoc/>
-    public async Task<OperationOutcome> Redo(OperationScope scope, OperationActor actor)
-    {
-        using var guard = await locks.Acquire(scope, actor);
-        var entries = await history.GetFor(scope, actor);
-        var target = FindRedoTarget(entries);
-        if (target is null)
-        {
-            return OperationOutcome.NothingToRedo;
-        }
-
-        var (definition, reason) = await EvaluateRedo(target);
-        if (reason is not null)
-        {
-            return OperationOutcome.Blocked(reason);
-        }
-
-        var forward = await definition!.CreateRedo(target, services);
-        var result = await Run(new RunRequest(scope, actor, target.Kind, OperationRole.Redo, target.Id, forward, definition.SerializeIntent(forward)));
-        return await TransitionOnSuccess(result.Outcome, target, OperationStatus.Redone);
-    }
+    public Task<OperationOutcome> Redo(OperationScope scope, OperationActor actor) => Reverse(scope, actor, OperationRole.Redo);
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<OperationHistoryItem>> GetHistory(OperationScope scope, OperationActor actor)
@@ -173,6 +135,29 @@ public class OperationEngine(
         }
 
         return (definition, await definition.EvaluateRedo(target, services));
+    }
+
+    async Task<OperationOutcome> Reverse(OperationScope scope, OperationActor actor, OperationRole role)
+    {
+        var isUndo = role == OperationRole.Undo;
+        using var guard = await locks.Acquire(scope, actor);
+        var entries = await history.GetFor(scope, actor);
+        var target = isUndo ? FindUndoTarget(entries) : FindRedoTarget(entries);
+        if (target is null)
+        {
+            return isUndo ? OperationOutcome.NothingToUndo : OperationOutcome.NothingToRedo;
+        }
+
+        var (definition, reason) = await (isUndo ? EvaluateUndo(target) : EvaluateRedo(target));
+        if (reason is not null)
+        {
+            return OperationOutcome.Blocked(reason);
+        }
+
+        var command = await (isUndo ? definition!.CreateUndo(target, services) : definition!.CreateRedo(target, services));
+        var intent = isUndo ? JsonSerializer.Serialize(command, command.GetType(), OperationJson.Options) : definition.SerializeIntent(command);
+        var result = await Run(new RunRequest(scope, actor, target.Kind, role, target.Id, command, intent));
+        return await TransitionOnSuccess(result.Outcome, target, isUndo ? OperationStatus.Undone : OperationStatus.Redone);
     }
 
     async Task<OperationOutcome> TransitionOnSuccess(OperationOutcome outcome, OperationEntry target, OperationStatus status)

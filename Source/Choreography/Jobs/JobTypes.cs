@@ -53,29 +53,22 @@ public class JobTypes : IJobTypes, IJobTypesCatalog
     }
 
     /// <inheritdoc />
-    public Result<Type, IJobTypes.GetClrTypeForError> GetClrTypeFor(JobType type)
-    {
-        if (type == JobType.NotSet)
-        {
-            return IJobTypes.GetClrTypeForError.JobTypeIsNotSet;
-        }
-
-        return _jobTypes.TryGetValue(type, out var jobClrType)
-            ? jobClrType
-            : IJobTypes.GetClrTypeForError.CouldNotFindType;
-    }
+    public Result<Type, IJobTypes.GetClrTypeForError> GetClrTypeFor(JobType type) =>
+        Lookup(_jobTypes, type, IJobTypes.GetClrTypeForError.JobTypeIsNotSet, IJobTypes.GetClrTypeForError.CouldNotFindType);
 
     /// <inheritdoc />
-    public Result<Type, IJobTypes.GetRequestClrTypeForError> GetRequestClrTypeFor(JobType type)
+    public Result<Type, IJobTypes.GetRequestClrTypeForError> GetRequestClrTypeFor(JobType type) =>
+        Lookup(_jobRequestTypes, type, IJobTypes.GetRequestClrTypeForError.JobTypeIsNotSet, IJobTypes.GetRequestClrTypeForError.CouldNotFindType);
+
+    static Result<Type, TError> Lookup<TError>(Dictionary<JobType, Type> map, JobType type, TError notSet, TError notFound)
+        where TError : struct, Enum
     {
         if (type == JobType.NotSet)
         {
-            return IJobTypes.GetRequestClrTypeForError.JobTypeIsNotSet;
+            return notSet;
         }
 
-        return _jobRequestTypes.TryGetValue(type, out var jobRequestClrType)
-            ? jobRequestClrType
-            : IJobTypes.GetRequestClrTypeForError.CouldNotFindType;
+        return map.TryGetValue(type, out var clrType) ? clrType : notFound;
     }
 
     static bool IsDiscoverableJob(Type type) =>

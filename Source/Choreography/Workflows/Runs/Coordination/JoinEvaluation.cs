@@ -1,6 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Cratis.Choreography.Workflows.Contracts;
 using Cratis.Choreography.Workflows.Graphs;
@@ -58,7 +59,7 @@ public static class JoinEvaluation
         var succeeded = results.Count(result => CountsAsSucceeded(result.Result.Status));
         var satisfied = IsSatisfied(configuration, succeeded, results.Count);
 
-        if (!satisfied && results.Exists(result => string.Equals(result.Result.Status, Running, StringComparison.Ordinal)))
+        if (IsAwaitingBranches(satisfied, results))
         {
             return false;
         }
@@ -73,6 +74,9 @@ public static class JoinEvaluation
         work.Record(new WorkflowBranchesJoined(execution, satisfied ? WellKnownOutlets.Completed : WellKnownOutlets.Partial, data));
         return true;
     }
+
+    static bool IsAwaitingBranches(bool satisfied, List<(WorkflowBranchKey Key, (string Status, string Outlet, JsonNode? Output) Result)> results) =>
+        !satisfied && results.Exists(result => string.Equals(result.Result.Status, Running, StringComparison.Ordinal));
 
     static bool IsSatisfied(JoinConfiguration configuration, int succeeded, int total) => configuration.Mode switch
     {
@@ -104,6 +108,17 @@ public static class JoinEvaluation
         return pending || executions.Exists(execution => execution.IsInFlight);
     }
 
+    static bool TryFindCleanArrival(WorkflowRunState state, ActivationAnalysis analysis, WorkflowBranchKey branch, List<NodeExecution> executions, [NotNullWhen(true)] out NodeExecution? arrived)
+    {
+        arrived = null;
+        if (HasFailureOrAmbiguity(executions) || analysis.ArrivalOf(branch) is not { } arrival)
+        {
+            return false;
+        }
+
+        return state.Executions.TryGetValue(arrival, out arrived);
+    }
+
     static (string Status, string Outlet, JsonNode? Output) ResultOf(WorkflowRunState state, ActivationAnalysis analysis, WorkflowBranchKey branch)
     {
         var executions = state.Executions.Values.Where(execution => execution.Key.Branch == branch).ToList();
@@ -112,8 +127,7 @@ public static class JoinEvaluation
             return (Running, string.Empty, null);
         }
 
-        if (!HasFailureOrAmbiguity(executions)
-            && analysis.ArrivalOf(branch) is { } arrival && state.Executions.TryGetValue(arrival, out var arrived))
+        if (TryFindCleanArrival(state, analysis, branch, executions, out var arrived))
         {
             return (Succeeded, arrived.Outlet.Value, ParseOrNull(arrived.Output.Value));
         }

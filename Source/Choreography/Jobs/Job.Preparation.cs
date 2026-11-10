@@ -129,16 +129,14 @@ public abstract partial class Job<TRequest, TJobState>
         var size = plan.Count == 0 ? 0 : JsonSerializer.SerializeToUtf8Bytes(plan, StepPlanSerializerOptions).Length;
         if (StepPlanFitsInline(plan.Count, size) || Storage.StepPlans is not { } store)
         {
-            State.StepPlan = plan;
-            State.HasStoredStepPlan = false;
+            KeepStepPlanInline(plan);
             return;
         }
 
         if (!JobStepPlanStorageIsSupportedByEverySilo())
         {
             _logger.KeepingLargeStepPlanInline(size);
-            State.StepPlan = plan;
-            State.HasStoredStepPlan = false;
+            KeepStepPlanInline(plan);
             return;
         }
 
@@ -150,6 +148,12 @@ public abstract partial class Job<TRequest, TJobState>
         saved.RethrowError();
         State.StepPlan = null;
         State.HasStoredStepPlan = true;
+    }
+
+    void KeepStepPlanInline(List<PlannedJobStep> plan)
+    {
+        State.StepPlan = plan;
+        State.HasStoredStepPlan = false;
     }
 
     bool StepPlanFitsInline(int stepCount, int size) => stepCount == 0 || size <= JobsOptionsOrDefault.MaxInlineStepPlanSize;
@@ -224,19 +228,34 @@ public abstract partial class Job<TRequest, TJobState>
             {
                 continue;
             }
-            if (!byId.TryGetValue(step.Id, out var state) || state.Status is JobStepStatus.CompletedSuccessfully)
-            {
-                stage.SuccessfulSteps++;
-            }
-            else if (state.Status is JobStepStatus.Failed or JobStepStatus.CompletedWithFailure)
-            {
-                stage.FailedSteps++;
-            }
-            else if (state.Status is JobStepStatus.Unreachable)
-            {
-                stage.UnreachableSteps++;
-            }
+            CountStepInStage(stage, byId.GetValueOrDefault(step.Id));
         }
+    }
+
+    static void CountStepInStage(JobStageProgress stage, JobStepState? state)
+    {
+        if (state is null || state.Status is JobStepStatus.CompletedSuccessfully)
+        {
+            stage.SuccessfulSteps++;
+        }
+        else if (state.Status is JobStepStatus.Failed or JobStepStatus.CompletedWithFailure)
+        {
+            stage.FailedSteps++;
+        }
+        else if (state.Status is JobStepStatus.Unreachable)
+        {
+            stage.UnreachableSteps++;
+        }
+    }
+
+    void RestoreProgressFromStorage(IReadOnlyList<PlannedJobStep> plan, IReadOnlyCollection<JobStepState> steps, IReadOnlyDictionary<JobStepId, JobStepState> byId)
+    {
+        State.Progress.TotalSteps = plan.Count;
+        State.Progress.SuccessfulSteps = plan.Count(step => !byId.TryGetValue(step.Id, out var state) || state.Status is JobStepStatus.CompletedSuccessfully);
+        State.Progress.FailedSteps = steps.Count(step => step.Status is JobStepStatus.Failed or JobStepStatus.CompletedWithFailure);
+        State.Progress.UnreachableSteps = steps.Count(step => step.Status is JobStepStatus.Unreachable);
+        ForgetCountedStops();
+        ReconcileStagesFromPlan(plan, byId);
     }
 
     async Task<Result<ResumeJobSuccess, ResumeJobError>> RecoverStepStartup()
@@ -252,12 +271,7 @@ public abstract partial class Job<TRequest, TJobState>
         stored.RethrowError();
         var steps = stored.AsT0;
         var byId = steps.ToDictionary(step => step.Id.JobStepId);
-        State.Progress.TotalSteps = plan.Count;
-        State.Progress.SuccessfulSteps = plan.Count(step => !byId.TryGetValue(step.Id, out var state) || state.Status is JobStepStatus.CompletedSuccessfully);
-        State.Progress.FailedSteps = steps.Count(step => step.Status is JobStepStatus.Failed or JobStepStatus.CompletedWithFailure);
-        State.Progress.UnreachableSteps = steps.Count(step => step.Status is JobStepStatus.Unreachable);
-        ForgetCountedStops();
-        ReconcileStagesFromPlan(plan, byId);
+        RestoreProgressFromStorage(plan, steps, byId);
         _jobStepGrains = steps.Where(step => !IsDone(step.Status)).ToDictionary(step => step.Id.JobStepId, GetJobStepGrain);
 
         // Reconstructed terminal outcomes are already in the counters. Delayed reports must not count them again.
