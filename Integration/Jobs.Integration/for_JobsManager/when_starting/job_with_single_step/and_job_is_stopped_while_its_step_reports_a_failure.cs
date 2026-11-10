@@ -59,7 +59,9 @@ public class and_job_is_stopped_while_its_step_reports_a_failure(context context
             await Task.Delay(_queueing);
             hold.Release();
             await held.WaitAsync(Deadline);
-            StopCompletedWithinDeadline = await Task.WhenAny(stop, Task.Delay(Deadline)) == stop;
+            using var stopDeadline = new CancellationTokenSource();
+            StopCompletedWithinDeadline = await Task.WhenAny(stop, Task.Delay(Deadline, stopDeadline.Token)) == stop;
+            await stopDeadline.CancelAsync();
 
             try
             {
