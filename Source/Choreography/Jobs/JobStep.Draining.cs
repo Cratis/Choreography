@@ -13,6 +13,9 @@ public abstract partial class JobStep<TRequest, TResult, TState>
 
     bool IsAlreadyStopped => State.Status is JobStepStatus.Stopped && _run is not { IsSettled: false };
 
+    bool HasPersistedTerminalOutcome =>
+        State.Status is JobStepStatus.CompletedSuccessfully or JobStepStatus.CompletedWithFailure or JobStepStatus.Failed;
+
     bool ParentLookupFailed => _job is null && State.IsPrepared;
 
     /// <inheritdoc/>
@@ -104,6 +107,14 @@ public abstract partial class JobStep<TRequest, TResult, TState>
     static bool IsLaterGeneration(long? generation, long? than) =>
         generation is { } value && (than is not { } other || value > other);
 
+    static async Task WaitBeforeRetry(TimeSpan delay)
+    {
+        if (delay > TimeSpan.Zero)
+        {
+            await Task.Delay(delay);
+        }
+    }
+
     async Task<JobStepDrainResult> DrainRun(long generation, TimeSpan timeout)
     {
         if (HasSettledTerminalState)
@@ -159,31 +170,9 @@ public abstract partial class JobStep<TRequest, TResult, TState>
 
     async Task<Result<JobStepError>> StopRun(bool removing, long? generation, CancellationToken deadline)
     {
-        if (_deactivated)
+        if (TryAnswerStopWithoutStopping(removing, generation, out var answer))
         {
-            return JobStepError.Unknown;
-        }
-
-        // A stop of an earlier execution that arrives after the job resumed must not stop the resumed execution.
-        if (IsOfEarlierExecution(generation))
-        {
-            logger.IgnoringStopOfEarlierExecution(generation!.Value);
-            return Result.Success<JobStepError>();
-        }
-
-        // Any other stop wins over a start deferred until the previous stop settled.
-        _pendingStart = null;
-
-        // A late notification must not replace a terminal outcome or report a second outcome to the job.
-        if (State.Status is JobStepStatus.CompletedSuccessfully or JobStepStatus.CompletedWithFailure or JobStepStatus.Failed)
-        {
-            return Result.Success<JobStepError>();
-        }
-        if (!removing && IsAlreadyStopped)
-        {
-            logger.AlreadyStopped();
-            TryDeactivateOnIdle();
-            return Result.Success<JobStepError>();
+            return answer;
         }
 
         logger.Stopping();
@@ -199,6 +188,41 @@ public abstract partial class JobStep<TRequest, TResult, TState>
         }
 
         return run.StopError is { } error ? error : Result.Success<JobStepError>();
+    }
+
+    bool TryAnswerStopWithoutStopping(bool removing, long? generation, out Result<JobStepError> answer)
+    {
+        answer = Result.Success<JobStepError>();
+        if (_deactivated)
+        {
+            answer = JobStepError.Unknown;
+            return true;
+        }
+
+        // A stop of an earlier execution that arrives after the job resumed must not stop the resumed execution.
+        if (IsOfEarlierExecution(generation))
+        {
+            logger.IgnoringStopOfEarlierExecution(generation!.Value);
+            return true;
+        }
+
+        // Any other stop wins over a start deferred until the previous stop settled.
+        _pendingStart = null;
+
+        // A late notification must not replace a terminal outcome or report a second outcome to the job.
+        if (HasPersistedTerminalOutcome)
+        {
+            return true;
+        }
+
+        if (!removing && IsAlreadyStopped)
+        {
+            logger.AlreadyStopped();
+            TryDeactivateOnIdle();
+            return true;
+        }
+
+        return false;
     }
 
     async Task ClaimWithinStopTimeout(JobStepRun run)
@@ -224,7 +248,7 @@ public abstract partial class JobStep<TRequest, TResult, TState>
     async Task<JobStepDrainResult> PersistDrainedOutcome(JobStepRun run)
     {
         // A terminal status is already persisted - a success is written before it is reported.
-        if (State.Status is JobStepStatus.CompletedSuccessfully or JobStepStatus.CompletedWithFailure or JobStepStatus.Failed)
+        if (HasPersistedTerminalOutcome)
         {
             run.OutcomePersisted = true;
             return new(true, State.Status, run.Outcome);
@@ -267,24 +291,7 @@ public abstract partial class JobStep<TRequest, TResult, TState>
 
             // Not bounded: a stop that timed out for its caller still owes the job exactly one outcome.
             _ = await Drained(run, CancellationToken.None);
-            await _gate.WaitAsync();
-            try
-            {
-                // A deactivated activation reports nothing; recovery runs the step again.
-                if (IsCurrent(run))
-                {
-                    var outcome = await ClaimStopOutcome(run);
-                    if (_job is not null && outcome is not null)
-                    {
-                        StartDelivery(run, outcome);
-                    }
-                }
-            }
-            finally
-            {
-                _gate.Release();
-                run.Claimed();
-            }
+            await ClaimAndDeliverStopOutcome(run);
 
             // Whoever delivers - the work or this stop - a removed step is removed once that delivery is done. A stop
             // the job never acknowledged leaves the run no longer current, and the step is kept to report it again.
@@ -302,14 +309,40 @@ public abstract partial class JobStep<TRequest, TResult, TState>
         finally
         {
             run.Claimed();
+            ReleaseDeferredStart(run);
+        }
+    }
 
-            // A lookup failure also releases a deferred start; no failed reservation can strand it.
-            if (_pendingStart is not null && IsCurrent(run))
+    async Task ClaimAndDeliverStopOutcome(JobStepRun run)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            // A deactivated activation reports nothing; recovery runs the step again.
+            if (IsCurrent(run))
             {
-                _pendingStartTimer ??= this.RegisterGrainTimer(
-                    StartPending,
-                    new GrainTimerCreationOptions { DueTime = TimeSpan.Zero, Period = Timeout.InfiniteTimeSpan });
+                var outcome = await ClaimStopOutcome(run);
+                if (_job is not null && outcome is not null)
+                {
+                    StartDelivery(run, outcome);
+                }
             }
+        }
+        finally
+        {
+            _gate.Release();
+            run.Claimed();
+        }
+    }
+
+    void ReleaseDeferredStart(JobStepRun run)
+    {
+        // A lookup failure also releases a deferred start; no failed reservation can strand it.
+        if (_pendingStart is not null && IsCurrent(run))
+        {
+            _pendingStartTimer ??= this.RegisterGrainTimer(
+                StartPending,
+                new GrainTimerCreationOptions { DueTime = TimeSpan.Zero, Period = Timeout.InfiniteTimeSpan });
         }
     }
 
@@ -451,28 +484,7 @@ public abstract partial class JobStep<TRequest, TResult, TState>
                 return;
             }
 
-            if (outcome.TryGetError(out var error))
-            {
-                if (error.Cancelled && run.Phase is JobStepRunPhase.Removing)
-                {
-                    // A removed step deletes itself once this is done, and then nothing is left to report the stop.
-                    // So it reports until the job has stored it - a job that is gone answers that it has nothing to.
-                    await DeliverUntilAcknowledged(run, () => ReportStopToJob(run, error), untilAcknowledged: true);
-                }
-                else if (error.Cancelled)
-                {
-                    // A stop is reported before it is persisted: the step is not done, so it must not look done.
-                    _ = await ReportFailureToJob(run, error);
-                }
-                else
-                {
-                    await DeliverFailure(run, error);
-                }
-            }
-            else
-            {
-                await DeliverSuccess(run, outcome);
-            }
+            await DeliverOutcome(run, outcome);
         }
         catch (Exception ex)
         {
@@ -486,6 +498,32 @@ public abstract partial class JobStep<TRequest, TResult, TState>
                 TryDeactivateOnIdle();
             }
         }
+    }
+
+    async Task DeliverOutcome(JobStepRun run, JobStepResult outcome)
+    {
+        if (!outcome.TryGetError(out var error))
+        {
+            await DeliverSuccess(run, outcome);
+            return;
+        }
+
+        if (!error.Cancelled)
+        {
+            await DeliverFailure(run, error);
+            return;
+        }
+
+        if (run.Phase is JobStepRunPhase.Removing)
+        {
+            // A removed step deletes itself once this is done, and then nothing is left to report the stop.
+            // So it reports until the job has stored it - a job that is gone answers that it has nothing to.
+            await DeliverUntilAcknowledged(run, () => ReportStopToJob(run, error), untilAcknowledged: true);
+            return;
+        }
+
+        // A stop is reported before it is persisted: the step is not done, so it must not look done.
+        _ = await ReportFailureToJob(run, error);
     }
 
     async Task DeliverSuccess(JobStepRun run, JobStepResult outcome)
@@ -533,18 +571,9 @@ public abstract partial class JobStep<TRequest, TResult, TState>
         var delay = _options.StepDeliveryRetryDelay;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            try
+            if (await TryDeliverOnce(deliver, attempt))
             {
-                var reported = await deliver();
-                if (!reported.TryGetError(out var jobError))
-                {
-                    return;
-                }
-                logger.FailedReportJobStepOutcome(attempt, jobError);
-            }
-            catch (Exception ex)
-            {
-                logger.FailedDeliveringJobStepOutcome(ex, attempt);
+                return;
             }
 
             if (attempt == maxAttempts || !IsCurrent(run))
@@ -552,11 +581,8 @@ public abstract partial class JobStep<TRequest, TResult, TState>
                 break;
             }
 
-            if (delay > TimeSpan.Zero)
-            {
-                await Task.Delay(delay);
-            }
-            delay = TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, Math.Max(_options.MaxStepDeliveryRetryDelay.Ticks, delay.Ticks)));
+            await WaitBeforeRetry(delay);
+            delay = NextRetryDelay(delay);
             if (!IsCurrent(run))
             {
                 break;
@@ -569,6 +595,28 @@ public abstract partial class JobStep<TRequest, TResult, TState>
             logger.GaveUpDeliveringJobStepOutcome(maxAttempts);
         }
     }
+
+    async Task<bool> TryDeliverOnce(Func<Task<Result<JobError>>> deliver, int attempt)
+    {
+        try
+        {
+            var reported = await deliver();
+            if (!reported.TryGetError(out var jobError))
+            {
+                return true;
+            }
+            logger.FailedReportJobStepOutcome(attempt, jobError);
+        }
+        catch (Exception ex)
+        {
+            logger.FailedDeliveringJobStepOutcome(ex, attempt);
+        }
+
+        return false;
+    }
+
+    TimeSpan NextRetryDelay(TimeSpan delay) =>
+        TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, Math.Max(_options.MaxStepDeliveryRetryDelay.Ticks, delay.Ticks)));
 
     async Task<Result<JobStepError>> ReportFailureToJob(JobStepRun? run, PerformJobStepError error)
     {

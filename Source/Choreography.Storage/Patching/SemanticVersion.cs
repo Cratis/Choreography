@@ -1,8 +1,6 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using System.Globalization;
-
 namespace Cratis.Choreography.Patching;
 
 /// <summary>
@@ -70,7 +68,7 @@ public record SemanticVersion(int Major, int Minor, int Patch, string PreRelease
     /// <exception cref="ArgumentException">Thrown if the version string is invalid.</exception>
     public static SemanticVersion Parse(string version)
     {
-        if (!TryReadVersion(version, out var parsed))
+        if (!SemanticVersionParser.TryRead(version, out var parsed))
         {
             throw new ArgumentException($"Invalid semantic version: {version}", nameof(version));
         }
@@ -180,53 +178,4 @@ public record SemanticVersion(int Major, int Minor, int Patch, string PreRelease
 
         return string.CompareOrdinal(left, right);
     }
-
-    static bool TryReadVersion(string version, out SemanticVersion result)
-    {
-        result = NotSet;
-
-        if (!TrySplitSuffix(version, '+', IsBuildIdentifier, out var rest, out var buildMetadata) ||
-            !TrySplitSuffix(rest, '-', IsPreReleaseIdentifier, out rest, out var preRelease) ||
-            !TryReadCore(rest, out var major, out var minor, out var patch))
-        {
-            return false;
-        }
-
-        result = new SemanticVersion(major, minor, patch, preRelease, buildMetadata);
-        return true;
-    }
-
-    static bool TrySplitSuffix(string value, char separator, Func<string, bool> isValid, out string rest, out string suffix)
-    {
-        var index = value.IndexOf(separator, StringComparison.Ordinal);
-        if (index < 0)
-        {
-            rest = value;
-            suffix = string.Empty;
-            return true;
-        }
-
-        suffix = value[(index + 1)..];
-        rest = value[..index];
-        return AllIdentifiers(suffix, isValid);
-    }
-
-    static bool TryReadCore(string core, out int major, out int minor, out int patch)
-    {
-        major = minor = patch = 0;
-        var numbers = core.Split('.');
-        return numbers.Length == 3 &&
-            numbers.All(IsNumeric) &&
-            int.TryParse(numbers[0], NumberStyles.None, CultureInfo.InvariantCulture, out major) &&
-            int.TryParse(numbers[1], NumberStyles.None, CultureInfo.InvariantCulture, out minor) &&
-            int.TryParse(numbers[2], NumberStyles.None, CultureInfo.InvariantCulture, out patch);
-    }
-
-    static bool AllIdentifiers(string identifiers, Func<string, bool> isValid) => identifiers.Split('.').All(isValid);
-
-    static bool IsNumeric(string value) => value.Length > 0 && value.All(char.IsAsciiDigit) && (value.Length == 1 || value[0] != '0');
-
-    static bool IsBuildIdentifier(string value) => value.Length > 0 && value.All(character => char.IsAsciiLetterOrDigit(character) || character == '-');
-
-    static bool IsPreReleaseIdentifier(string value) => IsNumeric(value) || (value.Length > 0 && IsBuildIdentifier(value) && !value.All(char.IsAsciiDigit));
 }
