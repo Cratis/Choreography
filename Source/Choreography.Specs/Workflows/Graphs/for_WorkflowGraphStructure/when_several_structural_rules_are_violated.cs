@@ -11,5 +11,5 @@ public class when_several_structural_rules_are_violated : Runs.Coordination.for_
         [Trigger(), Trigger("second"), Action("a"), Action("a"), Timer("wait", TimeSpan.FromMinutes(1)) with { Configuration = "garbage" }, ForEach("each", "trigger", "items")],
         [Edge("trigger", "undeclared", "missing"), Edge("a", "next", "a")]))];
 
-    [Fact] void should_keep_the_existing_violation_order() => string.Join(",", _violations.Select(violation => $"{violation.Kind}:{violation.Node.Value}")).ShouldEqual("DuplicateNode:a,MoreThanOneTrigger:second,UnknownNode:missing,UndeclaredOutlet:trigger,InvalidConfiguration:wait,ForEachWithoutSingleJoin:each,UnboundedCycle:a");
+    [Fact] void should_keep_the_existing_violation_order() => string.Join(',', _violations.Select(violation => $"{violation.Kind}:{violation.Node.Value}")).ShouldEqual("DuplicateNode:a,MoreThanOneTrigger:second,UnknownNode:missing,UndeclaredOutlet:trigger,InvalidConfiguration:wait,ForEachWithoutSingleJoin:each,UnboundedCycle:a");
 }

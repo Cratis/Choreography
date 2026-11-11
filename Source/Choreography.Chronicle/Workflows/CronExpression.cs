@@ -104,15 +104,18 @@ public sealed class CronExpression
     /// <inheritdoc/>
     public override string ToString() => Text;
 
-    bool MatchesTime(DateTime utc) => _minutes.Contains(utc.Minute) && _hours.Contains(utc.Hour) && _months.Contains(utc.Month);
-
     static HashSet<int> Parse(string field, int minimum, int maximum)
     {
         var values = new HashSet<int>();
         foreach (var part in field.Split(','))
         {
             var stepAt = part.IndexOf('/', StringComparison.Ordinal);
-            var step = ParseStep(field, part, stepAt);
+            var step = ParseStep(part, stepAt);
+            if (step < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(field), "a step must be at least one");
+            }
+
             var range = stepAt < 0 ? part : part[..stepAt];
             var (from, to) = ParseRange(range, stepAt >= 0, minimum, maximum);
             if (IsOutside(from, to, minimum, maximum))
@@ -129,16 +132,8 @@ public sealed class CronExpression
         return values;
     }
 
-    static int ParseStep(string field, string part, int stepAt)
-    {
-        var step = stepAt < 0 ? 1 : int.Parse(part[(stepAt + 1)..], CultureInfo.InvariantCulture);
-        if (step < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(field), "a step must be at least one");
-        }
-
-        return step;
-    }
+    static int ParseStep(string part, int stepAt) =>
+        stepAt < 0 ? 1 : int.Parse(part[(stepAt + 1)..], CultureInfo.InvariantCulture);
 
     static (int From, int To) ParseRange(string range, bool stepped, int minimum, int maximum)
     {
@@ -152,4 +147,6 @@ public sealed class CronExpression
     }
 
     static bool IsOutside(int from, int to, int minimum, int maximum) => from < minimum || to > maximum || from > to;
+
+    bool MatchesTime(DateTime utc) => _minutes.Contains(utc.Minute) && _hours.Contains(utc.Hour) && _months.Contains(utc.Month);
 }
