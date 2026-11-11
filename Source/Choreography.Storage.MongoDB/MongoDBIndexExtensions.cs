@@ -45,7 +45,7 @@ public static class MongoDBIndexExtensions
     /// <returns>The set of existing index names.</returns>
     public static async Task<IReadOnlySet<string>> GetIndexNamesAsync<T>(this IMongoCollection<T> collection)
     {
-        var names = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> names = [with(StringComparer.Ordinal)];
         using var cursor = await collection.Indexes.ListAsync().ConfigureAwait(false);
         await cursor.ForEachAsync(index =>
         {
