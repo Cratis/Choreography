@@ -6,13 +6,33 @@ namespace Cratis.Choreography.Tools.GrainCompatibility;
 /// <summary>
 /// What the tool was asked to do.
 /// </summary>
-/// <param name="Baseline">The OrleansContracts.txt of the previous release.</param>
-/// <param name="Current">The OrleansContracts.txt being checked.</param>
-/// <param name="BaselineName">What to call the baseline in the report, typically its release version.</param>
-/// <param name="GitHub">Whether to emit GitHub workflow commands for each break.</param>
-/// <param name="SelfTest">Whether to check the comparison itself against planted breaks instead.</param>
-public record Options(string? Baseline, string? Current, string BaselineName, bool GitHub, bool SelfTest)
+public record Options
 {
+    /// <summary>
+    /// Gets the OrleansContracts.txt of the previous release.
+    /// </summary>
+    public string? Baseline { get; init; }
+
+    /// <summary>
+    /// Gets the OrleansContracts.txt being checked.
+    /// </summary>
+    public string? Current { get; init; }
+
+    /// <summary>
+    /// Gets what to call the baseline in the report, typically its release version.
+    /// </summary>
+    public string BaselineName { get; init; } = "baseline";
+
+    /// <summary>
+    /// Gets whether to emit GitHub workflow commands for each break.
+    /// </summary>
+    public bool GitHub { get; init; }
+
+    /// <summary>
+    /// Gets whether to check the comparison itself against planted breaks instead.
+    /// </summary>
+    public bool SelfTest { get; init; }
+
     /// <summary>
     /// How to invoke the tool.
     /// </summary>
@@ -37,48 +57,34 @@ public record Options(string? Baseline, string? Current, string BaselineName, bo
     /// <exception cref="InvalidArguments">Thrown when the arguments do not describe something the tool can do.</exception>
     public static Options Parse(string[] args)
     {
-        string? baseline = null;
-        string? current = null;
-        var baselineName = "baseline";
-        var github = false;
-        var selfTest = false;
-
+        var options = new Options();
         for (var index = 0; index < args.Length; index++)
         {
-            switch (args[index])
-            {
-                case "--baseline":
-                    baseline = ValueOf(args, ref index);
-                    break;
-                case "--current":
-                    current = ValueOf(args, ref index);
-                    break;
-                case "--baseline-name":
-                    baselineName = ValueOf(args, ref index);
-                    break;
-                case "--github":
-                    github = true;
-                    break;
-                case "--self-test":
-                    selfTest = true;
-                    break;
-                default:
-                    throw new InvalidArguments($"Unknown argument '{args[index]}'.");
-            }
+            options = options.Apply(args, ref index);
         }
 
-        if (selfTest)
+        if (options.SelfTest)
         {
-            return new(null, null, baselineName, github, true);
+            return options with { Baseline = null, Current = null };
         }
 
-        if (baseline is null || current is null)
+        if (options.Baseline is null || options.Current is null)
         {
             throw new InvalidArguments("Both --baseline and --current are required.");
         }
 
-        return new(baseline, current, baselineName, github, false);
+        return options;
     }
+
+    Options Apply(string[] args, ref int index) => args[index] switch
+    {
+        "--baseline" => this with { Baseline = ValueOf(args, ref index) },
+        "--current" => this with { Current = ValueOf(args, ref index) },
+        "--baseline-name" => this with { BaselineName = ValueOf(args, ref index) },
+        "--github" => this with { GitHub = true },
+        "--self-test" => this with { SelfTest = true },
+        _ => throw new InvalidArguments($"Unknown argument '{args[index]}'.")
+    };
 
     static string ValueOf(string[] args, ref int index)
     {
