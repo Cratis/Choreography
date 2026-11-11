@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace Cratis.Choreography.Collaboration;
@@ -48,6 +49,8 @@ public partial class CollaborationHub : ICollaborationHub, ILocalCollaborationDe
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2025:Do not pass disposable objects to tasks that may outlive them", Justification = "The ping loop is awaited in the finally block before the connection is disposed.")]
     public async Task Run(string groupKey, string sessionId, string userId, string displayName, string color, WebSocket socket, CancellationToken cancellationToken, bool hasAvatar = false)
     {
+        // Session identifiers are scoped to the participant before entering local or shared state.
+        sessionId = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new[] { userId, sessionId })));
         var group = _groups.GetOrAdd(groupKey, _ => new());
         var connectionId = Guid.NewGuid();
         var connection = new Connection(socket, new Collaborator(sessionId, userId, displayName, color, 0, 0, string.Empty, string.Empty, IsIdle: false, HasAvatar: hasAvatar));
@@ -88,9 +91,8 @@ public partial class CollaborationHub : ICollaborationHub, ILocalCollaborationDe
 
             // Only the connection that still owns the session announces the leave - a replaced socket
             // (same session reconnected here) must not remove its successor.
-            if (group.TryGetValue(sessionId, out var current) && ReferenceEquals(current, connection))
+            if (group.TryRemove(new KeyValuePair<string, Connection>(sessionId, connection)))
             {
-                group.TryRemove(sessionId, out _);
                 await BroadcastLocal(group, exceptSessionId: sessionId, new { type = "left", sessionId });
                 await _backplane.Leave(groupKey, sessionId, connectionId);
             }
