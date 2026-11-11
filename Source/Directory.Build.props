@@ -59,11 +59,6 @@
         <None Include="$(MSBuildThisFileDirectory)/../logo.png" Pack="true" PackagePath="/" Visible="false" />
     </ItemGroup>
 
-    <PropertyGroup Condition="'$(IsTestProject)'=='true'">
-        <IsPackable>false</IsPackable>
-        <TargetFramework>net10.0</TargetFramework>
-    </PropertyGroup>
-
     <ItemGroup Condition="'$(IsTestProject)'=='true'">
         <PackageReference Include="coverlet.collector" />
         <PackageReference Include="Cratis.Specifications.XUnit.v3" />
