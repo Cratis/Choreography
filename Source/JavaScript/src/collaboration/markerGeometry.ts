@@ -18,6 +18,10 @@ const DEGREES_PER_RADIAN = 180 / Math.PI;
 const constrain = (value: number, minimum: number, maximum: number): number =>
     minimum > maximum ? (minimum + maximum) / 2 : Math.min(Math.max(value, minimum), maximum);
 
+/** Whether a point lies within a viewport of the given size. */
+const isWithinViewport = (x: number, y: number, viewportWidth: number, viewportHeight: number): boolean =>
+    x >= 0 && y >= 0 && x <= viewportWidth && y <= viewportHeight;
+
 /**
  * Places a collaborator's marker for a cursor sitting at a point in the local viewport. A cursor inside
  * the viewport keeps its exact position, so it reads as an ordinary mouse pointer where the collaborator
@@ -38,7 +42,7 @@ export function placeMarker(
     viewportHeight: number,
     insetX: number,
     insetY: number): MarkerPlacement {
-    if (x >= 0 && y >= 0 && x <= viewportWidth && y <= viewportHeight) {
+    if (isWithinViewport(x, y, viewportWidth, viewportHeight)) {
         return { x, y, isOffScreen: false, bearing: 0 };
     }
 
@@ -78,6 +82,62 @@ const distanceToCore = (x: number, y: number, coreHalfWidth: number, coreHalfHei
 /** How many halvings the distance is cornered by — well past the point where a pixel could tell. */
 const SOLVER_STEPS = 40;
 
+/** What the orbit is solved against: the direction walked out along, the pill's core rectangle and the tail's ends. */
+interface OrbitGeometry {
+    readonly towardX: number;
+    readonly towardY: number;
+    readonly coreHalfWidth: number;
+    readonly coreHalfHeight: number;
+    readonly tail: readonly Point[];
+}
+
+/** How far an end of the tail sits from the core once the arrow has walked a distance out along the bearing. */
+const reachOf = (geometry: OrbitGeometry, distance: number, point: Point): number =>
+    distanceToCore(
+        geometry.towardX * distance + point.x,
+        geometry.towardY * distance + point.y,
+        geometry.coreHalfWidth,
+        geometry.coreHalfHeight);
+
+// The tail is straight or hollowed, never bowed toward the pill, so whichever of its ends comes
+// closest to the core is what the whole tail's clearance is.
+const closestReach = (geometry: OrbitGeometry, distance: number): number =>
+    geometry.tail.reduce((closest, point) => {
+        const reach = reachOf(geometry, distance, point);
+        return reach < closest ? reach : closest;
+    }, Number.POSITIVE_INFINITY);
+
+// Walking out along the bearing only ever carries the tail further from the core, so the distance
+// that lands it exactly on the margin can be cornered by halving. The closed form would have to put
+// a rotated pair of points against a rounded rectangle - a page of algebra for the same number.
+const solveDistance = (geometry: OrbitGeometry, required: number): number => {
+    const spread = geometry.tail.reduce((widest, point) => Math.max(widest, Math.hypot(point.x, point.y)), 0);
+    let low = 0;
+    let high = Math.hypot(geometry.coreHalfWidth, geometry.coreHalfHeight) + required + spread;
+    for (let step = 0; step < SOLVER_STEPS; step++) {
+        const middle = (low + high) / 2;
+        if (closestReach(geometry, middle) < required) low = middle; else high = middle;
+    }
+    return high;
+};
+
+// Which end is doing the touching is what decides the tail's shape, not where the arrow's center
+// happens to be: the contact is the end that comes closest to the core, taken as offsets from its center.
+const contactAt = (geometry: OrbitGeometry, distance: number): Point => {
+    let contact: Point = { x: 0, y: 0 };
+    let closest = Number.POSITIVE_INFINITY;
+    for (const point of geometry.tail) {
+        const reach = reachOf(geometry, distance, point);
+        if (reach >= closest) continue;
+        closest = reach;
+        contact = {
+            x: Math.abs(geometry.towardX * distance + point.x),
+            y: Math.abs(geometry.towardY * distance + point.y),
+        };
+    }
+    return contact;
+};
+
 /**
  * Where the arrow sits while orbiting the pill, and what shape its tail should take there.
  *
@@ -113,57 +173,25 @@ export function orbitPlacement(
     const coreHalfHeight = Math.max(halfHeight - radius, 0);
 
     const radians = bearing / DEGREES_PER_RADIAN;
-    const towardX = Math.cos(radians);
-    const towardY = Math.sin(radians);
-    const required = radius + margin;
-
-    const reachOf = (distance: number, point: Point): number =>
-        distanceToCore(towardX * distance + point.x, towardY * distance + point.y, coreHalfWidth, coreHalfHeight);
-
-    // The tail is straight or hollowed, never bowed toward the pill, so whichever of its ends comes
-    // closest to the core is what the whole tail's clearance is.
-    const closestReach = (distance: number): number => {
-        let closest = Number.POSITIVE_INFINITY;
-        for (const point of tail) {
-            const reach = reachOf(distance, point);
-            if (reach < closest) closest = reach;
-        }
-        return closest;
+    const geometry: OrbitGeometry = {
+        towardX: Math.cos(radians),
+        towardY: Math.sin(radians),
+        coreHalfWidth,
+        coreHalfHeight,
+        tail,
     };
-
-    // Walking out along the bearing only ever carries the tail further from the core, so the distance
-    // that lands it exactly on the margin can be cornered by halving. The closed form would have to put
-    // a rotated pair of points against a rounded rectangle - a page of algebra for the same number.
-    let spread = 0;
-    for (const point of tail) spread = Math.max(spread, Math.hypot(point.x, point.y));
-    let low = 0;
-    let high = Math.hypot(coreHalfWidth, coreHalfHeight) + required + spread;
-    for (let step = 0; step < SOLVER_STEPS; step++) {
-        const middle = (low + high) / 2;
-        if (closestReach(middle) < required) low = middle; else high = middle;
-    }
-    const distance = high;
+    const distance = solveDistance(geometry, radius + margin);
 
     // The tail mirrors the pill where it meets it: flat along the straight runs, and hollowed to the
     // cap's own curve once fully onto an arc. Blending across the tangent rather than switching keeps
-    // the arrow from visibly changing shape in one frame as it travels. Which end is doing the touching
-    // is what decides that, not where the arrow's center happens to be.
-    let contactX = 0;
-    let contactY = 0;
-    let closest = Number.POSITIVE_INFINITY;
-    for (const point of tail) {
-        const reach = reachOf(distance, point);
-        if (reach >= closest) continue;
-        closest = reach;
-        contactX = Math.abs(towardX * distance + point.x);
-        contactY = Math.abs(towardY * distance + point.y);
-    }
+    // the arrow from visibly changing shape in one frame as it travels.
+    const contact = contactAt(geometry, distance);
 
     return {
-        x: towardX * distance,
-        y: towardY * distance,
+        x: geometry.towardX * distance,
+        y: geometry.towardY * distance,
         tailCurvature:
-            pastStraightRun(contactX, coreHalfWidth, radius)
-            * pastStraightRun(contactY, coreHalfHeight, radius),
+            pastStraightRun(contact.x, coreHalfWidth, radius)
+            * pastStraightRun(contact.y, coreHalfHeight, radius),
     };
 }
