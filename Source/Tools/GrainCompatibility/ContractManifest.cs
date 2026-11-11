@@ -155,7 +155,7 @@ public partial record ContractManifest(
         void ReadInterface(Match match)
         {
             var interfaceType = Unescape(match.Groups["type"].Value);
-            _currentMethods = new Dictionary<string, GrainMethodContract>(StringComparer.Ordinal);
+            _currentMethods = [with(StringComparer.Ordinal)];
             var contract = new GrainInterfaceContract(
                 interfaceType,
                 match.Groups["name"].Value,

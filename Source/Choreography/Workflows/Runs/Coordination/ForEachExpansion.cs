@@ -101,8 +101,8 @@ public static class ForEachExpansion
             return ([], $"'{property}' is not a list of items for '{forEach}'");
         }
 
-        var branches = new List<WorkflowBranch>();
-        var keys = new HashSet<string>(StringComparer.Ordinal);
+        List<WorkflowBranch> branches = [with(capacity: array.Count)];
+        HashSet<string> keys = [with(StringComparer.Ordinal)];
         foreach (var item in array)
         {
             if (item is not JsonObject itemObject || KeyOf(itemObject) is not { } key)
