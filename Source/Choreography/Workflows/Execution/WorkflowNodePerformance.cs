@@ -3,6 +3,7 @@
 
 using Cratis.Choreography.Workflows.Adapters;
 using Cratis.Choreography.Workflows.Contracts;
+using Cratis.Choreography.Workflows.Graphs;
 using Cratis.Choreography.Workflows.Runs;
 
 namespace Cratis.Choreography.Workflows.Execution;
@@ -16,7 +17,8 @@ namespace Cratis.Choreography.Workflows.Execution;
 /// <param name="execution">The execution.</param>
 /// <param name="attempt">The attempt.</param>
 /// <param name="performer">The performer, or null when none exists.</param>
-public class WorkflowNodePerformance(IWorkflowRun run, WorkflowWaveItem item, NodeExecutionKey execution, WorkflowAttempt attempt, IWorkflowNodePerformer? performer)
+/// <param name="gates">The <see cref="IWorkflowCapabilityGates"/> a performer call waits for room in, or null for none.</param>
+public class WorkflowNodePerformance(IWorkflowRun run, WorkflowWaveItem item, NodeExecutionKey execution, WorkflowAttempt attempt, IWorkflowNodePerformer? performer, IWorkflowCapabilityGates? gates = null)
 {
     WorkflowNodeInvocation Invocation => new(
         WorkflowRunKey.Parse(item.Run),
@@ -106,6 +108,7 @@ public class WorkflowNodePerformance(IWorkflowRun run, WorkflowWaveItem item, No
         attemptCancellation.CancelAfter(timeout);
         try
         {
+            using var lease = gates is null ? null : await gates.Enter(new CapabilityReference(item.Capability, item.CapabilityVersion), attemptCancellation.Token);
             return (await perform(attemptCancellation.Token).WaitAsync(timeout, cancellationToken), false);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested && exception is TimeoutException or OperationCanceledException)

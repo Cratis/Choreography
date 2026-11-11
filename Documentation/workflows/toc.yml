@@ -4,6 +4,8 @@
   href: runtime.md
 - name: Host and start
   href: host-and-start.md
+- name: Extension invocations
+  href: extension-invocations.md
 - name: Chronicle journal and triggers
   href: chronicle-journal-and-triggers.md
 - name: Reference

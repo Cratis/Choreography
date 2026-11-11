@@ -40,5 +40,7 @@ public class a_performance : Specification
             ["evidence-1"]);
     }
 
+    protected Task PerformThrough(IWorkflowCapabilityGates gates) => new WorkflowNodePerformance(Run, Item, Execution, Attempt, Performer, gates).Perform(CancellationToken.None);
+
     protected Task Perform() => new WorkflowNodePerformance(Run, Item, Execution, Attempt, Performer).Perform(CancellationToken.None);
 }

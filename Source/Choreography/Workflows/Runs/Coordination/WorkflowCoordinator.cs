@@ -99,6 +99,19 @@ public static class WorkflowCoordinator
         Decide(new(run, state, now), work => WaitHandling.Resolve(work, wait, outlet, payload, actor));
 
     /// <summary>
+    /// Takes a run stopped on an ambiguous outcome forward with the outcome a person chose.
+    /// </summary>
+    /// <param name="run">The <see cref="WorkflowRunKey"/>.</param>
+    /// <param name="state">The <see cref="WorkflowRunState"/>.</param>
+    /// <param name="execution">The <see cref="NodeExecutionKey"/> whose outcome was ambiguous.</param>
+    /// <param name="outcome">The chosen <see cref="WorkflowNodeOutcome"/>.</param>
+    /// <param name="actor">The <see cref="WorkflowActor"/> who chose it.</param>
+    /// <param name="now">The time.</param>
+    /// <returns>The <see cref="CoordinatorDecision"/>.</returns>
+    public static CoordinatorDecision Reconcile(WorkflowRunKey run, WorkflowRunState state, NodeExecutionKey execution, WorkflowNodeOutcome outcome, WorkflowActor actor, DateTimeOffset now) =>
+        Decide(new(run, state, now), work => OutcomeRecording.Reconcile(work, execution, outcome, actor));
+
+    /// <summary>
     /// Expires every wait whose deadline has passed.
     /// </summary>
     /// <param name="run">The <see cref="WorkflowRunKey"/>.</param>

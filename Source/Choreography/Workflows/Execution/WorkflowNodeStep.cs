@@ -73,7 +73,7 @@ public class WorkflowNodeStep(
         try
         {
             var performer = scope.ServiceProvider.GetRequiredService<IWorkflowNodePerformers>().For(new CapabilityReference(item.Capability, item.CapabilityVersion));
-            await new WorkflowNodePerformance(run, item, execution, attempt, performer).Perform(cancellationToken);
+            await new WorkflowNodePerformance(run, item, execution, attempt, performer, scope.ServiceProvider.GetService<IWorkflowCapabilityGates>()).Perform(cancellationToken);
             return JobStepResult.Succeeded();
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)

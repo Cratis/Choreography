@@ -1,0 +1,20 @@
+// Copyright (c) Cratis. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+using Cratis.Choreography.Workflows.Adapters;
+
+namespace Cratis.Choreography.Workflows.Runs.Coordination.for_WorkflowCoordinator;
+
+public class when_reconciling_through_an_undeclared_outlet : given.a_coordinator
+{
+    void Establish()
+    {
+        Admit([Trigger(), Action("a"), Action("b")], [Edge("trigger", "next", "a"), Edge("a", "next", "b")]);
+        Report(Root("a"), WorkflowNodeOutcome.Ambiguous("unknown"));
+    }
+
+    void Because() => Reconcile(Root("a"), WorkflowNodeOutcome.Succeeded("somethingElse"));
+
+    [Fact] void should_record_nothing() => Decision.Events.ShouldBeEmpty();
+    [Fact] void should_still_need_reconciliation() => StatusOf(Root("a")).ShouldEqual(NodeExecutionStatus.ReconciliationRequired);
+}

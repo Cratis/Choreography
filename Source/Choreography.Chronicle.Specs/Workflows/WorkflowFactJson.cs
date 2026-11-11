@@ -30,6 +30,7 @@ public static class WorkflowFactJson
         ["WorkflowRunCancelled"] = """{"reason":"called off"}""",
         ["WorkflowRunNeedsReconciliation"] = "{}",
         ["WorkflowNodeInputPinned"] = """{"execution":{"node":"publish","branch":"each//2:one","visit":2},"input":"{\u0022input\u0022:1}"}""",
-        ["WorkflowJobStopped"] = """{"job":"job-1"}"""
+        ["WorkflowJobStopped"] = """{"job":"job-1"}""",
+        ["WorkflowNodeReconciled"] = """{"execution":{"node":"publish","branch":"each//2:one","visit":2},"attempt":2,"actor":"operator"}"""
     };
 }

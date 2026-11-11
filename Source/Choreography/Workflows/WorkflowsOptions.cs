@@ -42,6 +42,13 @@ public class WorkflowsOptions
     public TimeSpan IdleBeforeResume { get; set; } = TimeSpan.FromMinutes(15);
 
     /// <summary>
+    /// Gets the most performer calls of a capability that may be in flight on this silo at once, keyed by capability id - or by a prefix
+    /// ending in <c lang="csharp">*</c> for a gate several capabilities share, such as <c lang="csharp">ability:Slack.*</c> for one external system.
+    /// A capability no entry covers is not limited. A call that waits for room waits inside its attempt's timeout.
+    /// </summary>
+    public IDictionary<string, int> CapabilityLimits { get; } = new Dictionary<string, int>();
+
+    /// <summary>
     /// Gets or sets whether the sweep runs on this silo at all. Defaults to true.
     /// </summary>
     public bool Sweep { get; set; } = true;

@@ -37,7 +37,8 @@ public static class WorkflowRunFacts
         typeof(WorkflowRunCancelled),
         typeof(WorkflowRunNeedsReconciliation),
         typeof(WorkflowNodeInputPinned),
-        typeof(WorkflowJobStopped)
+        typeof(WorkflowJobStopped),
+        typeof(WorkflowNodeReconciled)
     ];
 
     static readonly Dictionary<string, Type> _byName = Types.ToDictionary(NameOf);

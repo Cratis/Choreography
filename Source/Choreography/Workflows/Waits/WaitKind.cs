@@ -15,5 +15,8 @@ public enum WaitKind
     Timer = 1,
 
     /// <summary>A person to approve or reject.</summary>
-    Approval = 2
+    Approval = 2,
+
+    /// <summary>A performer that answers later - the node is completed by its <see cref="WorkflowCompletionKey"/>.</summary>
+    Completion = 3
 }

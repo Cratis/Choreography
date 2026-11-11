@@ -77,6 +77,9 @@ public static class WorkflowRunFold
             case WorkflowNodeOutcomeAmbiguous ambiguous:
                 Ended(state, ambiguous.Execution, NodeExecutionStatus.ReconciliationRequired, ambiguous.Reason);
                 break;
+            case WorkflowNodeReconciled:
+                Reconciled(state);
+                break;
             case WorkflowNodesUnreachable unreachable:
                 foreach (var execution in unreachable.Executions)
                 {
@@ -122,6 +125,20 @@ public static class WorkflowRunFold
             case WorkflowRunCancelled:
                 Cancelled(state);
                 break;
+        }
+    }
+
+    static void Reconciled(WorkflowRunState state)
+    {
+        // The stop is lifted: what it made unreachable is reachable again, and the run decides again whether it is over.
+        foreach (var key in state.Executions.Where(pair => pair.Value.Status == NodeExecutionStatus.Unreachable).Select(pair => pair.Key).ToList())
+        {
+            state.Executions.Remove(key);
+        }
+
+        if (state.Outcome == WorkflowRunStatus.ReconciliationRequired)
+        {
+            state.Outcome = null;
         }
     }
 

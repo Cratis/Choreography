@@ -47,12 +47,68 @@ public static class OutcomeRecording
             case WorkflowNodeOutcomeStatus.Ambiguous:
                 work.Record(new WorkflowNodeOutcomeAmbiguous(execution, attempt, outcome.Reason));
                 break;
+            case WorkflowNodeOutcomeStatus.Suspended:
+                if (string.IsNullOrEmpty(outcome.CompletionKey.Value))
+                {
+                    Fail(work, target, WorkflowFailureKind.InvalidOutput, $"'{node.Id}' suspended without a completion key");
+                }
+                else
+                {
+                    WaitHandling.OpenForCompletion(work, execution, outcome.CompletionKey, outcome.ExpiresAfter);
+                }
+
+                break;
             default:
                 Fail(work, target, WorkflowFailureKind.Error, outcome.Reason);
                 break;
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Records the outcome a person chose for a node execution whose outcome was ambiguous, taking the run forward again.
+    /// </summary>
+    /// <param name="work">The <see cref="CoordinatorWork"/>.</param>
+    /// <param name="execution">The <see cref="NodeExecutionKey"/>.</param>
+    /// <param name="outcome">The chosen <see cref="WorkflowNodeOutcome"/> - succeeded, skipped or failed.</param>
+    /// <param name="actor">The <see cref="WorkflowActor"/> who chose it.</param>
+    /// <returns>True if it was recorded.</returns>
+    /// <remarks>
+    /// Only an execution in the root branch that is waiting for reconciliation of a run that has not been cancelled can be reconciled. A chosen success
+    /// must leave through an outlet the node declares with bounded JSON output. The run's nodes recorded as unreachable because of the stop become
+    /// reachable again, and the chosen outcome is routed like any other.
+    /// </remarks>
+    public static bool Reconcile(CoordinatorWork work, NodeExecutionKey execution, WorkflowNodeOutcome outcome, WorkflowActor actor)
+    {
+        var state = work.State;
+        if (state.IsCancelled
+            || execution.Branch != WorkflowBranchKey.Root
+            || !state.Executions.TryGetValue(execution, out var recorded)
+            || recorded.Status != NodeExecutionStatus.ReconciliationRequired
+            || state.Graph.NodeFor(execution.Node) is not { } node)
+        {
+            return false;
+        }
+
+        var attempt = recorded.Attempt;
+        switch (outcome.Status)
+        {
+            case WorkflowNodeOutcomeStatus.Succeeded when node.Declares(outcome.Outlet) && !outcome.Output.ExceedsLimit && outcome.Output.IsValidJson:
+                work.Record(new WorkflowNodeReconciled(execution, attempt, actor));
+                work.Record(new WorkflowNodeSucceeded(execution, attempt, outcome.Outlet, outcome.Output, [.. outcome.Evidence]));
+                return true;
+            case WorkflowNodeOutcomeStatus.Skipped:
+                work.Record(new WorkflowNodeReconciled(execution, attempt, actor));
+                work.Record(new WorkflowNodeSkipped(execution, outcome.Reason));
+                return true;
+            case WorkflowNodeOutcomeStatus.Failed:
+                work.Record(new WorkflowNodeReconciled(execution, attempt, actor));
+                work.Record(new WorkflowNodeFailed(execution, attempt, WorkflowFailureKind.Error, outcome.Reason, FailureRouting.For(state.Graph, node.Id, WorkflowFailureKind.Error)));
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>

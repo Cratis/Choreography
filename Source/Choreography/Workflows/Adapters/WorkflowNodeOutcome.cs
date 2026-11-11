@@ -4,6 +4,7 @@
 using Cratis.Choreography.Workflows.Contracts;
 using Cratis.Choreography.Workflows.Graphs;
 using Cratis.Choreography.Workflows.Runs;
+using Cratis.Choreography.Workflows.Waits;
 
 namespace Cratis.Choreography.Workflows.Adapters;
 
@@ -22,6 +23,16 @@ public record WorkflowNodeOutcome(
     IEnumerable<EvidenceReference> Evidence,
     WorkflowFailureReason Reason)
 {
+    /// <summary>
+    /// Gets the <see cref="WorkflowCompletionKey"/> a suspended node is completed by.
+    /// </summary>
+    public WorkflowCompletionKey CompletionKey { get; init; } = WorkflowCompletionKey.None;
+
+    /// <summary>
+    /// Gets how long a suspended node waits before it expires through the <c lang="csharp">expired</c> outlet - zero for never.
+    /// </summary>
+    public TimeSpan ExpiresAfter { get; init; } = TimeSpan.Zero;
+
     /// <summary>
     /// Creates a successful outcome.
     /// </summary>
@@ -47,6 +58,20 @@ public record WorkflowNodeOutcome(
     /// <returns>The <see cref="WorkflowNodeOutcome"/>.</returns>
     public static WorkflowNodeOutcome Failed(WorkflowFailureReason reason) =>
         new(WorkflowNodeOutcomeStatus.Failed, OutletName.None, WorkflowData.Empty, [], reason);
+
+    /// <summary>
+    /// Creates a suspended outcome: the performer accepted the work and answers later. The node leaves the worker and waits,
+    /// like a <c lang="csharp">wait</c>, until it is completed through <paramref name="key"/> or runs out of time.
+    /// </summary>
+    /// <param name="key">The <see cref="WorkflowCompletionKey"/> the answer arrives under - for an extension invocation, its identity.</param>
+    /// <param name="expiresAfter">How long to wait before the node expires - zero for never.</param>
+    /// <returns>The <see cref="WorkflowNodeOutcome"/>.</returns>
+    public static WorkflowNodeOutcome Suspended(WorkflowCompletionKey key, TimeSpan expiresAfter = default) =>
+        new(WorkflowNodeOutcomeStatus.Suspended, OutletName.None, WorkflowData.Empty, [], WorkflowFailureReason.None)
+        {
+            CompletionKey = key,
+            ExpiresAfter = expiresAfter
+        };
 
     /// <summary>
     /// Creates an ambiguous outcome.

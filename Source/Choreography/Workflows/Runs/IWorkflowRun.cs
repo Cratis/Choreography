@@ -7,6 +7,7 @@ using Cratis.Choreography.Workflows.Definitions;
 using Cratis.Choreography.Workflows.Graphs;
 using Cratis.Choreography.Workflows.Triggers;
 using Cratis.Choreography.Workflows.Waits;
+using Orleans.CodeGeneration;
 
 namespace Cratis.Choreography.Workflows.Runs;
 
@@ -18,6 +19,7 @@ namespace Cratis.Choreography.Workflows.Runs;
 /// call is answered by recording facts on it. Every call is safe to repeat - what no longer applies
 /// records nothing.
 /// </remarks>
+[Version(1)]
 public interface IWorkflowRun : IGrainWithStringKey
 {
     /// <summary>
@@ -112,6 +114,20 @@ public interface IWorkflowRun : IGrainWithStringKey
     /// </summary>
     /// <returns>Awaitable task.</returns>
     Task Resume();
+
+    /// <summary>
+    /// Takes a run stopped on an ambiguous outcome forward with the outcome a person chose after finding out what happened.
+    /// </summary>
+    /// <param name="execution">The <see cref="NodeExecutionKey"/> whose outcome was ambiguous.</param>
+    /// <param name="outcome">The chosen <see cref="WorkflowNodeOutcome"/> - succeeded through an outlet the node declares, skipped or failed.</param>
+    /// <param name="actor">The <see cref="WorkflowActor"/> who chose it.</param>
+    /// <returns>Awaitable task.</returns>
+    /// <remarks>
+    /// Records nothing when the execution is not waiting for reconciliation, is not in the root branch, the run was cancelled
+    /// or the outcome is not one a person can choose - so it is safe to repeat. The execution, its last attempt and why it is ambiguous
+    /// are in <see cref="GetSnapshot"/>.
+    /// </remarks>
+    Task Reconcile(NodeExecutionKey execution, WorkflowNodeOutcome outcome, WorkflowActor actor);
 
     /// <summary>
     /// Cancels the run.
