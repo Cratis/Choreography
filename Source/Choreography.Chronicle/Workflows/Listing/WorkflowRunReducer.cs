@@ -185,6 +185,14 @@ public class WorkflowRunReducer : IReducerFor<WorkflowRun>
     /// <returns>The updated model.</returns>
     public WorkflowRun? On(WorkflowRunNeedsReconciliation @event, WorkflowRun? current, EventContext context) => Finish(current, WorkflowRunStatus.ReconciliationRequired, context);
 
+    /// <summary>Reopens a run stopped for reconciliation.</summary>
+    /// <param name="event">The event.</param>
+    /// <param name="current">The model.</param>
+    /// <param name="context">The context.</param>
+    /// <returns>The updated model.</returns>
+    public WorkflowRun? On(WorkflowNodeReconciled @event, WorkflowRun? current, EventContext context) =>
+        current is null ? null : Touch(current with { CompletedAt = null, Status = WorkflowRunStatus.Running }, context);
+
     static WorkflowRun? Track(WorkflowRun? current, NodeExecutionKey execution, NodeExecutionStatus status, EventContext context, WorkflowJobReference? job = null) => current is null ? null : Touch(
         current with { Executions = [.. current.Executions.Where(item => item.Execution != execution), new(execution, status) { Job = job }] }, context);
 

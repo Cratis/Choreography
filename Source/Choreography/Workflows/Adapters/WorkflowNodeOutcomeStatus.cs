@@ -18,5 +18,8 @@ public enum WorkflowNodeOutcomeStatus
     Failed = 2,
 
     /// <summary>Whether the effect happened is unknown - never retried automatically.</summary>
-    Ambiguous = 3
+    Ambiguous = 3,
+
+    /// <summary>It accepted the work and will answer later - the node suspends until it is completed by key, or expires.</summary>
+    Suspended = 4
 }

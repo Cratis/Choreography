@@ -59,6 +59,7 @@ public static class WorkflowFactSamples
         new WorkflowRunCancelled("called off"),
         new WorkflowRunNeedsReconciliation(),
         new WorkflowNodeInputPinned(_execution, "{\"input\":1}"),
-        new WorkflowJobStopped("job-1")
+        new WorkflowJobStopped("job-1"),
+        new WorkflowNodeReconciled(_execution, 2, "operator")
     ];
 }

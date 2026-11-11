@@ -54,6 +54,23 @@ public static class WaitHandling
     }
 
     /// <summary>
+    /// Opens the wait of a node execution whose performer accepted the work and answers later.
+    /// </summary>
+    /// <param name="work">The <see cref="CoordinatorWork"/>.</param>
+    /// <param name="execution">The <see cref="NodeExecutionKey"/>.</param>
+    /// <param name="key">The <see cref="WorkflowCompletionKey"/> the answer arrives under, recorded as the wait's correlation.</param>
+    /// <param name="expiresAfter">How long the wait lasts - zero for never.</param>
+    /// <remarks>It expires through <c lang="csharp">expired</c>, like a signal; the node declares the outlet to route it.</remarks>
+    public static void OpenForCompletion(CoordinatorWork work, NodeExecutionKey execution, WorkflowCompletionKey key, TimeSpan expiresAfter) =>
+        work.Record(new WorkflowWaitOpened(
+            WaitIdFor(work.State.Run, execution),
+            execution,
+            WaitKind.Completion,
+            new WorkflowCorrelationKey(key.Value),
+            WorkflowContractReference.Any,
+            expiresAfter > TimeSpan.Zero ? work.Now + expiresAfter : WaitDeadline.None));
+
+    /// <summary>
     /// Resolves an open wait.
     /// </summary>
     /// <param name="work">The <see cref="CoordinatorWork"/>.</param>
@@ -64,7 +81,7 @@ public static class WaitHandling
     /// <returns>True if the wait was open and the outlet is one it can be resolved through.</returns>
     public static bool Resolve(CoordinatorWork work, WorkflowWaitId wait, OutletName outlet, WorkflowData payload, WorkflowActor actor)
     {
-        if (!work.State.OpenWaits.TryGetValue(wait, out var open) || !CanBeResolved(open, outlet, payload))
+        if (!work.State.OpenWaits.TryGetValue(wait, out var open) || !CanBeResolved(work.State, open, outlet, payload))
         {
             return false;
         }
@@ -110,8 +127,10 @@ public static class WaitHandling
     public static WorkflowWaitId WaitIdFor(WorkflowRunId run, NodeExecutionKey execution) =>
         new(DeterministicId.From(run.Value, execution.ToString()).ToString());
 
-    static bool CanBeResolved(WorkflowOpenWait open, OutletName outlet, WorkflowData payload) =>
-        CanResolveThrough(open.Kind, outlet) && !payload.ExceedsLimit && payload.IsValidJson;
+    static bool CanBeResolved(WorkflowRunState state, WorkflowOpenWait open, OutletName outlet, WorkflowData payload) =>
+        (open.Kind == WaitKind.Completion ? state.Graph.NodeFor(open.Execution.Node)?.Declares(outlet) == true : CanResolveThrough(open.Kind, outlet))
+        && !payload.ExceedsLimit
+        && payload.IsValidJson;
 
     static bool CanResolveThrough(WaitKind kind, OutletName outlet) => kind switch
     {

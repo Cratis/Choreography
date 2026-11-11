@@ -84,6 +84,7 @@ Namespace `Cratis.Choreography.Workflows`. See [Host and start workflows](../wor
 | --- | --- | --- |
 | `JobsScope` | `"workflows"` | Scope of the jobs manager that holds a run's wave jobs, for the default `IWorkflowExecutionScopes`. |
 | `Scopes` | empty set | Scopes the sweep and wave-job recovery act on, besides those an `IWorkflowScopeSource` names and those the silo has seen. |
+| `CapabilityLimits` | none | The most performer calls of a capability in flight on this silo at once, by capability id or a prefix ending in `*`. See [capability gates](../workflows/extension-invocations.md#limit-concurrent-calls-per-capability). |
 | `WakeRunsItself` | `true` | While a retry or wait deadline is pending, the run's grain keeps a timer and a reminder to act on time. |
 | `Sweep` | `true` | Whether the sweep runs on this silo. |
 | `SweepInterval` | 30 seconds | How often the sweep asks every active run of every known scope whether it has work. |

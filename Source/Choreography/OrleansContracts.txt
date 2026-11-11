@@ -113,7 +113,7 @@ class [GrainType("cratis-orleans-workflow-wave-job")] Cratis.Choreography.Workfl
 interface [GrainInterfaceType("Cratis.Choreography.Workflows.IWorkflow")] Cratis.Choreography.Workflows.IWorkflow [Version(0)]
   AA1B5E41: Admit(Cratis.Choreography.Workflows.Triggers.WorkflowTrigger) -> Task<Cratis.Choreography.Workflows.Runs.WorkflowAdmission>
 
-interface [GrainInterfaceType("Cratis.Choreography.Workflows.Runs.IWorkflowRun")] Cratis.Choreography.Workflows.Runs.IWorkflowRun [Version(0)]
+interface [GrainInterfaceType("Cratis.Choreography.Workflows.Runs.IWorkflowRun")] Cratis.Choreography.Workflows.Runs.IWorkflowRun [Version(1)]
   0F58BB01: Admit(Cratis.Choreography.Workflows.Definitions.WorkflowDefinitionSnapshot, Cratis.Choreography.Workflows.Triggers.WorkflowTrigger) -> Task<Cratis.Choreography.Workflows.Runs.WorkflowAdmission>
   1614324F: Cancel(Cratis.Choreography.Workflows.Runs.WorkflowFailureReason) -> Task
   3F08CE32: CompleteNode(Cratis.Choreography.Workflows.Runs.NodeExecutionKey, Cratis.Choreography.Workflows.Runs.WorkflowAttempt, Cratis.Choreography.Workflows.Adapters.WorkflowNodeOutcome) -> Task
@@ -122,6 +122,7 @@ interface [GrainInterfaceType("Cratis.Choreography.Workflows.Runs.IWorkflowRun")
   ACB96023: FailAttempt(Cratis.Choreography.Workflows.Runs.NodeExecutionKey, Cratis.Choreography.Workflows.Runs.WorkflowAttempt, Cratis.Choreography.Workflows.Runs.WorkflowFailureKind, Cratis.Choreography.Workflows.Runs.WorkflowFailureReason) -> Task
   523788DA: GetOperationOutput(Cratis.Choreography.Workflows.Runs.NodeExecutionKey, Cratis.Choreography.Workflows.Runs.WorkflowAttempt, Cratis.Choreography.Workflows.Adapters.WorkflowOperationName) -> Task<Cratis.Choreography.Workflows.Contracts.WorkflowData>
   A291FF36: GetSnapshot() -> Task<Cratis.Choreography.Workflows.Runs.WorkflowRunSnapshot>
+  9055299A: Reconcile(Cratis.Choreography.Workflows.Runs.NodeExecutionKey, Cratis.Choreography.Workflows.Adapters.WorkflowNodeOutcome, Cratis.Choreography.Workflows.WorkflowActor) -> Task
   C0C02FC5: ResolveWait(Cratis.Choreography.Workflows.Waits.WorkflowWaitId, Cratis.Choreography.Workflows.Graphs.OutletName, Cratis.Choreography.Workflows.Contracts.WorkflowData, Cratis.Choreography.Workflows.WorkflowActor) -> Task
   ECF01910: Resume() -> Task
   1634F352: StartDueRetries(System.DateTimeOffset) -> Task

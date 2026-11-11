@@ -4,6 +4,7 @@
 using Cratis.Choreography.Workflows;
 using Cratis.Choreography.Workflows.Adapters;
 using Cratis.Choreography.Workflows.Definitions;
+using Cratis.Choreography.Workflows.Execution;
 using Cratis.Choreography.Workflows.Journal;
 using Cratis.Choreography.Workflows.Scopes;
 using Cratis.Choreography.Workflows.Sweeping;
@@ -62,6 +63,7 @@ public static class WorkflowsSiloBuilderExtensions
         services.TryAddSingleton<IWorkflowRunSweeper, WorkflowRunSweeper>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, WorkflowRunSweepService>());
 
+        services.TryAddSingleton<IWorkflowCapabilityGates, WorkflowCapabilityGates>();
         services.TryAddScoped<IWorkflowNodePerformers, WorkflowNodePerformers>();
         services.TryAddScoped<IWorkflowDefinitionSource, CompositeWorkflowDefinitionSource>();
         services.TryAddEnumerable(ServiceDescriptor.Transient<IWorkflowAdmissionPolicy, StructuralAdmissionPolicy>());

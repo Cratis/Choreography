@@ -30,6 +30,10 @@ public record WorkflowRunSnapshot(
         state.Run,
         state.IsAdmitted,
         state.Status,
-        [.. state.Executions.Values.Select(execution => new NodeExecutionSnapshot(execution.Key, execution.Status, execution.Attempt, execution.Outlet))],
+        [.. state.Executions.Values.Select(execution => new NodeExecutionSnapshot(execution.Key, execution.Status, execution.Attempt, execution.Outlet)
+        {
+            Reason = execution.Reason,
+            IdempotencyKey = Coordination.WorkflowPlanner.IdempotencyKeyFor(state.Run, execution.Key)
+        })],
         [.. state.OpenWaits.Keys]);
 }

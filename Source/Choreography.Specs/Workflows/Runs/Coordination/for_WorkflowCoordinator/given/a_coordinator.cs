@@ -82,6 +82,9 @@ public class a_coordinator : Specification
 
     protected void StartRetriesAt(DateTimeOffset at) => Apply(WorkflowCoordinator.StartDueRetries(Run, State, at));
 
+    protected void Reconcile(NodeExecutionKey execution, WorkflowNodeOutcome outcome) =>
+        Apply(WorkflowCoordinator.Reconcile(Run, State, execution, outcome, "operator", Now));
+
     protected void Cancel() => Apply(WorkflowCoordinator.Cancel(Run, State, "called off", Now));
 
     protected WorkflowAttempt AttemptOf(NodeExecutionKey execution) => State.Executions[execution].Attempt;

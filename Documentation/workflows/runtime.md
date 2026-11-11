@@ -58,7 +58,9 @@ Nothing is repeated that the run has recorded. A retry reuses the input pinned w
 idempotency key, `WorkflowNodeInvocation.IdempotencyKey`, so a performer can deduplicate its external effect. Because a restart
 can also invoke a performer twice for one attempt, deduplicating on that key is your half of the guarantee. When a
 performer cannot tell whether its effect happened, it answers `Ambiguous`: the node is never retried, and the run ends as
-`ReconciliationRequired` for a person to settle.
+`ReconciliationRequired` for a person to settle, who resumes it with `IWorkflowRun.Reconcile`. A performer that accepted
+the work and will answer later answers `Suspended`. See [Answers that arrive later, capability gates and
+reconciliation](extension-invocations.md).
 
 Cancelling a run (`IWorkflowRun.Cancel`) cancels its open waits and owes a stop to every wave job that held scheduled work.
 The stop is retried until it is acknowledged. An outcome that arrives after cancellation is still recorded, because it

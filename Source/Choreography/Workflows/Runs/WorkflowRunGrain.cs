@@ -112,6 +112,10 @@ public class WorkflowRunGrain(
         Execute(state => WorkflowCoordinator.ResolveWait(_key, state, wait, outlet, payload, actor, Now));
 
     /// <inheritdoc/>
+    public Task Reconcile(NodeExecutionKey execution, WorkflowNodeOutcome outcome, WorkflowActor actor) =>
+        Execute(state => WorkflowCoordinator.Reconcile(_key, state, execution, outcome, actor, Now));
+
+    /// <inheritdoc/>
     public Task ExpireDueWaits(DateTimeOffset now) =>
         Execute(state => WorkflowCoordinator.ExpireDueWaits(_key, state, now));
 
