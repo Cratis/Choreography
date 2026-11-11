@@ -46,77 +46,14 @@ public partial record ContractManifest(
     /// <exception cref="InvalidContractManifest">Thrown when a line cannot be read.</exception>
     public static ContractManifest Parse(string text)
     {
-        var interfaces = new Dictionary<string, GrainInterfaceContract>(StringComparer.Ordinal);
-        var classes = new Dictionary<string, GrainClassContract>(StringComparer.Ordinal);
-        string? currentInterface = null;
-        Dictionary<string, GrainMethodContract>? currentMethods = null;
-
+        var reader = new ManifestReader();
         var lines = text.ReplaceLineEndings("\n").Split('\n');
         for (var index = 0; index < lines.Length; index++)
         {
-            var lineNumber = index + 1;
-            var line = lines[index].TrimEnd();
-            if (line.Length == 0 || line.StartsWith('#'))
-            {
-                continue;
-            }
-
-            if (line.StartsWith(MethodIndent, StringComparison.Ordinal))
-            {
-                if (currentMethods is null)
-                {
-                    throw new InvalidContractManifest(lineNumber, "A method appears before any interface.");
-                }
-
-                var method = ParseMethod(lineNumber, line[MethodIndent.Length..]);
-                if (!currentMethods.TryAdd(method.Identity, method))
-                {
-                    throw new InvalidContractManifest(lineNumber, $"Method identity '{method.Identity}' appears twice on {currentInterface}.");
-                }
-
-                continue;
-            }
-
-            var retired = line.StartsWith(RetiredPrefix, StringComparison.Ordinal);
-            var declaration = retired ? line[RetiredPrefix.Length..] : line;
-
-            if (InterfaceLine.Match(declaration) is { Success: true } interfaceMatch)
-            {
-                var interfaceType = Unescape(interfaceMatch.Groups["type"].Value);
-                currentMethods = new Dictionary<string, GrainMethodContract>(StringComparer.Ordinal);
-                var contract = new GrainInterfaceContract(
-                    interfaceType,
-                    interfaceMatch.Groups["name"].Value,
-                    int.Parse(interfaceMatch.Groups["version"].Value, CultureInfo.InvariantCulture),
-                    retired,
-                    currentMethods);
-
-                if (!interfaces.TryAdd(interfaceType, contract))
-                {
-                    throw new InvalidContractManifest(lineNumber, $"Interface '{interfaceType}' is declared twice.");
-                }
-
-                currentInterface = interfaceType;
-                continue;
-            }
-
-            if (ClassLine.Match(declaration) is { Success: true } classMatch)
-            {
-                var grainType = Unescape(classMatch.Groups["type"].Value);
-                if (!classes.TryAdd(grainType, new GrainClassContract(grainType, classMatch.Groups["name"].Value, retired)))
-                {
-                    throw new InvalidContractManifest(lineNumber, $"Grain class '{grainType}' is declared twice.");
-                }
-
-                currentInterface = null;
-                currentMethods = null;
-                continue;
-            }
-
-            throw new InvalidContractManifest(lineNumber, $"Not an interface, class or method declaration: '{line}'.");
+            reader.ReadLine(index + 1, lines[index].TrimEnd());
         }
 
-        return new ContractManifest(interfaces, classes);
+        return new ContractManifest(reader.Interfaces, reader.Classes);
     }
 
     static GrainMethodContract ParseMethod(int lineNumber, string line)
@@ -158,4 +95,92 @@ public partial record ContractManifest(
     }
 
     static string Unescape(string value) => EscapedCharacter.Replace(value, "${character}");
+
+    sealed class ManifestReader
+    {
+        int _lineNumber;
+        bool _retired;
+        string? _currentInterface;
+        Dictionary<string, GrainMethodContract>? _currentMethods;
+
+        public Dictionary<string, GrainInterfaceContract> Interfaces { get; } = new(StringComparer.Ordinal);
+
+        public Dictionary<string, GrainClassContract> Classes { get; } = new(StringComparer.Ordinal);
+
+        public void ReadLine(int lineNumber, string line)
+        {
+            _lineNumber = lineNumber;
+            if (line.Length == 0 || line.StartsWith('#'))
+            {
+                return;
+            }
+
+            if (line.StartsWith(MethodIndent, StringComparison.Ordinal))
+            {
+                ReadMethod(line);
+                return;
+            }
+
+            _retired = line.StartsWith(RetiredPrefix, StringComparison.Ordinal);
+            var declaration = _retired ? line[RetiredPrefix.Length..] : line;
+
+            if (InterfaceLine.Match(declaration) is { Success: true } interfaceMatch)
+            {
+                ReadInterface(interfaceMatch);
+            }
+            else if (ClassLine.Match(declaration) is { Success: true } classMatch)
+            {
+                ReadClass(classMatch);
+            }
+            else
+            {
+                throw new InvalidContractManifest(lineNumber, $"Not an interface, class or method declaration: '{line}'.");
+            }
+        }
+
+        void ReadMethod(string line)
+        {
+            if (_currentMethods is null)
+            {
+                throw new InvalidContractManifest(_lineNumber, "A method appears before any interface.");
+            }
+
+            var method = ParseMethod(_lineNumber, line[MethodIndent.Length..]);
+            if (!_currentMethods.TryAdd(method.Identity, method))
+            {
+                throw new InvalidContractManifest(_lineNumber, $"Method identity '{method.Identity}' appears twice on {_currentInterface}.");
+            }
+        }
+
+        void ReadInterface(Match match)
+        {
+            var interfaceType = Unescape(match.Groups["type"].Value);
+            _currentMethods = new Dictionary<string, GrainMethodContract>(StringComparer.Ordinal);
+            var contract = new GrainInterfaceContract(
+                interfaceType,
+                match.Groups["name"].Value,
+                int.Parse(match.Groups["version"].Value, CultureInfo.InvariantCulture),
+                _retired,
+                _currentMethods);
+
+            if (!Interfaces.TryAdd(interfaceType, contract))
+            {
+                throw new InvalidContractManifest(_lineNumber, $"Interface '{interfaceType}' is declared twice.");
+            }
+
+            _currentInterface = interfaceType;
+        }
+
+        void ReadClass(Match match)
+        {
+            var grainType = Unescape(match.Groups["type"].Value);
+            if (!Classes.TryAdd(grainType, new GrainClassContract(grainType, match.Groups["name"].Value, _retired)))
+            {
+                throw new InvalidContractManifest(_lineNumber, $"Grain class '{grainType}' is declared twice.");
+            }
+
+            _currentInterface = null;
+            _currentMethods = null;
+        }
+    }
 }
