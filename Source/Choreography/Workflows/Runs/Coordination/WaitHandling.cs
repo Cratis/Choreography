@@ -64,7 +64,7 @@ public static class WaitHandling
     /// <returns>True if the wait was open and the outlet is one it can be resolved through.</returns>
     public static bool Resolve(CoordinatorWork work, WorkflowWaitId wait, OutletName outlet, WorkflowData payload, WorkflowActor actor)
     {
-        if (!work.State.OpenWaits.TryGetValue(wait, out var open) || !CanResolveThrough(open.Kind, outlet) || payload.ExceedsLimit || !payload.IsValidJson)
+        if (!work.State.OpenWaits.TryGetValue(wait, out var open) || !CanBeResolved(open, outlet, payload))
         {
             return false;
         }
@@ -109,6 +109,9 @@ public static class WaitHandling
     /// <returns>The <see cref="WorkflowWaitId"/>.</returns>
     public static WorkflowWaitId WaitIdFor(WorkflowRunId run, NodeExecutionKey execution) =>
         new(DeterministicId.From(run.Value, execution.ToString()).ToString());
+
+    static bool CanBeResolved(WorkflowOpenWait open, OutletName outlet, WorkflowData payload) =>
+        CanResolveThrough(open.Kind, outlet) && !payload.ExceedsLimit && payload.IsValidJson;
 
     static bool CanResolveThrough(WaitKind kind, OutletName outlet) => kind switch
     {

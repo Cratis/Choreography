@@ -39,6 +39,8 @@ public sealed class CronExpression
     /// </summary>
     public string Text { get; }
 
+    bool RequiresBothDays => _anyDayOfMonth || _anyDayOfWeek;
+
     /// <summary>
     /// Parses an expression.
     /// </summary>
@@ -71,14 +73,14 @@ public sealed class CronExpression
     public bool Matches(DateTimeOffset time)
     {
         var utc = time.UtcDateTime;
-        if (!_minutes.Contains(utc.Minute) || !_hours.Contains(utc.Hour) || !_months.Contains(utc.Month))
+        if (!MatchesTime(utc))
         {
             return false;
         }
 
         var dayOfMonth = _daysOfMonth.Contains(utc.Day);
         var dayOfWeek = _daysOfWeek.Contains((int)utc.DayOfWeek);
-        return _anyDayOfMonth || _anyDayOfWeek ? dayOfMonth && dayOfWeek : dayOfMonth || dayOfWeek;
+        return RequiresBothDays ? dayOfMonth && dayOfWeek : dayOfMonth || dayOfWeek;
     }
 
     /// <summary>
@@ -108,20 +110,15 @@ public sealed class CronExpression
         foreach (var part in field.Split(','))
         {
             var stepAt = part.IndexOf('/', StringComparison.Ordinal);
-            var step = stepAt < 0 ? 1 : int.Parse(part[(stepAt + 1)..], CultureInfo.InvariantCulture);
+            var step = ParseStep(part, stepAt);
             if (step < 1)
             {
                 throw new ArgumentOutOfRangeException(nameof(field), "a step must be at least one");
             }
 
             var range = stepAt < 0 ? part : part[..stepAt];
-            var (from, to) = range switch
-            {
-                "*" => (minimum, maximum),
-                _ when range.Contains('-', StringComparison.Ordinal) => (int.Parse(range[..range.IndexOf('-', StringComparison.Ordinal)], CultureInfo.InvariantCulture), int.Parse(range[(range.IndexOf('-', StringComparison.Ordinal) + 1)..], CultureInfo.InvariantCulture)),
-                _ => (int.Parse(range, CultureInfo.InvariantCulture), stepAt < 0 ? int.Parse(range, CultureInfo.InvariantCulture) : maximum)
-            };
-            if (from < minimum || to > maximum || from > to)
+            var (from, to) = ParseRange(range, stepAt >= 0, minimum, maximum);
+            if (IsOutside(from, to, minimum, maximum))
             {
                 throw new ArgumentOutOfRangeException(nameof(field), $"'{part}' is outside {minimum}-{maximum}");
             }
@@ -134,4 +131,22 @@ public sealed class CronExpression
 
         return values;
     }
+
+    static int ParseStep(string part, int stepAt) =>
+        stepAt < 0 ? 1 : int.Parse(part[(stepAt + 1)..], CultureInfo.InvariantCulture);
+
+    static (int From, int To) ParseRange(string range, bool stepped, int minimum, int maximum)
+    {
+        var dashAt = range.IndexOf('-', StringComparison.Ordinal);
+        return range switch
+        {
+            "*" => (minimum, maximum),
+            _ when dashAt >= 0 => (int.Parse(range[..dashAt], CultureInfo.InvariantCulture), int.Parse(range[(dashAt + 1)..], CultureInfo.InvariantCulture)),
+            _ => (int.Parse(range, CultureInfo.InvariantCulture), stepped ? maximum : int.Parse(range, CultureInfo.InvariantCulture))
+        };
+    }
+
+    static bool IsOutside(int from, int to, int minimum, int maximum) => from < minimum || to > maximum || from > to;
+
+    bool MatchesTime(DateTime utc) => _minutes.Contains(utc.Minute) && _hours.Contains(utc.Hour) && _months.Contains(utc.Month);
 }

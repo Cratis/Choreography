@@ -50,39 +50,48 @@ public class Jobs(
     /// <inheritdoc/>
     public async Task<StopJobResult> Stop(JobKey key, JobId jobId)
     {
-        var lookup = await ResolveJob(key, jobId);
-        return await lookup.Match(
+        return await OnJob<StopJobResult>(
+            key,
+            jobId,
             async job => (await job.Stop()).Match<StopJobResult>(
                 _ => new StopJobResult.Stopped(jobId),
                 error => new StopJobResult.Refused(jobId, error)),
-            type => Task.FromResult<StopJobResult>(type is null
-                ? new StopJobResult.NotFound(jobId)
-                : new StopJobResult.UnknownJobType(jobId, type)));
+            StopMissing);
     }
 
     /// <inheritdoc/>
     public async Task<DeleteJobResult> Delete(JobKey key, JobId jobId)
     {
-        var lookup = await ResolveJob(key, jobId);
-        return await lookup.Match(
+        return await OnJob<DeleteJobResult>(
+            key,
+            jobId,
             async job => (await job.Remove()).Match<DeleteJobResult>(
                 _ => new DeleteJobResult.Deleted(jobId),
                 error => new DeleteJobResult.Refused(jobId, error)),
-            type => Task.FromResult<DeleteJobResult>(type is null
-                ? new DeleteJobResult.NotFound(jobId)
-                : new DeleteJobResult.UnknownJobType(jobId, type)));
+            DeleteMissing);
     }
 
     /// <inheritdoc/>
     public async Task<DrainJobResult> StopAndDrain(JobKey key, JobId jobId, TimeSpan timeout)
     {
-        var lookup = await ResolveJob(key, jobId);
-        return await lookup.Match(
+        return await OnJob<DrainJobResult>(
+            key,
+            jobId,
             async job => ToDrainJobResult(jobId, await (job as IJobDrain ?? job.AsReference<IJobDrain>()).StopAndDrain(timeout)),
-            type => Task.FromResult<DrainJobResult>(type is null
-                ? new DrainJobResult.NotFound(jobId)
-                : new DrainJobResult.UnknownJobType(jobId, type)));
+            DrainMissing);
     }
+
+    static StopJobResult StopMissing(JobId jobId, JobType? type) => type is null
+        ? new StopJobResult.NotFound(jobId)
+        : new StopJobResult.UnknownJobType(jobId, type);
+
+    static DeleteJobResult DeleteMissing(JobId jobId, JobType? type) => type is null
+        ? new DeleteJobResult.NotFound(jobId)
+        : new DeleteJobResult.UnknownJobType(jobId, type);
+
+    static DrainJobResult DrainMissing(JobId jobId, JobType? type) => type is null
+        ? new DrainJobResult.NotFound(jobId)
+        : new DrainJobResult.UnknownJobType(jobId, type);
 
     static DrainJobResult ToDrainJobResult(JobId jobId, JobDrainStatus status) => status switch
     {
@@ -90,6 +99,12 @@ public class Jobs(
         JobDrainStatus.Completed => new DrainJobResult.Completed(jobId),
         _ => new DrainJobResult.TimedOut(jobId)
     };
+
+    async Task<TResult> OnJob<TResult>(JobKey key, JobId jobId, Func<IJob, Task<TResult>> onJob, Func<JobId, JobType?, TResult> missing)
+    {
+        var lookup = await ResolveJob(key, jobId);
+        return await lookup.Match(onJob, type => Task.FromResult(missing(jobId, type)));
+    }
 
     async Task<Result<IJob, JobType?>> ResolveJob(JobKey key, JobId jobId)
     {
