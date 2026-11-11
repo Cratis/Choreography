@@ -32,7 +32,7 @@ public static class WorkflowCoordinator
     /// <param name="now">The time.</param>
     /// <returns>The <see cref="CoordinatorDecision"/> - empty when the run was already admitted.</returns>
     public static CoordinatorDecision Admit(WorkflowRunKey run, WorkflowRunState state, WorkflowDefinitionSnapshot definition, WorkflowTrigger trigger, DateTimeOffset now) =>
-        Decide(run, state, now, work =>
+        Decide(new(run, state, now), work =>
         {
             if (work.State.IsAdmitted)
             {
@@ -54,7 +54,7 @@ public static class WorkflowCoordinator
     /// <param name="now">The time.</param>
     /// <returns>The <see cref="CoordinatorDecision"/>.</returns>
     public static CoordinatorDecision CompleteNode(WorkflowRunKey run, WorkflowRunState state, NodeExecutionKey execution, WorkflowAttempt attempt, WorkflowNodeOutcome outcome, DateTimeOffset now) =>
-        Decide(run, state, now, work => OutcomeRecording.Record(work, execution, attempt, outcome));
+        Decide(new(run, state, now), work => OutcomeRecording.Record(work, execution, attempt, outcome));
 
     /// <summary>
     /// Records that an attempt failed in a way the performer did not report itself - it timed out, or no performer exists.
@@ -68,7 +68,7 @@ public static class WorkflowCoordinator
     /// <param name="now">The time.</param>
     /// <returns>The <see cref="CoordinatorDecision"/>.</returns>
     public static CoordinatorDecision FailAttempt(WorkflowRunKey run, WorkflowRunState state, NodeExecutionKey execution, WorkflowAttempt attempt, WorkflowFailureKind kind, WorkflowFailureReason reason, DateTimeOffset now) =>
-        Decide(run, state, now, work => OutcomeRecording.RecordFailure(work, execution, attempt, kind, reason));
+        Decide(new(run, state, now), work => OutcomeRecording.RecordFailure(work, execution, attempt, kind, reason));
 
     /// <summary>
     /// Records that one operation of a staged node completed.
@@ -82,7 +82,7 @@ public static class WorkflowCoordinator
     /// <param name="now">The time.</param>
     /// <returns>The <see cref="CoordinatorDecision"/>.</returns>
     public static CoordinatorDecision CompleteOperation(WorkflowRunKey run, WorkflowRunState state, NodeExecutionKey execution, WorkflowAttempt attempt, WorkflowOperationName operation, WorkflowData output, DateTimeOffset now) =>
-        Decide(run, state, now, work => OutcomeRecording.RecordOperation(work, execution, attempt, operation, output));
+        Decide(new(run, state, now), work => OutcomeRecording.RecordOperation(work, execution, attempt, operation, output));
 
     /// <summary>
     /// Resolves an open wait.
@@ -96,7 +96,7 @@ public static class WorkflowCoordinator
     /// <param name="now">The time.</param>
     /// <returns>The <see cref="CoordinatorDecision"/>.</returns>
     public static CoordinatorDecision ResolveWait(WorkflowRunKey run, WorkflowRunState state, WorkflowWaitId wait, OutletName outlet, WorkflowData payload, WorkflowActor actor, DateTimeOffset now) =>
-        Decide(run, state, now, work => WaitHandling.Resolve(work, wait, outlet, payload, actor));
+        Decide(new(run, state, now), work => WaitHandling.Resolve(work, wait, outlet, payload, actor));
 
     /// <summary>
     /// Expires every wait whose deadline has passed.
@@ -106,7 +106,7 @@ public static class WorkflowCoordinator
     /// <param name="now">The time.</param>
     /// <returns>The <see cref="CoordinatorDecision"/>.</returns>
     public static CoordinatorDecision ExpireDueWaits(WorkflowRunKey run, WorkflowRunState state, DateTimeOffset now) =>
-        Decide(run, state, now, WaitHandling.ExpireDue);
+        Decide(new(run, state, now), WaitHandling.ExpireDue);
 
     /// <summary>
     /// Starts every retry whose time has come.
@@ -116,7 +116,7 @@ public static class WorkflowCoordinator
     /// <param name="now">The time.</param>
     /// <returns>The <see cref="CoordinatorDecision"/>.</returns>
     public static CoordinatorDecision StartDueRetries(WorkflowRunKey run, WorkflowRunState state, DateTimeOffset now) =>
-        Decide(run, state, now, work =>
+        Decide(new(run, state, now), work =>
         {
             var due = work.State.IsOver
                 ? []
@@ -138,7 +138,7 @@ public static class WorkflowCoordinator
     /// <param name="now">The time.</param>
     /// <returns>The <see cref="CoordinatorDecision"/>.</returns>
     public static CoordinatorDecision Resume(WorkflowRunKey run, WorkflowRunState state, IEnumerable<WorkflowJobReference> runningJobs, DateTimeOffset now) =>
-        Decide(run, state, now, work =>
+        Decide(new(run, state, now), work =>
         {
             var running = runningJobs.ToHashSet();
             var orphaned = work.State.IsOver
@@ -161,7 +161,7 @@ public static class WorkflowCoordinator
     /// <param name="now">The time.</param>
     /// <returns>The <see cref="CoordinatorDecision"/>.</returns>
     public static CoordinatorDecision Cancel(WorkflowRunKey run, WorkflowRunState state, WorkflowFailureReason reason, DateTimeOffset now) =>
-        Decide(run, state, now, work =>
+        Decide(new(run, state, now), work =>
         {
             if (!work.State.IsAdmitted || work.State.IsOver)
             {
@@ -179,9 +179,8 @@ public static class WorkflowCoordinator
             return false;
         });
 
-    static CoordinatorDecision Decide(WorkflowRunKey run, WorkflowRunState state, DateTimeOffset now, Func<CoordinatorWork, bool> handle, bool plan = true)
+    static CoordinatorDecision Decide(CoordinatorWork work, Func<CoordinatorWork, bool> handle, bool plan = true)
     {
-        var work = new CoordinatorWork(run, state, now);
         if (handle(work) && plan)
         {
             WorkflowPlanner.Plan(work);

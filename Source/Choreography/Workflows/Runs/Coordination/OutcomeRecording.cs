@@ -3,6 +3,7 @@
 
 using Cratis.Choreography.Workflows.Adapters;
 using Cratis.Choreography.Workflows.Contracts;
+using Cratis.Choreography.Workflows.Graphs;
 
 namespace Cratis.Choreography.Workflows.Runs.Coordination;
 
@@ -28,7 +29,8 @@ public static class OutcomeRecording
     /// <returns>True if it was recorded.</returns>
     public static bool Record(CoordinatorWork work, NodeExecutionKey execution, WorkflowAttempt attempt, WorkflowNodeOutcome outcome)
     {
-        if (!IsScheduled(work.State, execution, attempt))
+        var target = new NodeAttempt(execution, attempt);
+        if (!IsScheduled(work.State, target))
         {
             return false;
         }
@@ -36,14 +38,8 @@ public static class OutcomeRecording
         var node = work.State.Graph.NodeFor(execution.Node)!;
         switch (outcome.Status)
         {
-            case WorkflowNodeOutcomeStatus.Succeeded when !node.Declares(outcome.Outlet):
-                Fail(work, execution, attempt, WorkflowFailureKind.InvalidOutlet, $"'{node.Id}' answered with '{outcome.Outlet}', which it does not declare");
-                break;
-            case WorkflowNodeOutcomeStatus.Succeeded when outcome.Output.ExceedsLimit || !outcome.Output.IsValidJson:
-                Fail(work, execution, attempt, WorkflowFailureKind.InvalidOutput, $"The output of '{node.Id}' is not JSON of at most {WorkflowData.MaxBytes} bytes");
-                break;
             case WorkflowNodeOutcomeStatus.Succeeded:
-                work.Record(new WorkflowNodeSucceeded(execution, attempt, outcome.Outlet, outcome.Output, [.. outcome.Evidence]));
+                RecordSucceeded(work, target, node, outcome);
                 break;
             case WorkflowNodeOutcomeStatus.Skipped:
                 work.Record(new WorkflowNodeSkipped(execution, outcome.Reason));
@@ -52,7 +48,7 @@ public static class OutcomeRecording
                 work.Record(new WorkflowNodeOutcomeAmbiguous(execution, attempt, outcome.Reason));
                 break;
             default:
-                Fail(work, execution, attempt, WorkflowFailureKind.Error, outcome.Reason);
+                Fail(work, target, WorkflowFailureKind.Error, outcome.Reason);
                 break;
         }
 
@@ -70,12 +66,13 @@ public static class OutcomeRecording
     /// <returns>True if it was recorded.</returns>
     public static bool RecordFailure(CoordinatorWork work, NodeExecutionKey execution, WorkflowAttempt attempt, WorkflowFailureKind kind, WorkflowFailureReason reason)
     {
-        if (!IsScheduled(work.State, execution, attempt))
+        var target = new NodeAttempt(execution, attempt);
+        if (!IsScheduled(work.State, target))
         {
             return false;
         }
 
-        Fail(work, execution, attempt, kind, reason);
+        Fail(work, target, kind, reason);
         return true;
     }
 
@@ -90,7 +87,7 @@ public static class OutcomeRecording
     /// <returns>True if it was recorded.</returns>
     public static bool RecordOperation(CoordinatorWork work, NodeExecutionKey execution, WorkflowAttempt attempt, WorkflowOperationName operation, WorkflowData output)
     {
-        if (!IsScheduled(work.State, execution, attempt) || work.State.Operations.ContainsKey((execution, attempt, operation)))
+        if (!IsScheduled(work.State, new NodeAttempt(execution, attempt)) || work.State.Operations.ContainsKey((execution, attempt, operation)))
         {
             return false;
         }
@@ -113,19 +110,36 @@ public static class OutcomeRecording
     /// <param name="attempt">The attempt.</param>
     /// <param name="reason">The rejection reason.</param>
     public static void RejectData(CoordinatorWork work, NodeExecutionKey execution, WorkflowAttempt attempt, WorkflowFailureReason reason) =>
-        Fail(work, execution, attempt, WorkflowFailureKind.InvalidOutput, reason);
+        Fail(work, new NodeAttempt(execution, attempt), WorkflowFailureKind.InvalidOutput, reason);
 
-    static bool IsScheduled(WorkflowRunState state, NodeExecutionKey execution, WorkflowAttempt attempt) =>
-        state.Executions.TryGetValue(execution, out var recorded)
+    static bool IsScheduled(WorkflowRunState state, NodeAttempt target) =>
+        state.Executions.TryGetValue(target.Execution, out var recorded)
             && recorded.Status == NodeExecutionStatus.Scheduled
-            && recorded.Attempt == attempt;
+            && recorded.Attempt == target.Attempt;
 
-    static void Fail(CoordinatorWork work, NodeExecutionKey execution, WorkflowAttempt attempt, WorkflowFailureKind kind, WorkflowFailureReason reason)
+    static void RecordSucceeded(CoordinatorWork work, NodeAttempt target, WorkflowNode node, WorkflowNodeOutcome outcome)
+    {
+        if (!node.Declares(outcome.Outlet))
+        {
+            Fail(work, target, WorkflowFailureKind.InvalidOutlet, $"'{node.Id}' answered with '{outcome.Outlet}', which it does not declare");
+            return;
+        }
+
+        if (outcome.Output.ExceedsLimit || !outcome.Output.IsValidJson)
+        {
+            Fail(work, target, WorkflowFailureKind.InvalidOutput, $"The output of '{node.Id}' is not JSON of at most {WorkflowData.MaxBytes} bytes");
+            return;
+        }
+
+        work.Record(new WorkflowNodeSucceeded(target.Execution, target.Attempt, outcome.Outlet, outcome.Output, [.. outcome.Evidence]));
+    }
+
+    static void Fail(CoordinatorWork work, NodeAttempt target, WorkflowFailureKind kind, WorkflowFailureReason reason)
     {
         var state = work.State;
-        var node = state.Graph.NodeFor(execution.Node)!;
-        var retries = RetryPolicy.Retries(state, node, kind, attempt);
-        work.Record(new WorkflowNodeAttemptFailed(execution, attempt, kind, reason));
+        var node = state.Graph.NodeFor(target.Execution.Node)!;
+        var retries = RetryPolicy.Retries(state, node, kind, target.Attempt);
+        work.Record(new WorkflowNodeAttemptFailed(target.Execution, target.Attempt, kind, reason));
 
         // A retry is not a fact until it starts: the failed attempt makes it pending, due the node's
         // retry delay from now, and the run's sweep starts it through StartDueRetries.
@@ -135,6 +149,6 @@ public static class OutcomeRecording
         }
 
         var routedTo = state.IsCancelled ? Graphs.OutletName.None : FailureRouting.For(state.Graph, node.Id, kind);
-        work.Record(new WorkflowNodeFailed(execution, attempt, kind, reason, routedTo));
+        work.Record(new WorkflowNodeFailed(target.Execution, target.Attempt, kind, reason, routedTo));
     }
 }
