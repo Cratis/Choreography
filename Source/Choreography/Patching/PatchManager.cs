@@ -44,7 +44,7 @@ public class PatchManager(
     {
         logger.PatchingRequested(caller, _hostVersion);
         var knownVersion = HostVersion.IsKnown(_hostVersion);
-        if (knownVersion && HostVersion.IsKnown(caller) && _hostVersion < caller)
+        if (IsBehindCaller(knownVersion, caller))
         {
             logger.RelocatingToCaller(caller, _hostVersion);
             return RelocateToCaller();
@@ -73,6 +73,8 @@ public class PatchManager(
         return PatchOutcome.Completed;
     }
 
+    bool IsBehindCaller(bool knownVersion, SemanticVersion caller) => knownVersion && HostVersion.IsKnown(caller) && _hostVersion < caller;
+
     PatchOutcome RelocateToCaller()
     {
         if (PatchRelocation.CallerSilo() is { } callerSilo)
@@ -95,6 +97,24 @@ public class PatchManager(
         var patchedVersion = await storage.GetPatchedVersion() ?? SemanticVersion.NotSet;
         logger.CurrentPatchedVersion(patchedVersion);
 
+        var (pending, skipped) = await FindPendingPatches(patchedVersion);
+        if (pending.Count > 0)
+        {
+            logger.FoundPatchesToApply(pending.Count);
+        }
+
+        var (latestVersion, applied) = await ApplyAll(pending);
+        if (latestVersion is not null)
+        {
+            await storage.SetPatchedVersion(latestVersion);
+            logger.UpdatedPatchedVersion(latestVersion);
+        }
+
+        logger.PatchApplicationCompleted(applied, skipped);
+    }
+
+    async Task<(List<ICanApplyPatch> Pending, int Skipped)> FindPendingPatches(SemanticVersion patchedVersion)
+    {
         var candidates = patches
             .Where(_ => _.Version > patchedVersion)
             .OrderBy(_ => _.Version)
@@ -113,11 +133,11 @@ public class PatchManager(
             pending.Add(patch);
         }
 
-        if (pending.Count > 0)
-        {
-            logger.FoundPatchesToApply(pending.Count);
-        }
+        return (pending, skipped);
+    }
 
+    async Task<(SemanticVersion? Latest, int Applied)> ApplyAll(List<ICanApplyPatch> pending)
+    {
         SemanticVersion? latestVersion = null;
         var applied = 0;
         foreach (var patch in pending)
@@ -139,12 +159,6 @@ public class PatchManager(
             }
         }
 
-        if (latestVersion is not null)
-        {
-            await storage.SetPatchedVersion(latestVersion);
-            logger.UpdatedPatchedVersion(latestVersion);
-        }
-
-        logger.PatchApplicationCompleted(applied, skipped);
+        return (latestVersion, applied);
     }
 }
