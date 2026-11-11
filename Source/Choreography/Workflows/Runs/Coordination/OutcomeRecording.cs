@@ -82,33 +82,20 @@ public static class OutcomeRecording
     public static bool Reconcile(CoordinatorWork work, NodeExecutionKey execution, WorkflowNodeOutcome outcome, WorkflowActor actor)
     {
         var state = work.State;
-        if (state.IsCancelled
-            || execution.Branch != WorkflowBranchKey.Root
-            || !state.Executions.TryGetValue(execution, out var recorded)
-            || recorded.Status != NodeExecutionStatus.ReconciliationRequired
-            || state.Graph.NodeFor(execution.Node) is not { } node)
+        if (!TryFindReconcilable(state, execution, out var attempt, out var node))
         {
             return false;
         }
 
-        var attempt = recorded.Attempt;
-        switch (outcome.Status)
+        var chosen = ChosenOutcome(state, new NodeAttempt(execution, attempt), node, outcome);
+        if (chosen is null)
         {
-            case WorkflowNodeOutcomeStatus.Succeeded when node.Declares(outcome.Outlet) && !outcome.Output.ExceedsLimit && outcome.Output.IsValidJson:
-                work.Record(new WorkflowNodeReconciled(execution, attempt, actor));
-                work.Record(new WorkflowNodeSucceeded(execution, attempt, outcome.Outlet, outcome.Output, [.. outcome.Evidence]));
-                return true;
-            case WorkflowNodeOutcomeStatus.Skipped:
-                work.Record(new WorkflowNodeReconciled(execution, attempt, actor));
-                work.Record(new WorkflowNodeSkipped(execution, outcome.Reason));
-                return true;
-            case WorkflowNodeOutcomeStatus.Failed:
-                work.Record(new WorkflowNodeReconciled(execution, attempt, actor));
-                work.Record(new WorkflowNodeFailed(execution, attempt, WorkflowFailureKind.Error, outcome.Reason, FailureRouting.For(state.Graph, node.Id, WorkflowFailureKind.Error)));
-                return true;
-            default:
-                return false;
+            return false;
         }
+
+        work.Record(new WorkflowNodeReconciled(execution, attempt, actor));
+        work.Record(chosen);
+        return true;
     }
 
     /// <summary>
@@ -167,6 +154,41 @@ public static class OutcomeRecording
     /// <param name="reason">The rejection reason.</param>
     public static void RejectData(CoordinatorWork work, NodeExecutionKey execution, WorkflowAttempt attempt, WorkflowFailureReason reason) =>
         Fail(work, new NodeAttempt(execution, attempt), WorkflowFailureKind.InvalidOutput, reason);
+
+    static bool TryFindReconcilable(WorkflowRunState state, NodeExecutionKey execution, out WorkflowAttempt attempt, out WorkflowNode node)
+    {
+        attempt = default!;
+        node = default!;
+        if (!IsInReconcilableRun(state, execution) || !state.Executions.TryGetValue(execution, out var recorded))
+        {
+            return false;
+        }
+
+        if (recorded.Status != NodeExecutionStatus.ReconciliationRequired || state.Graph.NodeFor(execution.Node) is not { } found)
+        {
+            return false;
+        }
+
+        attempt = recorded.Attempt;
+        node = found;
+        return true;
+    }
+
+    static bool IsInReconcilableRun(WorkflowRunState state, NodeExecutionKey execution) =>
+        !state.IsCancelled && execution.Branch == WorkflowBranchKey.Root;
+
+    static bool IsBoundedOutput(WorkflowNodeOutcome outcome) =>
+        !outcome.Output.ExceedsLimit && outcome.Output.IsValidJson;
+
+    static object? ChosenOutcome(WorkflowRunState state, NodeAttempt target, WorkflowNode node, WorkflowNodeOutcome outcome) =>
+        outcome.Status switch
+        {
+            WorkflowNodeOutcomeStatus.Succeeded when node.Declares(outcome.Outlet) && IsBoundedOutput(outcome) =>
+                new WorkflowNodeSucceeded(target.Execution, target.Attempt, outcome.Outlet, outcome.Output, [.. outcome.Evidence]),
+            WorkflowNodeOutcomeStatus.Skipped => new WorkflowNodeSkipped(target.Execution, outcome.Reason),
+            WorkflowNodeOutcomeStatus.Failed => new WorkflowNodeFailed(target.Execution, target.Attempt, WorkflowFailureKind.Error, outcome.Reason, FailureRouting.For(state.Graph, node.Id, WorkflowFailureKind.Error)),
+            _ => null
+        };
 
     static bool IsScheduled(WorkflowRunState state, NodeAttempt target) =>
         state.Executions.TryGetValue(target.Execution, out var recorded)

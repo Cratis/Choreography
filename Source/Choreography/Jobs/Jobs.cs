@@ -48,28 +48,10 @@ public class Jobs(
     }
 
     /// <inheritdoc/>
-    public async Task<StopJobResult> Stop(JobKey key, JobId jobId)
-    {
-        return await OnJob<StopJobResult>(
-            key,
-            jobId,
-            async job => (await job.Stop()).Match<StopJobResult>(
-                _ => new StopJobResult.Stopped(jobId),
-                error => new StopJobResult.Refused(jobId, error)),
-            StopMissing);
-    }
+    public Task<StopJobResult> Stop(JobKey key, JobId jobId) => OnJob(key, jobId, job => StopJob(job, jobId), StopMissing);
 
     /// <inheritdoc/>
-    public async Task<DeleteJobResult> Delete(JobKey key, JobId jobId)
-    {
-        return await OnJob<DeleteJobResult>(
-            key,
-            jobId,
-            async job => (await job.Remove()).Match<DeleteJobResult>(
-                _ => new DeleteJobResult.Deleted(jobId),
-                error => new DeleteJobResult.Refused(jobId, error)),
-            DeleteMissing);
-    }
+    public Task<DeleteJobResult> Delete(JobKey key, JobId jobId) => OnJob(key, jobId, job => RemoveJob(job, jobId), DeleteMissing);
 
     /// <inheritdoc/>
     public async Task<DrainJobResult> StopAndDrain(JobKey key, JobId jobId, TimeSpan timeout)
@@ -80,6 +62,19 @@ public class Jobs(
             async job => ToDrainJobResult(jobId, await (job as IJobDrain ?? job.AsReference<IJobDrain>()).StopAndDrain(timeout)),
             DrainMissing);
     }
+
+    static async Task<StopJobResult> StopJob(IJob job, JobId jobId)
+    {
+        var stopped = await job.Stop();
+        return stopped.TryGetError(out var error)
+            ? new StopJobResult.Refused(jobId, error)
+            : new StopJobResult.Stopped(jobId);
+    }
+
+    static async Task<DeleteJobResult> RemoveJob(IJob job, JobId jobId) =>
+        (await job.Remove()).Match<DeleteJobResult>(
+            _ => new DeleteJobResult.Deleted(jobId),
+            error => new DeleteJobResult.Refused(jobId, error));
 
     static StopJobResult StopMissing(JobId jobId, JobType? type) => type is null
         ? new StopJobResult.NotFound(jobId)
