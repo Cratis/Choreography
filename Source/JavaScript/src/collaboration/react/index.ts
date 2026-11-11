@@ -2,6 +2,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 export * from './useCollaborationClient.js';
+export * from './useCanvasPresence.js';
 export * from './useCollaborators.js';
 export * from './useOwnOtherTabs.js';
 export * from './useCollaborationConnectionState.js';
