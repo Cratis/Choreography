@@ -50,7 +50,9 @@ public class Jobs(
     /// <inheritdoc/>
     public async Task<StopJobResult> Stop(JobKey key, JobId jobId)
     {
-        return await OnJob<StopJobResult>(key, jobId,
+        return await OnJob<StopJobResult>(
+            key,
+            jobId,
             async job => (await job.Stop()).Match<StopJobResult>(
                 _ => new StopJobResult.Stopped(jobId),
                 error => new StopJobResult.Refused(jobId, error)),
@@ -60,7 +62,9 @@ public class Jobs(
     /// <inheritdoc/>
     public async Task<DeleteJobResult> Delete(JobKey key, JobId jobId)
     {
-        return await OnJob<DeleteJobResult>(key, jobId,
+        return await OnJob<DeleteJobResult>(
+            key,
+            jobId,
             async job => (await job.Remove()).Match<DeleteJobResult>(
                 _ => new DeleteJobResult.Deleted(jobId),
                 error => new DeleteJobResult.Refused(jobId, error)),
@@ -70,15 +74,11 @@ public class Jobs(
     /// <inheritdoc/>
     public async Task<DrainJobResult> StopAndDrain(JobKey key, JobId jobId, TimeSpan timeout)
     {
-        return await OnJob<DrainJobResult>(key, jobId,
+        return await OnJob<DrainJobResult>(
+            key,
+            jobId,
             async job => ToDrainJobResult(jobId, await (job as IJobDrain ?? job.AsReference<IJobDrain>()).StopAndDrain(timeout)),
             DrainMissing);
-    }
-
-    async Task<TResult> OnJob<TResult>(JobKey key, JobId jobId, Func<IJob, Task<TResult>> onJob, Func<JobId, JobType?, TResult> missing)
-    {
-        var lookup = await ResolveJob(key, jobId);
-        return await lookup.Match(onJob, type => Task.FromResult(missing(jobId, type)));
     }
 
     static StopJobResult StopMissing(JobId jobId, JobType? type) => type is null
@@ -99,6 +99,12 @@ public class Jobs(
         JobDrainStatus.Completed => new DrainJobResult.Completed(jobId),
         _ => new DrainJobResult.TimedOut(jobId)
     };
+
+    async Task<TResult> OnJob<TResult>(JobKey key, JobId jobId, Func<IJob, Task<TResult>> onJob, Func<JobId, JobType?, TResult> missing)
+    {
+        var lookup = await ResolveJob(key, jobId);
+        return await lookup.Match(onJob, type => Task.FromResult(missing(jobId, type)));
+    }
 
     async Task<Result<IJob, JobType?>> ResolveJob(JobKey key, JobId jobId)
     {
