@@ -50,31 +50,31 @@ The same `options` property is accepted by the hooks and by both components, so 
 
 ## Send the pointer position
 
-Positions are in the **content space** of the surface, not in screen pixels, so each client can place a cursor through its own pan and zoom. Send the position from your pointer handler, and tell the others when the user leaves the surface.
+Positions are in the **content space** of the surface, not in screen pixels, so each client can place a cursor through its own pan and zoom. `useCanvasPresence` does the whole sending side of a canvas: it holds the room's connection while the canvas is mounted, announces the canvas as soon as it opens, maps the pointer into content space, follows the content under a pointer that stands still while the canvas pans or zooms, and leaves the area when the canvas closes.
 
 ```tsx
-import { useEffect } from 'react';
-import { currentCollaboration, type CanvasTransform } from '@cratis/choreography/collaboration';
+import { useRef } from 'react';
+import type { CanvasTransform } from '@cratis/choreography/collaboration';
+import { CollaboratorCursors, useCanvasPresence } from '@cratis/choreography/collaboration/react';
 
 const AREA = 'board';
 
-export const useShareCursor = (surfaceId: string, transformRef: React.RefObject<CanvasTransform>) => {
-    const share = (event: React.PointerEvent<HTMLElement>) => {
-        const { zoom, pan } = transformRef.current;
-        const bounds = event.currentTarget.getBoundingClientRect();
-        const contentX = (event.clientX - bounds.left - pan.x) / zoom;
-        const contentY = (event.clientY - bounds.top - pan.y) / zoom;
-        currentCollaboration()?.sendPresence(contentX, contentY, AREA, surfaceId);
-    };
+export const Board = ({ room, surfaceId }: { room: string; surfaceId: string }) => {
+    const surfaceRef = useRef<HTMLDivElement>(null);
+    const transformRef = useRef<CanvasTransform>({ zoom: 1, pan: { x: 0, y: 0 } });
+    const { handlePointerMove, handleTransformChange } = useCanvasPresence({ room, area: AREA, surfaceId, transformRef, surfaceRef });
 
-    // Tell the others this session is no longer on the surface, so its cursor is not left behind.
-    useEffect(() => () => currentCollaboration()?.leaveArea(), [surfaceId]);
-
-    return share;
+    // Call handleTransformChange from wherever the canvas pans or zooms.
+    return (
+        <div ref={surfaceRef} style={{ position: 'relative' }} onPointerMove={handlePointerMove}>
+            {/* the canvas */}
+            <CollaboratorCursors room={room} area={AREA} surfaceId={surfaceId} transformRef={transformRef} />
+        </div>
+    );
 };
 ```
 
-`sendPresence(x, y, area, surfaceId)` is throttled to about 30 sends a second and always delivers the latest position. After a reconnect the latest position is sent again without another pointer move. `leaveArea()` sends a presence with no area, which hides the cursor and lists the session without an area.
+Without React, the same pieces are available from `@cratis/choreography/collaboration`: `contentPointOf(screen, transform)` maps a point into content space, and `reportCanvasPresence(client, screen, transform, area, surfaceId)` sends it. `sendPresence(x, y, area, surfaceId)` on the client is throttled to about 30 sends a second and always delivers the latest position. After a reconnect the latest position is sent again without another pointer move. `leaveArea()` sends a presence with no area, which hides the cursor and lists the session without an area.
 
 ## Draw the cursors over a canvas
 
