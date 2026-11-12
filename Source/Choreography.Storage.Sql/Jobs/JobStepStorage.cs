@@ -175,7 +175,7 @@ public class JobStepStorage(Func<JobsDbContext> contextFactory) : IJobStepStorag
                     Id = existing?.Id ?? Guid.NewGuid(),
                     JobId = jobId.Value,
                     JobStepId = jobStepId.Value,
-                    StateJson = JsonSerializer.Serialize(state)
+                    StateJson = JsonSerializer.Serialize(state, state?.GetType() ?? typeof(TJobStepState))
                 };
 
             if (existing is null)
@@ -213,7 +213,7 @@ public class JobStepStorage(Func<JobsDbContext> contextFactory) : IJobStepStorag
             {
                 // Update status to failed and save the state
                 jobStep.Status = JobStepStatus.Failed;
-                jobStep.StateJson = JsonSerializer.Serialize(jobStepState);
+                jobStep.StateJson = JsonSerializer.Serialize(jobStepState, jobStepState?.GetType() ?? typeof(TJobStepState));
 
                 if (jobStepState is JobStepState stepState)
                 {

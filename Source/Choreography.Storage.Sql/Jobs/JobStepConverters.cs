@@ -59,6 +59,6 @@ public static class JobStepConverters
             Name = jobStepState.Name.Value,
             Status = jobStepState.Status,
             IsPrepared = jobStepState.IsPrepared,
-            StateJson = JsonSerializer.Serialize(jobStepState)
+            StateJson = JsonSerializer.Serialize(jobStepState, jobStepState.GetType())
         };
 }
