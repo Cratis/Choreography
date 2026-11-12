@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
@@ -58,13 +58,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Setup .Net
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             ${{ env.DOTNET_VERSION }}
@@ -86,7 +86,7 @@ jobs:
         run: dotnet nuget push '${{ env.NUGET_OUTPUT }}/*.nupkg' --skip-duplicate --timeout 900 --api-key ${{ secrets.GITHUB_TOKEN }} --source "github"
 
       - name: Add comment for NuGet packages
-        uses: mshick/add-pr-comment@v1
+        uses: mshick/add-pr-comment@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -103,13 +103,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Setup node v20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 20.x
           registry-url: "https://registry.npmjs.org"
