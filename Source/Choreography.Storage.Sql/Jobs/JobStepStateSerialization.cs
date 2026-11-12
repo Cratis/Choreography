@@ -75,7 +75,7 @@ internal sealed class JobStepStateSerialization
             {
                 return JsonSerializer.Deserialize(json, type, _legacyOptions);
             }
-            catch (Exception)
+            catch (Exception fallbackException) when (fallbackException is JsonException or NotSupportedException or InvalidOperationException)
             {
                 ExceptionDispatchInfo.Capture(ex).Throw();
                 return null;
