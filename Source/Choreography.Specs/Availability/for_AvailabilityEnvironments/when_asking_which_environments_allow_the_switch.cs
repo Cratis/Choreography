@@ -5,14 +5,12 @@ namespace Cratis.Choreography.Availability.for_AvailabilityEnvironments;
 
 public class when_asking_which_environments_allow_the_switch : Specification
 {
-    [Theory]
-    [InlineData("Development", true)]
-    [InlineData("local", true)]
-    [InlineData("Test", true)]
-    [InlineData("Testing", true)]
-    [InlineData("Production", false)]
-    [InlineData("Staging", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    void should_allow_only_local_and_test(string? name, bool expected) => AvailabilityEnvironments.AllowsGrantAll(name).ShouldEqual(expected);
+    [Fact] void should_allow_development() => AvailabilityEnvironments.AllowsGrantAll("Development").ShouldBeTrue();
+    [Fact] void should_allow_local_in_any_case() => AvailabilityEnvironments.AllowsGrantAll("local").ShouldBeTrue();
+    [Fact] void should_allow_test() => AvailabilityEnvironments.AllowsGrantAll("Test").ShouldBeTrue();
+    [Fact] void should_allow_testing() => AvailabilityEnvironments.AllowsGrantAll("Testing").ShouldBeTrue();
+    [Fact] void should_refuse_production() => AvailabilityEnvironments.AllowsGrantAll("Production").ShouldBeFalse();
+    [Fact] void should_refuse_staging() => AvailabilityEnvironments.AllowsGrantAll("Staging").ShouldBeFalse();
+    [Fact] void should_refuse_an_empty_name() => AvailabilityEnvironments.AllowsGrantAll(string.Empty).ShouldBeFalse();
+    [Fact] void should_refuse_no_name() => AvailabilityEnvironments.AllowsGrantAll(null).ShouldBeFalse();
 }
