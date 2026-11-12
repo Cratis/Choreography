@@ -6,6 +6,7 @@ using System.Linq.Expressions;
 using System.Reactive.Subjects;
 using System.Text.Json;
 using Cratis.Choreography.Jobs;
+using Cratis.Choreography.Serialization;
 using Cratis.Choreography.Storage.Jobs;
 using Cratis.Monads;
 using Microsoft.EntityFrameworkCore;
@@ -21,8 +22,20 @@ namespace Cratis.Choreography.Storage.Sql.Jobs;
 /// Initializes a new instance of the <see cref="JobStepStorage"/> class.
 /// </remarks>
 /// <param name="contextFactory">Factory creating the <see cref="JobsDbContext"/> for the scope and namespace being stored for.</param>
-public class JobStepStorage(Func<JobsDbContext> contextFactory) : IJobStepStorage
+/// <param name="hostJsonSerializerOptions">The host's <see cref="JsonSerializerOptions"/> step states are serialized with.</param>
+public class JobStepStorage(Func<JobsDbContext> contextFactory, JsonSerializerOptions hostJsonSerializerOptions) : IJobStepStorage
 {
+    readonly JobStepStateSerialization _serialization = new(hostJsonSerializerOptions);
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JobStepStorage"/> class with the default Cratis options.
+    /// </summary>
+    /// <param name="contextFactory">Factory creating the <see cref="JobsDbContext"/> for the scope and namespace being stored for.</param>
+    public JobStepStorage(Func<JobsDbContext> contextFactory)
+        : this(contextFactory, CratisJsonSerializer.CreateSerializerOptions())
+    {
+    }
+
     /// <inheritdoc/>
     public Task<Catch> RemoveAllForJob(JobId jobId) => RemoveWhere(js => js.JobId == jobId.Value);
 
@@ -56,7 +69,7 @@ public class JobStepStorage(Func<JobsDbContext> contextFactory) : IJobStepStorag
         {
             await using var dbContext = contextFactory();
             var jobSteps = await StepsOfJob(dbContext, jobId, statuses).ToListAsync();
-            return jobSteps.Select(js => js.ToJobStepState()).ToImmutableList();
+            return jobSteps.Select(_serialization.ToJobStepState).ToImmutableList();
         }
         catch (Exception ex)
         {
@@ -147,7 +160,7 @@ public class JobStepStorage(Func<JobsDbContext> contextFactory) : IJobStepStorag
                 return JobStepError.NotFound;
             }
 
-            var jobStepState = JsonSerializer.Deserialize<TJobStepState>(jobStep.StateJson);
+            var jobStepState = (TJobStepState?)_serialization.Deserialize(jobStep.StateJson, typeof(TJobStepState));
             return jobStepState is not null ? jobStepState : JobStepError.NotFound;
         }
         catch (Exception ex)
@@ -169,13 +182,13 @@ public class JobStepStorage(Func<JobsDbContext> contextFactory) : IJobStepStorag
             await using var dbContext = contextFactory();
             var existing = await dbContext.JobSteps.FirstOrDefaultAsync(js => js.JobId == jobId.Value && js.JobStepId == jobStepId.Value);
             var entity = state is JobStepState jobStepState ?
-                jobStepState.ToEntity(existing?.Id ?? Guid.NewGuid()) :
+                _serialization.ToEntity(jobStepState, existing?.Id ?? Guid.NewGuid()) :
                 new JobStep
                 {
                     Id = existing?.Id ?? Guid.NewGuid(),
                     JobId = jobId.Value,
                     JobStepId = jobStepId.Value,
-                    StateJson = JsonSerializer.Serialize(state, state?.GetType() ?? typeof(TJobStepState))
+                    StateJson = _serialization.Serialize(state, typeof(TJobStepState))
                 };
 
             if (existing is null)
@@ -213,7 +226,7 @@ public class JobStepStorage(Func<JobsDbContext> contextFactory) : IJobStepStorag
             {
                 // Update status to failed and save the state
                 jobStep.Status = JobStepStatus.Failed;
-                jobStep.StateJson = JsonSerializer.Serialize(jobStepState, jobStepState?.GetType() ?? typeof(TJobStepState));
+                jobStep.StateJson = _serialization.Serialize(jobStepState, typeof(TJobStepState));
 
                 if (jobStepState is JobStepState stepState)
                 {

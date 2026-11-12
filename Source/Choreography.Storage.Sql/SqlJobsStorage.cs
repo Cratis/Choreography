@@ -44,7 +44,7 @@ public class SqlJobsStorage(
         var jsonSerializerOptions = serviceProvider.GetService<JsonSerializerOptions>() ?? new JsonSerializerOptions();
         storage = new JobsStorage(
             new Jobs.JobStorage(ContextFactory, jobTypes, jsonSerializerOptions, serviceProvider.GetService<ILogger<Jobs.JobStorage>>() ?? NullLogger<Jobs.JobStorage>.Instance),
-            new Jobs.JobStepStorage(ContextFactory));
+            new Jobs.JobStepStorage(ContextFactory, jsonSerializerOptions));
         _storageByScopeAndNamespace.TryAdd(key, storage);
         return storage;
     }
