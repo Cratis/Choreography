@@ -24,6 +24,8 @@
   href: patching/toc.yml
 - name: Tenancy
   href: tenancy.md
+- name: Availability
+  href: availability/toc.yml
 - name: Serializers and grain keys
   href: serializers-and-keys.md
 - name: Upgrading and compatibility
