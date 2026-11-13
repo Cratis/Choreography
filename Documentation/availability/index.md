@@ -15,6 +15,7 @@ The engine has three pieces:
 | Gate evaluation | Evaluates `for`, `when` and `with` parts combined with `and`, `or` and parentheses. | [Evaluating gates](evaluating-gates.md) |
 | Audiences | Resolves which audiences apply to a request, from the tenant, the user and the system caller. | [Audiences](audiences.md) |
 | Context values | Resolves the values a gate reads, lazily and once per request. | [Request-scoped context values](context-values.md) |
+| Manifest | Describes what the model declares as data, and expands gates into alternatives. | [The availability manifest](manifest.md) |
 
 Three rules hold everywhere:
 
