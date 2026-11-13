@@ -17,6 +17,11 @@ public interface IDeclaredAudiences
     IReadOnlyCollection<AudienceName> All { get; }
 
     /// <summary>
+    /// Gets every declared audience with its description and source. Implementations that do not know them report the names alone.
+    /// </summary>
+    IReadOnlyCollection<AudienceDeclaration> Declarations => [.. All.Select(_ => new AudienceDeclaration(_))];
+
+    /// <summary>
     /// Determines whether an audience is declared.
     /// </summary>
     /// <param name="audience">The audience to check.</param>

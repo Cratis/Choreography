@@ -6,10 +6,19 @@ namespace Cratis.Choreography.Availability.Audiences;
 /// <summary>
 /// An in-memory <see cref="IDeclaredAudiences"/>.
 /// </summary>
-/// <param name="audiences">The declared audiences.</param>
-public class DeclaredAudiences(IEnumerable<AudienceName> audiences) : IDeclaredAudiences
+/// <param name="declarations">The declared audiences with their descriptions and sources.</param>
+public class DeclaredAudiences(IEnumerable<AudienceDeclaration> declarations) : IDeclaredAudiences
 {
-    readonly HashSet<AudienceName> _audiences = [.. audiences];
+    readonly HashSet<AudienceName> _audiences = [.. declarations.Select(_ => _.Name)];
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DeclaredAudiences"/> class.
+    /// </summary>
+    /// <param name="audiences">The declared audiences.</param>
+    public DeclaredAudiences(IEnumerable<AudienceName> audiences)
+        : this(audiences.Select(_ => new AudienceDeclaration(_)))
+    {
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DeclaredAudiences"/> class.
@@ -22,6 +31,9 @@ public class DeclaredAudiences(IEnumerable<AudienceName> audiences) : IDeclaredA
 
     /// <inheritdoc/>
     public IReadOnlyCollection<AudienceName> All => _audiences;
+
+    /// <inheritdoc/>
+    public IReadOnlyCollection<AudienceDeclaration> Declarations { get; } = [.. declarations.DistinctBy(_ => _.Name)];
 
     /// <inheritdoc/>
     public bool IsDeclared(AudienceName audience) => _audiences.Contains(audience);

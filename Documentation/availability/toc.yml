@@ -6,3 +6,5 @@
   href: audiences.md
 - name: Request-scoped context values
   href: context-values.md
+- name: The availability manifest
+  href: manifest.md
