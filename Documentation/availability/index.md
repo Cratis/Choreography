@@ -1,6 +1,6 @@
 ---
 title: Availability engine
-description: Decide per request whether a part of your application exists for a tenant, user or system caller, with audiences, gate expressions and lazily resolved context values.
+description: Decide per request whether part of your application exists for a tenant, user or system caller, using audiences, gate expressions and lazy context values.
 ---
 
 Authorization says who may do something. Availability says whether a part of the application is there at all for a given

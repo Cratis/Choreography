@@ -1,6 +1,6 @@
 ---
 title: Request-scoped context values
-description: Declare values at application, module, feature and slice level, resolve them lazily once per request, and understand required versus optional, cycles and failure.
+description: Declare values at application, module, feature and slice level, resolve them lazily once per request, and handle required values, cycles and failures.
 ---
 
 Gates read values: the vessel being viewed, the project the user works in. A `ContextValueDeclaration` adds such a value
