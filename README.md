@@ -130,7 +130,7 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or
 
 Two settings are separate from the jobs storage provider you register (`AddCratisChoreographyMongoDBJobsStorage`, `AddCratisChoreographySqlJobsStorage` or the in-memory provider, all behind `IJobsStorage`):
 
-- **Storage** on `CratisChoreographyOptions` is where grain state — jobs, job steps and workflow runs — is kept. It defaults to MongoDB; `InMemory` needs no database.
+- **Storage** on `CratisChoreographyOptions` is the hosting grain storage mode. It defaults to MongoDB; `InMemory` needs no database. Job and job step state is read and written through `IJobsStorage`, the provider you register.
 - **Clustering** defaults to Localhost; `MongoDB` membership needs a MongoDB server.
 
 MongoDB storage or MongoDB membership needs a MongoDB server, and registering SQL jobs storage changes neither setting. `CratisChoreographyOptions.Local()` selects Localhost clustering and in-memory storage. Workflows are off by default; when enabled, workflow grain state and run history follow the Storage setting, not the jobs storage provider.
