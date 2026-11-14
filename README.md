@@ -43,7 +43,7 @@
 
 Cratis Choreography runs long-lived, stateful behavior on Orleans so it survives restarts, deactivation and moves between silos. It holds a **workflow engine** that runs a business process defined as a graph of nodes, **state machines** (plain, and event-sourced through Chronicle), a durable **job system** for work that outlives a request, a **storage API** the job state persists through — with MongoDB, SQL and in-memory providers — and the **silo hosting tooling** that co-hosts Orleans next to an application in one call.
 
-It is consolidated here from [Chronicle](https://github.com/Cratis/Chronicle) (the job engine, the workers pattern, the serializers), [Direct](https://github.com/Cratis/Direct) (the hosting knowledge) and [Studio](https://github.com/Cratis/Studio) (the package-alignment guard) — so all three consume one canonical implementation instead of three diverging copies. The repository has **no dependency on Chronicle**; Chronicle is a consumer, like every other Cratis service.
+It is consolidated here from [Chronicle](https://github.com/Cratis/Chronicle) (the job engine, the workers pattern, the serializers), [Direct](https://github.com/Cratis/Direct) (the hosting knowledge) and [Studio](https://github.com/Cratis/Studio) (the package-alignment guard) — so all three consume one canonical implementation instead of three diverging copies. Apart from the optional [`Cratis.Choreography.Chronicle`](#-packages) integration, nothing here depends on Chronicle; Chronicle is a consumer, like every other Cratis service.
 
 > For core values and principles, read our [core values and principles](https://github.com/Cratis/.github/blob/main/profile/README.md).
 
@@ -126,7 +126,14 @@ It is consolidated here from [Chronicle](https://github.com/Cratis/Chronicle) (t
 
 ## 🚀 Getting Started
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) and, for anything but the in-memory storage, a MongoDB server.
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) and, depending on the modes you choose below, a MongoDB server.
+
+Two settings are separate from the jobs storage provider you register (`AddCratisChoreographyMongoDBJobsStorage`, `AddCratisChoreographySqlJobsStorage` or the in-memory provider, all behind `IJobsStorage`):
+
+- **Storage** on `CratisChoreographyOptions` is where grain state — jobs, job steps and workflow runs — is kept. It defaults to MongoDB; `InMemory` needs no database.
+- **Clustering** defaults to Localhost; `MongoDB` membership needs a MongoDB server.
+
+MongoDB storage or MongoDB membership needs a MongoDB server, and registering SQL jobs storage changes neither setting. `CratisChoreographyOptions.Local()` selects Localhost clustering and in-memory storage. Workflows are off by default; when enabled, workflow grain state and run history follow the Storage setting, not the jobs storage provider.
 
 ```bash
 dotnet add package Cratis.Choreography
