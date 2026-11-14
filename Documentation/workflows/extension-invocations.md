@@ -1,6 +1,6 @@
 ---
 title: Answers that arrive later, capability gates and reconciliation
-description: How a performer suspends its node until completed by key or expiry, how to limit concurrent calls per capability, and how to resume a run after an ambiguous outcome.
+description: How a performer suspends its node until completed by key or expiry, limits concurrent calls per capability, and resumes a run after an ambiguous outcome.
 ---
 
 A performer that calls an external system sometimes cannot answer when the call returns: a question posted to a chat tool, an
