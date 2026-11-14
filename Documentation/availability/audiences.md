@@ -15,6 +15,11 @@ exist. Who holds them is runtime data and changes without a redeploy.
 | `GetGrants(subject, cancellationToken)` | The `AudienceGrant`s that apply to an `AudienceSubject` (tenant, user, system), each tagged with its `AudienceLevel`. |
 | `OnChanged(handler)` | Subscribes to `AudienceChange` notifications, so a host can invalidate what it cached. Dispose the result to unsubscribe. |
 
+An `AudienceSubject` can also carry the calling system's client id in `SystemClientId`, set with an object initializer
+(`new AudienceSubject(tenant, user, IsSystem: true) { SystemClientId = "billing" }`). It is empty when the caller names
+none. The resolver hands the subject to the source unchanged, so a source can return the system-wide grants plus that
+system's own; a caller with no client id gets the system-wide grants only.
+
 `InMemoryAudienceSource` is a complete implementation for specifications and samples. Its `Grant` and `Withdraw` methods
 take effect immediately and notify subscribers. Withdrawing at one level leaves the other levels alone.
 
