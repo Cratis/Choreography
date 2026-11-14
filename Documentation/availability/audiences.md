@@ -1,6 +1,6 @@
 ---
 title: Audiences
-description: Resolve the audiences that apply to a request from tenant, user and system grants, see grants for undeclared audiences, react to changes, and grant every audience in local and test environments.
+description: Resolve the audiences that apply to a request from tenant, user and system grants, react to changes, and grant every audience in local and test environments.
 ---
 
 An audience is a named group a tenant, a user or the system caller can belong to. The model declares which audiences

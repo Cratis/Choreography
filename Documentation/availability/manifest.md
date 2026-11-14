@@ -1,6 +1,6 @@
 ---
 title: The availability manifest
-description: Read what a model declares about availability as data with IAvailabilityManifest, and expand any gate into its alternatives with AvailabilityExpression.Alternatives().
+description: Read what a model declares about availability as data with IAvailabilityManifest, and expand any gate into its alternatives with Alternatives().
 ---
 
 The availability manifest is a description of what a model declares: the audiences, the `availability` blocks, the gates,
