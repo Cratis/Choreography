@@ -1,6 +1,6 @@
 ---
 title: Packages and target frameworks
-description: Compare the five Cratis Choreography NuGet packages, their contents, target frameworks, and dependencies to choose a storage provider and references.
+description: Compare the five Cratis Choreography NuGet packages and the @cratis/choreography npm package, their contents, target frameworks, and dependencies to choose a storage provider and references.
 ---
 
 Cratis Choreography ships as five NuGet packages. Reference `Cratis.Choreography` and a storage provider for most
@@ -10,17 +10,30 @@ services, and add `Cratis.Choreography.Chronicle` only when you use Cratis Chron
 
 | Package | Contains | Target frameworks |
 | --- | --- | --- |
-| `Cratis.Choreography` | Jobs, workers, state machines, workflows, patching, tenancy, typed grain keys, serializers, live collaboration presence and silo hosting | `net10.0`, `net11.0` |
+| `Cratis.Choreography` | Jobs, workers, state machines, workflows, patching, tenancy, the availability engine, typed grain keys, serializers, live collaboration presence and silo hosting | `net10.0`, `net11.0` |
 | `Cratis.Choreography.Storage` | The jobs and patch storage APIs and the in-memory providers | `net10.0`, `net11.0` |
 | `Cratis.Choreography.Storage.MongoDB` | The MongoDB providers for jobs and patches | `net10.0`, `net11.0` |
 | `Cratis.Choreography.Storage.Sql` | The SQL providers for jobs and patches, on EF Core for SQL Server, PostgreSQL and SQLite | `net10.0`, `net11.0` |
 | `Cratis.Choreography.Chronicle` | Event-sourced state machines and workflows whose runs are kept as Chronicle events | `net10.0`, `net11.0` |
 
-Live collaboration presence ships inside `Cratis.Choreography`: it is not a separate package. It uses the ASP.NET Core shared framework
+Live collaboration presence and the [availability engine](../availability/index.md) ship inside `Cratis.Choreography`: they are not separate packages. It uses the ASP.NET Core shared framework
 and the Orleans packages that `Cratis.Choreography` already references.
 
 All five packages target `net10.0` and `net11.0`. The SQL provider uses EF Core 10 on both frameworks to stay within
 Npgsql's supported EF Core range. Source builds, tools and specifications target `net11.0` and require the .NET 11 GA SDK.
+
+## The npm package
+
+The browser side ships separately as `@cratis/choreography` on npm. A backend needs none of it; add it to a frontend that shows
+operation history with undo and redo, or live collaborators.
+
+| Entry point | Contains | Read |
+| --- | --- | --- |
+| `@cratis/choreography` | The operation history client and its types | [Operations and undo/redo](../operations/index.md) |
+| `@cratis/choreography/react` | The hooks `useOperationHistory`, `useUndo` and `useRedo` | [Operations in React](../operations/react.md) |
+| `@cratis/choreography/collaboration` | The live collaboration client, shared store, types and geometry helpers, with no React dependency | [Show live collaborators in React](../collaboration/frontend.md) |
+| `@cratis/choreography/collaboration/react` | The collaboration hooks and components | [Show live collaborators in React](../collaboration/frontend.md) |
+| `@cratis/choreography/collaboration/collaboration.css` | The styles for the collaboration components | [Show live collaborators in React](../collaboration/frontend.md) |
 
 ## Which packages you need
 
