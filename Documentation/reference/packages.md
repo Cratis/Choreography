@@ -1,6 +1,6 @@
 ---
 title: Packages and target frameworks
-description: Compare the five Cratis Choreography NuGet packages and the @cratis/choreography npm package, their contents, target frameworks, and dependencies to choose a storage provider and references.
+description: Compare the five Choreography NuGet packages and the @cratis/choreography npm package: contents, target frameworks and dependencies for choosing references.
 ---
 
 Cratis Choreography ships as five NuGet packages. Reference `Cratis.Choreography` and a storage provider for most
