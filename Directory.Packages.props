@@ -42,7 +42,7 @@
     <!-- Cratis -->
     <PackageVersion Include="Cratis.Arc.MongoDB" Version="22.179.0" />
     <PackageVersion Include="Cratis.Chronicle" Version="19.148.0" />
-    <PackageVersion Include="Cratis.Chronicle.XUnit.Integration" Version="19.14.0" />
+    <PackageVersion Include="Cratis.Chronicle.XUnit.Integration" Version="19.148.0" />
     <PackageVersion Include="Cratis.Fundamentals" Version="7.33.1" />
     <PackageVersion Include="Cratis.Metrics.Roslyn" Version="7.33.1" />
     <PackageVersion Include="Cratis.Specifications.XUnit.v3" Version="5.2.3" />
