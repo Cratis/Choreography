@@ -23,22 +23,41 @@ namespace Cratis.Choreography.Chronicle.Workflows;
 /// The run facts are plain records in the core package, which does not know Chronicle, so they carry no event type attribute.
 /// They are registered here, explicitly, with an event type identifier that is the bare type name - exactly what an
 /// attribute without arguments would have given them. That is what keeps the facts already in a store readable.
+/// <para>
+/// Configuring the <see cref="EventSourcedWorkflowsOptions"/> may itself read Chronicle options, for instance to take the
+/// event store name from them. An instance of <typeparamref name="TOptions"/> built while the same thread is already
+/// registering on another instance of <typeparamref name="TOptions"/> is only read by that configuration, and the options
+/// manager keeps the outer instance, so the inner one is left without the engine's artifacts instead of building the workflow
+/// options again, which would recurse until the stack overflows. The guard is per options type: an instance of another
+/// Chronicle options type built along the way is the one its options manager keeps, so it still gets the artifacts.
+/// </para>
 /// </remarks>
 internal sealed class RegisterEventSourcedWorkflows<TOptions>(IServiceProvider services) : IConfigureOptions<TOptions>
     where TOptions : ChronicleOptions
 {
     static readonly ConditionalWeakTable<ExplicitArtifacts, object> _registered = [];
 
+    [ThreadStatic]
+    static bool _registering;
+
     /// <inheritdoc/>
     public void Configure(TOptions options)
     {
-        if (!_registered.TryAdd(options.ExplicitArtifacts, new()))
+        if (_registering || !_registered.TryAdd(options.ExplicitArtifacts, new()))
         {
             return;
         }
 
-        var workflows = services.GetRequiredService<IOptions<EventSourcedWorkflowsOptions>>().Value;
-        Register(options.ExplicitArtifacts, workflows, services);
+        _registering = true;
+        try
+        {
+            var workflows = services.GetRequiredService<IOptions<EventSourcedWorkflowsOptions>>().Value;
+            Register(options.ExplicitArtifacts, workflows, services);
+        }
+        finally
+        {
+            _registering = false;
+        }
     }
 
     /// <summary>
