@@ -68,7 +68,8 @@ public class WorkflowScheduleService(
             return;
         }
 
-        var handled = timeProvider.GetUtcNow();
+        // Start from the catch-up window, so the first tick starts the minutes that fell due while no silo was running.
+        var handled = timeProvider.GetUtcNow() - MaximumCatchUp;
         try
         {
             using var timer = new PeriodicTimer(Interval, timeProvider);
