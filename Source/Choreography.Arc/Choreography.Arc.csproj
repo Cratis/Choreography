@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <AssemblyName>Cratis.Choreography.Arc</AssemblyName>
+        <RootNamespace>Cratis.Choreography.Arc</RootNamespace>
+        <Description>Cratis Arc integration for Cratis Choreography - execute Arc commands as actions of state machines and workflows</Description>
+        <PackageTags>orleans;arc;commands;actions;state-machines;workflows;cratis</PackageTags>
+        <RepositoryUrl>https://github.com/Cratis/Choreography</RepositoryUrl>
+        <ProjectUrl>https://github.com/Cratis/Choreography</ProjectUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Cratis.Arc.Core" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Choreography/Choreography.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <InternalsVisibleTo Include="Cratis.Choreography.Arc.Specs" />
+        <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+    </ItemGroup>
+</Project>

@@ -17,6 +17,7 @@ const ordinary = [
     ['Source/Choreography.Storage.MongoDB.Specs/Choreography.Storage.MongoDB.Specs.csproj', 'Cratis.Choreography.Storage.MongoDB.Specs'],
     ['Source/Choreography.Storage.Sql.Specs/Choreography.Storage.Sql.Specs.csproj', 'Cratis.Choreography.Storage.Sql.Specs'],
     ['Source/Choreography.Chronicle.Specs/Choreography.Chronicle.Specs.csproj', 'Cratis.Choreography.Chronicle.Specs'],
+    ['Source/Choreography.Arc.Specs/Choreography.Arc.Specs.csproj', 'Cratis.Choreography.Arc.Specs'],
     ['Source/Tools/GrainCompatibility.Specs/GrainCompatibility.Specs.csproj', 'Cratis.Choreography.Tools.GrainCompatibility.Specs']
 ];
 const integration = [
@@ -104,10 +105,10 @@ const executed = result => (result.output.match(/ executed/g) ?? []).length;
 test('all scope runs six ordinary and two integration projects sequentially', t => {
     const result = fixture(t, { args: ['Debug', '--results', '@results'] });
     assert.equal(result.status, 0, result.output);
-    assert.match(result.output, /Running 8 specification projects sequentially/);
-    assert.match(result.output, /Validated 8 specification projects, 8 tests/);
-    assert.equal(executed(result), 8);
-    assert.equal(result.started.split('\n').filter(l => l.startsWith('start')).length, 8);
+    assert.match(result.output, /Running 9 specification projects sequentially/);
+    assert.match(result.output, /Validated 9 specification projects, 9 tests/);
+    assert.equal(executed(result), 9);
+    assert.equal(result.started.split('\n').filter(l => l.startsWith('start')).length, 9);
     assert.doesNotMatch(result.output, /CONCURRENT/);
     assert.equal(readdirSync(join(result.results, 'Choreography.Specs')).filter(n => n.endsWith('.trx')).length, 1);
 });
@@ -115,9 +116,9 @@ test('all scope runs six ordinary and two integration projects sequentially', t 
 test('ordinary scope never runs integration projects', t => {
     const result = fixture(t, { args: ['Debug', '--scope', 'ordinary'] });
     assert.equal(result.status, 0, result.output);
-    assert.match(result.output, /Validated 6 specification projects/);
+    assert.match(result.output, /Validated 7 specification projects/);
     assert.doesNotMatch(result.output, /Integration/);
-    assert.equal(executed(result), 6);
+    assert.equal(executed(result), 7);
 });
 
 test('integration scope runs only the two integration projects', t => {
@@ -189,7 +190,7 @@ test('finishes every project and preserves the first nonzero child status, even 
     assert.equal(result.status, 3, result.output);
     assert.match(result.output, /::error::Choreography.Specs exited with 3/);
     assert.match(result.output, /::error::Choreography.Storage.Specs exited with 7/);
-    assert.equal(executed(result), 8);
+    assert.equal(executed(result), 9);
     assert.doesNotMatch(result.output, /Validated/);
 });
 
@@ -228,7 +229,7 @@ test('a failing discovery fails the project without running it', t => {
     const result = fixture(t, { discoveryExit: { 'Choreography.Specs': 5 } });
     assert.equal(result.status, 5, result.output);
     assert.match(result.output, /Choreography.Specs discovery exited with 5/);
-    assert.equal(executed(result), 7);
+    assert.equal(executed(result), 8);
 });
 
 test('does not reuse stale results for a project', t => {
@@ -240,7 +241,7 @@ test('does not reuse stale results for a project', t => {
 test('accepts the Windows executable suffix', t => {
     const result = fixture(t, { windows: true, args: ['Debug', '--scope', 'ordinary'] });
     assert.equal(result.status, 0, result.output);
-    assert.equal(executed(result), 6);
+    assert.equal(executed(result), 7);
 });
 
 test('never builds or restores', t => {

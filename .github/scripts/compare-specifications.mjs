@@ -24,6 +24,7 @@ export const PROJECTS = [
     ['Source/Choreography.Storage.MongoDB.Specs/Choreography.Storage.MongoDB.Specs.csproj', 'Cratis.Choreography.Storage.MongoDB.Specs', 'ordinary'],
     ['Source/Choreography.Storage.Sql.Specs/Choreography.Storage.Sql.Specs.csproj', 'Cratis.Choreography.Storage.Sql.Specs', 'ordinary'],
     ['Source/Choreography.Chronicle.Specs/Choreography.Chronicle.Specs.csproj', 'Cratis.Choreography.Chronicle.Specs', 'ordinary'],
+    ['Source/Choreography.Arc.Specs/Choreography.Arc.Specs.csproj', 'Cratis.Choreography.Arc.Specs', 'ordinary'],
     ['Source/Tools/GrainCompatibility.Specs/GrainCompatibility.Specs.csproj', 'Cratis.Choreography.Tools.GrainCompatibility.Specs', 'ordinary'],
     ['Integration/Jobs.Integration/Jobs.Integration.csproj', 'Cratis.Choreography.Jobs.Integration', 'integration'],
     ['Integration/Chronicle.Integration/Chronicle.Integration.csproj', 'Cratis.Choreography.Chronicle.Integration', 'integration']

@@ -14,7 +14,7 @@ namespace Cratis.Choreography.Workflows.Adapters;
 /// <remarks>
 /// <para>
 /// This is how the actions state machines use are plugged into workflows: derive from it, say which capability it
-/// performs and which action it executes - a <see cref="CodeAction"/>, a <see cref="CommandAction"/>, a
+/// performs and which action it executes - a <see cref="CodeAction"/>, a <see cref="ProcessAction"/>, a
 /// <see cref="CompositeAction"/> of several, or any other <see cref="IAction"/>. The action sees the node's input as its
 /// <see cref="ActionContext.Input"/> and the workflow run as its <see cref="ActionContext.Identity"/>.
 /// </para>
@@ -26,6 +26,8 @@ namespace Cratis.Choreography.Workflows.Adapters;
 /// <param name="services">The <see cref="IServiceProvider"/> the action resolves its dependencies from.</param>
 public abstract class ActionNodePerformer(IServiceProvider services) : IWorkflowNodePerformer
 {
+    IAction? _defined;
+
     /// <inheritdoc/>
     public abstract CapabilityReference Capability { get; }
 
@@ -35,9 +37,9 @@ public abstract class ActionNodePerformer(IServiceProvider services) : IWorkflow
     protected virtual OutletName SuccessOutlet => WellKnownOutlets.Next;
 
     /// <summary>
-    /// Gets the <see cref="IAction"/> that performs the node.
+    /// Gets the <see cref="IAction"/> that performs the node. By default it is what <see cref="Define(ActionsBuilder)"/> defines.
     /// </summary>
-    protected abstract IAction Action { get; }
+    protected virtual IAction Action => _defined ??= BuildDefined();
 
     /// <inheritdoc/>
     public async Task<WorkflowNodeOutcome> Perform(WorkflowNodeInvocation invocation, CancellationToken cancellationToken)
@@ -49,5 +51,20 @@ public abstract class ActionNodePerformer(IServiceProvider services) : IWorkflow
         return result.IsSuccess
             ? WorkflowNodeOutcome.Succeeded(SuccessOutlet, new WorkflowData(result.Output))
             : WorkflowNodeOutcome.Failed(result.Reason);
+    }
+
+    /// <summary>
+    /// Define the actions that perform the node fluently.
+    /// </summary>
+    /// <param name="actions">The <see cref="ActionsBuilder"/> to define the actions on.</param>
+    protected virtual void Define(ActionsBuilder actions)
+    {
+    }
+
+    IAction BuildDefined()
+    {
+        var builder = new ActionsBuilder();
+        Define(builder);
+        return builder.Build();
     }
 }

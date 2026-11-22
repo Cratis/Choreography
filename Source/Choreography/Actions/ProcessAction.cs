@@ -7,11 +7,11 @@ using System.Text.Json;
 namespace Cratis.Choreography.Actions;
 
 /// <summary>
-/// Represents an <see cref="IAction"/> that executes a command - an operating system process.
+/// Represents an <see cref="IAction"/> that runs a process - an operating system command.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The command runs without a shell, so the arguments are never interpreted. It succeeds when the process exits with
+/// The process runs without a shell, so the arguments are never interpreted. It succeeds when the process exits with
 /// code 0 and fails otherwise, with the standard error as the reason. The output is JSON holding the exit code and the
 /// standard output. The identity of the grain executing the action is passed in the CHOREOGRAPHY_GRAIN_KIND,
 /// CHOREOGRAPHY_GRAIN_TYPE and CHOREOGRAPHY_GRAIN_KEY environment variables.
@@ -25,7 +25,7 @@ namespace Cratis.Choreography.Actions;
 /// <param name="arguments">Optional arguments, each passed as one argument.</param>
 /// <param name="workingDirectory">Optional working directory.</param>
 /// <param name="timeout">Optional time the command may run for.</param>
-public class CommandAction(string fileName, IEnumerable<string>? arguments = default, string? workingDirectory = default, TimeSpan? timeout = default) : IAction
+public class ProcessAction(string fileName, IEnumerable<string>? arguments = default, string? workingDirectory = default, TimeSpan? timeout = default) : IAction
 {
     /// <inheritdoc/>
     public async Task<ActionResult> Execute(ActionContext context, CancellationToken cancellationToken)

@@ -123,6 +123,7 @@ It is consolidated here from [Chronicle](https://github.com/Cratis/Chronicle) (t
 | [`Cratis.Choreography.Storage.MongoDB`](http://nuget.org/packages/cratis.choreography.storage.mongodb) | The MongoDB jobs and patch storage provider |
 | [`Cratis.Choreography.Storage.Sql`](http://nuget.org/packages/cratis.choreography.storage.sql) | The SQL jobs and patch storage provider (EF Core 10; net10 and net11) |
 | [`Cratis.Choreography.Chronicle`](http://nuget.org/packages/cratis.choreography.chronicle) | Event-sourced state machines and workflows driven by Chronicle events |
+| [`Cratis.Choreography.Arc`](http://nuget.org/packages/cratis.choreography.arc) | Execute Cratis Arc commands as actions of state machines and workflows |
 
 ## 🚀 Getting Started
 
