@@ -1,6 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using Cratis.Choreography.Actions;
 using Cratis.Choreography.Jobs;
 using Cratis.Choreography.Workflows.Adapters;
 using Cratis.Choreography.Workflows.Contracts;
@@ -41,15 +42,20 @@ namespace Cratis.Choreography.Workflows.Runs;
 /// so nothing is lost when a silo goes away.
 /// </para>
 /// </remarks>
-[GrainType("cratis-orleans-workflow-run")]
+[GrainType(WorkflowRunGrain.GrainTypeName)]
 public class WorkflowRunGrain(
     IWorkflowRunJournal journal,
     IWorkflowExecutionScopes scopes,
     WorkflowScopes knownScopes,
     IOptions<WorkflowsOptions> options,
     TimeProvider timeProvider,
-    ILogger<WorkflowRunGrain> logger) : Grain, IWorkflowRun, IRemindable
+    ILogger<WorkflowRunGrain> logger) : Grain, IWorkflowRun, IIdentifiable, IRemindable
 {
+    /// <summary>
+    /// The Orleans grain type name of a workflow run.
+    /// </summary>
+    public const string GrainTypeName = "cratis-orleans-workflow-run";
+
     const string WakeReminder = "cratis-orleans-workflow-due";
     static readonly TimeSpan _reminderPeriod = TimeSpan.FromMinutes(1);
 
@@ -60,6 +66,9 @@ public class WorkflowRunGrain(
     bool? _indexed;
     IGrainTimer? _wake;
     IGrainReminder? _reminder;
+
+    /// <inheritdoc/>
+    public GrainIdentity Identity => field ??= GrainIdentity.Of(this, GrainKind.WorkflowRun);
 
     DateTimeOffset Now => timeProvider.GetUtcNow();
 
