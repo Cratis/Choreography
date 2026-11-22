@@ -80,13 +80,12 @@ jobs:
             ${{ env.DOTNET_VERSION }}
             10.0.x
 
-      - name: Cache NuGet packages
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      # Only restore here; warm-nuget-cache.yml saves the shared cache on main.
+      # Compute the key before restore or build generates any .props or .targets files.
+      - name: Restore NuGet packages
+        uses: Cratis/Workflows/.github/actions/dotnet-cache@main
         with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj', 'global.json') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
+          mode: restore
 
       - name: Start SQL Server
         run: |
@@ -135,4 +134,5 @@ jobs:
         with:
           name: specification-results
           path: TestResults/
+          retention-days: 3
           if-no-files-found: ignore

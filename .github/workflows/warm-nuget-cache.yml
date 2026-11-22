@@ -1,0 +1,57 @@
+# Copyright (c) Cratis. All rights reserved.
+# Licensed under the MIT license. See LICENSE file in the project root for full license information.
+name: Warm NuGet cache
+
+# Pull request builds only restore the shared cache. Seed it on main when its inputs
+# change, and weekly so it is not evicted between dependency changes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.csproj"
+      - "**/*.props"
+      - "**/*.targets"
+      - "**/packages.lock.json"
+      - "**/[Nn]u[Gg]et.[Cc]onfig"
+      - "*.slnx"
+      - "global.json"
+      - ".github/workflows/warm-nuget-cache.yml"
+  schedule:
+    - cron: "29 5 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  restore:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .Net
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: |
+            11.0.x
+            10.0.x
+
+      - name: Cache NuGet packages
+        id: nuget
+        uses: Cratis/Workflows/.github/actions/dotnet-cache@main
+        with:
+          # On an exact-key miss, save only the versions this full restore needs.
+          prune-on-miss: 'true'
+
+      - name: Restore every project
+        if: steps.nuget.outputs.cache-hit != 'true'
+        run: dotnet restore --property:Configuration=Release
