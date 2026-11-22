@@ -236,10 +236,10 @@ function inventoryTree(t, { extra = [], omit = [] } = {}) {
     return f.dir;
 }
 
-test('inventory has six ordinary and two integration projects', () => {
-    assert.equal(projectsIn('ordinary').length, 6);
+test('inventory has seven ordinary and two integration projects', () => {
+    assert.equal(projectsIn('ordinary').length, 7);
     assert.equal(projectsIn('integration').length, 2);
-    assert.equal(projectsIn('all').length, 8);
+    assert.equal(projectsIn('all').length, 9);
     assert.ok(projectsIn('ordinary').some(([p]) => p === 'Source/Tools/GrainCompatibility.Specs/GrainCompatibility.Specs.csproj'));
     assert.ok(!projectsIn('ordinary').some(([p]) => p.includes('Integration')));
 });

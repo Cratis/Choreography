@@ -10,6 +10,8 @@
   href: workflows/toc.yml
 - name: State machines
   href: state-machines/toc.yml
+- name: Actions
+  href: actions.md
 - name: Operations and undo/redo
   href: operations/toc.yml
 - name: Workers

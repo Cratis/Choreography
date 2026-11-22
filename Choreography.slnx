@@ -10,6 +10,8 @@
         <Project Path="Source/Choreography.Storage.Sql.Specs/Choreography.Storage.Sql.Specs.csproj" />
         <Project Path="Source/Choreography.Chronicle/Choreography.Chronicle.csproj" />
         <Project Path="Source/Choreography.Chronicle.Specs/Choreography.Chronicle.Specs.csproj" />
+        <Project Path="Source/Choreography.Arc/Choreography.Arc.csproj" />
+        <Project Path="Source/Choreography.Arc.Specs/Choreography.Arc.Specs.csproj" />
     </Folder>
     <Folder Name="/Source/Tools/">
         <Project Path="Source/Tools/GrainCompatibility/GrainCompatibility.csproj" />

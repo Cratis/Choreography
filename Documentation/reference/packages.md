@@ -1,10 +1,10 @@
 ---
 title: Packages and target frameworks
-description: Compare the five Choreography NuGet packages and the @cratis/choreography npm package: contents, target frameworks and dependencies for choosing references.
+description: Compare the six Choreography NuGet packages and the @cratis/choreography npm package: contents, target frameworks and dependencies for choosing references.
 ---
 
-Cratis Choreography ships as five NuGet packages. Reference `Cratis.Choreography` and a storage provider for most
-services, and add `Cratis.Choreography.Chronicle` only when you use Cratis Chronicle.
+Cratis Choreography ships as six NuGet packages. Reference `Cratis.Choreography` and a storage provider for most
+services, and add `Cratis.Choreography.Chronicle` only when you use Cratis Chronicle, or `Cratis.Choreography.Arc` only when actions execute Cratis Arc commands.
 
 ## Packages at a glance
 
@@ -14,12 +14,13 @@ services, and add `Cratis.Choreography.Chronicle` only when you use Cratis Chron
 | `Cratis.Choreography.Storage` | The jobs and patch storage APIs and the in-memory providers | `net10.0`, `net11.0` |
 | `Cratis.Choreography.Storage.MongoDB` | The MongoDB providers for jobs and patches | `net10.0`, `net11.0` |
 | `Cratis.Choreography.Storage.Sql` | The SQL providers for jobs and patches, on EF Core for SQL Server, PostgreSQL and SQLite | `net10.0`, `net11.0` |
-| `Cratis.Choreography.Chronicle` | Event-sourced state machines and workflows whose runs are kept as Chronicle events | `net10.0`, `net11.0` |
+| `Cratis.Choreography.Chronicle` | Event-sourced state machines and workflows whose runs are kept as Chronicle events, and the Append action | `net10.0`, `net11.0` |
+| `Cratis.Choreography.Arc` | The Execute action, which runs a Cratis Arc command as an action of a state machine or a workflow | `net10.0`, `net11.0` |
 
 Live collaboration presence and the [availability engine](../availability/index.md) ship inside `Cratis.Choreography`: they are not separate packages. It uses the ASP.NET Core shared framework
 and the Orleans packages that `Cratis.Choreography` already references.
 
-All five packages target `net10.0` and `net11.0`. The SQL provider uses EF Core 10 on both frameworks to stay within
+All six packages target `net10.0` and `net11.0`. The SQL provider uses EF Core 10 on both frameworks to stay within
 Npgsql's supported EF Core range. Source builds, tools and specifications target `net11.0` and require the .NET 11 GA SDK.
 
 ## The npm package
@@ -43,9 +44,10 @@ operation history with undo and redo, or live collaborators.
 | Durable state in MongoDB | `Cratis.Choreography` and `Cratis.Choreography.Storage.MongoDB` |
 | Durable state in SQL Server, PostgreSQL or SQLite | `Cratis.Choreography` and `Cratis.Choreography.Storage.Sql` |
 | Event-sourced state machines or a Chronicle-backed workflow journal | `Cratis.Choreography`, a storage provider if you run jobs, and `Cratis.Choreography.Chronicle` |
+| Actions that append events or execute Cratis Arc commands | `Cratis.Choreography`, with `Cratis.Choreography.Chronicle` for Append and `Cratis.Choreography.Arc` for Execute |
 
 `Cratis.Choreography` references `Cratis.Choreography.Storage`, so you do not add it yourself. The storage provider
-packages and the Chronicle package reference `Cratis.Choreography`.
+packages, the Chronicle package and the Arc package reference `Cratis.Choreography`.
 
 ## Dependencies
 
@@ -56,8 +58,9 @@ packages and the Chronicle package reference `Cratis.Choreography`.
 | `Cratis.Choreography.Storage.MongoDB` | `MongoDB.Driver`, `Cratis.Arc.MongoDB`, `System.Reactive` |
 | `Cratis.Choreography.Storage.Sql` | `Cratis.Arc.EntityFrameworkCore` and the EF Core SQL Server, PostgreSQL and SQLite providers |
 | `Cratis.Choreography.Chronicle` | `Microsoft.Orleans.Sdk`, `Cratis.Chronicle` |
+| `Cratis.Choreography.Arc` | `Cratis.Arc.Core` |
 
-Only `Cratis.Choreography.Chronicle` depends on Cratis Chronicle. The other four packages work without it.
+Only `Cratis.Choreography.Chronicle` depends on Cratis Chronicle and only `Cratis.Choreography.Arc` depends on Cratis Arc. The other four packages work without either.
 
 ## One Orleans version
 

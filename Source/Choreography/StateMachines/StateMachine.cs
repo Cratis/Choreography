@@ -3,6 +3,7 @@
 
 using System.Collections.Immutable;
 using System.Reflection;
+using Cratis.Choreography.Actions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,7 +15,7 @@ namespace Cratis.Choreography.StateMachines;
 /// Represents a base implementation of <see cref="IStateMachine{TStoredState}"/>.
 /// </summary>
 /// <typeparam name="TStoredState">Type of stored state.</typeparam>
-public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMachine<TStoredState>
+public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMachine<TStoredState>, IIdentifiable
 {
     static readonly NoOpState<TStoredState> _noOpState = new();
     static readonly MethodInfo _canTransitionToMethod = typeof(IState<TStoredState>).GetMethod(nameof(IState<TStoredState>.CanTransitionTo))!;
@@ -27,6 +28,8 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
     bool _isTransitioning;
     bool _isLeaving;
     ILogger<StateMachine<TStoredState>>? _logger;
+    GrainIdentity? _identity;
+    StateMachineControl? _control;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StateMachine{TStoredState}"/> class, with the stored state
@@ -57,6 +60,9 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
     /// </summary>
     public bool IsInActiveState => _currentState.GetType() != _noOpState.GetType();
 
+    /// <inheritdoc/>
+    public GrainIdentity Identity => _identity ??= GrainIdentity.Of(this, GrainKind.StateMachine);
+
     /// <summary>
     /// Gets the initial state of the state machine.
     /// </summary>
@@ -85,7 +91,11 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
 
         InvalidTypeForState.ThrowIfInvalid(activationState);
         ThrowIfUnknownStateType(activationState);
-        await PerformTransition(activationState, _entryGeneration);
+
+        // A state machine that has never persisted a state is entering its first state; any other activation resumes
+        // a state it is already in, whose entry actions have run before.
+        var isFirstEntry = State is not StateMachineState { CurrentState.Length: > 0 };
+        await PerformTransition(activationState, _entryGeneration, runEntryActions: isFirstEntry);
     }
 
     /// <inheritdoc/>
@@ -139,6 +149,26 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
     public virtual Task OnActivation(CancellationToken cancellationToken) => Task.CompletedTask;
 
     /// <summary>
+    /// Transition to a state by type, if the current state allows it.
+    /// </summary>
+    /// <param name="stateType">The type of state to transition to.</param>
+    /// <returns>True if the transition was admitted, false if the current state refused it.</returns>
+    internal async Task<bool> TryTransitionTo(Type stateType)
+    {
+        ThrowIfNotAStateType(stateType);
+        ThrowIfUnknownStateType(stateType);
+
+        var admissionGeneration = _entryGeneration;
+        if (!await CanTransitionTo(stateType))
+        {
+            return false;
+        }
+
+        await PerformTransition(stateType, admissionGeneration);
+        return true;
+    }
+
+    /// <summary>
     /// Check if the current state allows a transition to a specific state, identified by its type.
     /// </summary>
     /// <param name="stateType">Type of state to check.</param>
@@ -176,11 +206,7 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
     {
         ThrowIfNotAStateType(stateType);
         ThrowIfUnknownStateType(stateType);
-        var admissionGeneration = _entryGeneration;
-        if (await CanTransitionTo(stateType))
-        {
-            await PerformTransition(stateType, admissionGeneration);
-        }
+        await TryTransitionTo(stateType);
     }
 
     /// <summary>
@@ -233,7 +259,7 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
     /// <returns>Awaitable task.</returns>
     protected virtual Task OnAfterLeavingState(IState<TStoredState> state) => Task.CompletedTask;
 
-    async Task PerformTransition(Type stateType, long admissionGeneration)
+    async Task PerformTransition(Type stateType, long admissionGeneration, bool runEntryActions = true)
     {
         _logger?.TransitioningTo(stateType);
         if (_isTransitioning)
@@ -249,13 +275,13 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
         _isTransitioning = true;
         try
         {
-            await PerformSingleTransition(stateType);
+            await PerformSingleTransition(stateType, runEntryActions);
             while (_scheduledTransitions.TryDequeue(out var scheduledState))
             {
                 if (_entryGeneration == scheduledState.AdmissionGeneration || await CanTransitionTo(scheduledState.TargetState))
                 {
                     _logger?.TransitioningTo(scheduledState.TargetState);
-                    await PerformSingleTransition(scheduledState.TargetState);
+                    await PerformSingleTransition(scheduledState.TargetState, runEntryActions: true);
                 }
             }
         }
@@ -268,7 +294,7 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
         }
     }
 
-    async Task PerformSingleTransition(Type stateType)
+    async Task PerformSingleTransition(Type stateType, bool runEntryActions)
     {
         var stateTypeBeforeTransition = _currentState.GetType();
         var storedStateBeforeTransition = State;
@@ -276,6 +302,7 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
         _isLeaving = true;
         await OnBeforeLeavingState(_currentState);
         State = await _currentState.OnLeave(State);
+        await ExecuteActions(_currentState, StateActionPhase.Exit);
         await OnAfterLeavingState(_currentState);
         _isLeaving = false;
 
@@ -284,6 +311,11 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
 
         await OnBeforeEnteringState(_currentState);
         State = await _currentState.OnEnter(State);
+        if (runEntryActions)
+        {
+            await ExecuteActions(_currentState, StateActionPhase.Entry);
+        }
+
         await OnAfterEnteringState(_currentState);
 
         if (State is StateMachineState stateMachineState)
@@ -297,6 +329,39 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
         if (_currentState.GetType() != stateTypeBeforeTransition || !ReferenceEquals(State, storedStateBeforeTransition))
         {
             await WriteStateAsync();
+        }
+
+        await ExecuteActions(_currentState, StateActionPhase.Running);
+    }
+
+    async Task ExecuteActions(IState<TStoredState> state, StateActionPhase phase)
+    {
+        if (state is not IStateActions stateActions)
+        {
+            return;
+        }
+
+        var actions = phase switch
+        {
+            StateActionPhase.Entry => stateActions.EntryActions,
+            StateActionPhase.Running => stateActions.RunningActions,
+            _ => stateActions.ExitActions
+        };
+
+        _control ??= new(this);
+        foreach (var action in actions)
+        {
+            var context = new ActionContext(Identity, ServiceProvider)
+            {
+                StateMachine = _control,
+                State = State
+            };
+
+            var result = await action.Execute(context, CancellationToken.None);
+            if (!result.IsSuccess)
+            {
+                throw new StateActionFailed(state.GetType(), phase, result.Reason);
+            }
         }
     }
 
@@ -314,5 +379,18 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
         {
             throw new UnknownStateTypeInStateMachine(type, GetType());
         }
+    }
+
+    sealed class StateMachineControl(StateMachine<TStoredState> machine) : IStateMachineControl
+    {
+        public GrainIdentity Identity => machine.Identity;
+
+        public Task<bool> CanTransitionTo(Type stateType)
+        {
+            machine.ThrowIfNotAStateType(stateType);
+            return machine.CanTransitionTo(stateType);
+        }
+
+        public Task<bool> TransitionTo(Type stateType) => machine.TryTransitionTo(stateType);
     }
 }

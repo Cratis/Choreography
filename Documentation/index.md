@@ -46,7 +46,7 @@ are looking at, start with [Troubleshooting](reference/troubleshooting.md).
 
 ## Packages
 
-Five packages carry the library. They all target `net10.0` and `net11.0`.
+Six packages carry the library. They all target `net10.0` and `net11.0`.
 
 | Package | Holds |
 | --- | --- |
@@ -54,7 +54,8 @@ Five packages carry the library. They all target `net10.0` and `net11.0`.
 | `Cratis.Choreography.Storage` | The jobs storage API and in-memory storage |
 | `Cratis.Choreography.Storage.MongoDB` | The MongoDB storage provider |
 | `Cratis.Choreography.Storage.Sql` | The SQL storage provider on EF Core for SQL Server, PostgreSQL and SQLite |
-| `Cratis.Choreography.Chronicle` | Event-sourced state machines and workflows whose runs are kept as Chronicle events |
+| `Cratis.Choreography.Chronicle` | Event-sourced state machines and workflows whose runs are kept as Chronicle events, and the Append action |
+| `Cratis.Choreography.Arc` | The Execute action, which runs a Cratis Arc command from a state machine or a workflow |
 
-Apart from `Cratis.Choreography.Chronicle`, nothing depends on Cratis Chronicle. Chronicle is a consumer of the library,
+Apart from `Cratis.Choreography.Chronicle`, nothing depends on Cratis Chronicle, and only `Cratis.Choreography.Arc` depends on Cratis Arc. Chronicle is a consumer of the library,
 like any other service. See [Packages](reference/packages.md) for dependencies and target frameworks.

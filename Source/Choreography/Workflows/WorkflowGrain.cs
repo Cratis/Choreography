@@ -1,6 +1,7 @@
 // Copyright (c) Cratis. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using Cratis.Choreography.Actions;
 using Cratis.Choreography.Workflows.Definitions;
 using Cratis.Choreography.Workflows.Runs;
 using Cratis.Choreography.Workflows.Scopes;
@@ -16,8 +17,11 @@ namespace Cratis.Choreography.Workflows;
 /// <param name="scopeFactory">Resolves definition storage and admission policies in the scope of the workflow.</param>
 /// <param name="scopes">The <see cref="IWorkflowExecutionScopes"/> that establish the context work for a scope runs in.</param>
 [GrainType("cratis-orleans-workflow")]
-public class WorkflowGrain(IServiceScopeFactory scopeFactory, IWorkflowExecutionScopes scopes) : Grain, IWorkflow
+public class WorkflowGrain(IServiceScopeFactory scopeFactory, IWorkflowExecutionScopes scopes) : Grain, IWorkflow, IIdentifiable
 {
+    /// <inheritdoc/>
+    public GrainIdentity Identity => field ??= GrainIdentity.Of(this, GrainKind.Workflow);
+
     /// <inheritdoc/>
     public async Task<WorkflowAdmission> Admit(WorkflowTrigger trigger)
     {

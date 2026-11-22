@@ -121,4 +121,5 @@ heavier than the problem when:
 - the work is a single call. Write the call.
 
 [Choosing a building block](../choosing-a-building-block.md) compares them side by side. To see how a run stays
-durable, read [the runtime](runtime.md).
+durable, read [the runtime](runtime.md). To perform a node with the same [actions](../actions.md) a state machine uses,
+derive from `ActionNodePerformer`.

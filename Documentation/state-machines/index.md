@@ -166,6 +166,8 @@ state from the hook.
 
 - [Persist, restore and test a state machine](persistence-and-testing.md) covers what is recorded, supplying your own
   storage, deriving the activation state and testing a state on its own.
+- [Actions](../actions.md) run code, execute commands, append events, switch state or start workflows as a state is entered,
+  running and left.
 - [Event-sourced state machines](event-sourced.md) drive the same states from Chronicle events instead of persisting
   anything in the grain.
 - [Choosing a building block](../choosing-a-building-block.md) compares state machines with jobs, workflows and workers.
