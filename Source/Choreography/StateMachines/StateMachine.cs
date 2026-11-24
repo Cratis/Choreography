@@ -95,7 +95,7 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
         // A state machine that has never persisted a state is entering its first state; any other activation resumes
         // a state it is already in, whose entry actions have run before.
         var isFirstEntry = State is not StateMachineState { CurrentState.Length: > 0 };
-        await PerformTransition(activationState, _entryGeneration, runEntryActions: isFirstEntry);
+        await PerformTransition(activationState, _entryGeneration, runEntryActions: isFirstEntry, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -259,7 +259,7 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
     /// <returns>Awaitable task.</returns>
     protected virtual Task OnAfterLeavingState(IState<TStoredState> state) => Task.CompletedTask;
 
-    async Task PerformTransition(Type stateType, long admissionGeneration, bool runEntryActions = true)
+    async Task PerformTransition(Type stateType, long admissionGeneration, bool runEntryActions = true, CancellationToken cancellationToken = default)
     {
         _logger?.TransitioningTo(stateType);
         if (_isTransitioning)
@@ -275,13 +275,14 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
         _isTransitioning = true;
         try
         {
-            await PerformSingleTransition(stateType, runEntryActions);
+            await PerformSingleTransition(stateType, runEntryActions, cancellationToken);
             while (_scheduledTransitions.TryDequeue(out var scheduledState))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (_entryGeneration == scheduledState.AdmissionGeneration || await CanTransitionTo(scheduledState.TargetState))
                 {
                     _logger?.TransitioningTo(scheduledState.TargetState);
-                    await PerformSingleTransition(scheduledState.TargetState, runEntryActions: true);
+                    await PerformSingleTransition(scheduledState.TargetState, runEntryActions: true, cancellationToken);
                 }
             }
         }
@@ -294,29 +295,39 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
         }
     }
 
-    async Task PerformSingleTransition(Type stateType, bool runEntryActions)
+    async Task PerformSingleTransition(Type stateType, bool runEntryActions, CancellationToken cancellationToken)
     {
+        // A cancelled activation is abandoned by Orleans and marked invalid, so the next write to the grain state would
+        // throw an exception nobody observes. The token is checked between the steps instead, which ends the abandoned
+        // transition as cancelled; nothing has been persisted by then because the state is written at the end.
+        cancellationToken.ThrowIfCancellationRequested();
         var stateTypeBeforeTransition = _currentState.GetType();
         var storedStateBeforeTransition = State;
 
         _isLeaving = true;
         await OnBeforeLeavingState(_currentState);
+        cancellationToken.ThrowIfCancellationRequested();
         State = await _currentState.OnLeave(State);
         await ExecuteActions(_currentState, StateActionPhase.Exit);
         await OnAfterLeavingState(_currentState);
         _isLeaving = false;
+        cancellationToken.ThrowIfCancellationRequested();
 
         _currentState = _states[stateType];
         _entryGeneration++;
 
         await OnBeforeEnteringState(_currentState);
+        cancellationToken.ThrowIfCancellationRequested();
         State = await _currentState.OnEnter(State);
         if (runEntryActions)
         {
             await ExecuteActions(_currentState, StateActionPhase.Entry);
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         await OnAfterEnteringState(_currentState);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (State is StateMachineState stateMachineState)
         {
@@ -331,6 +342,7 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
             await WriteStateAsync();
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         await ExecuteActions(_currentState, StateActionPhase.Running);
     }
 

@@ -9,6 +9,10 @@
         <RepositoryType>git</RepositoryType>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
     </PropertyGroup>
+    <!-- EF Core 11 supports net11.0 only, so this package is not built for net10.0 -->
+    <PropertyGroup Condition="'$(IsPackaging)' == 'true'">
+        <TargetFrameworks>net11.0</TargetFrameworks>
+    </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="Cratis.Arc.EntityFrameworkCore" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
