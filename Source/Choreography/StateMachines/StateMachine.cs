@@ -295,11 +295,11 @@ public abstract class StateMachine<TStoredState> : Grain<TStoredState>, IStateMa
         }
     }
 
-    // A cancelled activation is abandoned by Orleans and marked invalid, so the next write to the grain state would throw
-    // an InvalidOperationException nobody observes. The token is checked between the steps instead, which ends the
-    // abandoned transition as cancelled; nothing has been persisted by then because the state is written at the end.
     async Task PerformSingleTransition(Type stateType, bool runEntryActions, CancellationToken cancellationToken)
     {
+        // A cancelled activation is abandoned by Orleans and marked invalid, so the next write to the grain state would
+        // throw an exception nobody observes. The token is checked between the steps instead, which ends the abandoned
+        // transition as cancelled; nothing has been persisted by then because the state is written at the end.
         cancellationToken.ThrowIfCancellationRequested();
         var stateTypeBeforeTransition = _currentState.GetType();
         var storedStateBeforeTransition = State;
