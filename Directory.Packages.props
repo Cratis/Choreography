@@ -30,8 +30,9 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
     <PackageVersion Include="coverlet.collector" Version="10.1.1" />
     <!-- EF Core (SQL storage) -->
-    <PackageVersion Include="Cratis.Arc.Core" Version="24.2.1" />
-    <PackageVersion Include="Cratis.Arc.EntityFrameworkCore" Version="24.2.1" />
+    <PackageVersion Include="Cratis.Arc.Core" Version="24.6.0" />
+    <PackageVersion Include="Cratis.Arc.Availability" Version="24.6.0" />
+    <PackageVersion Include="Cratis.Arc.EntityFrameworkCore" Version="24.6.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="11.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="11.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="11.0.0" />
@@ -41,7 +42,7 @@
          references it directly; drop this when SqlClient's own floor is 10.0.13 or later. -->
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="11.0.0" />
     <!-- Cratis -->
-    <PackageVersion Include="Cratis.Arc.MongoDB" Version="24.2.1" />
+    <PackageVersion Include="Cratis.Arc.MongoDB" Version="24.6.0" />
     <PackageVersion Include="Cratis.Chronicle" Version="19.187.0" />
     <PackageVersion Include="Cratis.Chronicle.XUnit.Integration" Version="19.187.0" />
     <PackageVersion Include="Cratis.Fundamentals" Version="7.34.4" />

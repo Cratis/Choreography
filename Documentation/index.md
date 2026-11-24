@@ -37,7 +37,7 @@ New to Choreography? Build something and watch it survive a restart:
 | Storage | Job and workflow state must persist in MongoDB, SQL or memory | [Storage](storage/index.md) |
 | Patching | A release must change stored data once, on start | [Patching](patching/index.md) |
 | Tenancy | Grain calls must carry the caller's tenant | [Tenancy](tenancy.md) |
-| Availability | Part of the application must exist only for some tenants, users or callers, decided per request | [Availability engine](availability/index.md) |
+| Availability (moved to Arc, deprecated here) | Part of the application must exist only for some tenants, users or callers, decided per request | [Moved to Arc](availability/index.md) |
 | Upgrading | Silos of two releases run in one cluster | [Upgrading and compatibility](upgrading/index.md) |
 | Testing | You want to test jobs, state machines and patches | [Testing](testing/index.md) |
 

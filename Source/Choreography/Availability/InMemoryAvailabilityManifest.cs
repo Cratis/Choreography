@@ -4,19 +4,24 @@
 namespace Cratis.Choreography.Availability;
 
 /// <summary>
-/// An <see cref="IAvailabilityManifest"/> that holds a manifest given to it.
+/// An availability manifest held in memory. Forwards to <see cref="Cratis.Arc.Availability.InMemoryAvailabilityManifest"/>.
 /// </summary>
-/// <param name="current">The manifest.</param>
-public class InMemoryAvailabilityManifest(AvailabilityManifest current) : IAvailabilityManifest
+[Obsolete("The availability engine moved to Cratis.Arc.Availability (the Cratis.Arc.Availability package); use InMemoryAvailabilityManifest there. This forwarder is removed in the next major release.")]
+public class InMemoryAvailabilityManifest : Cratis.Arc.Availability.InMemoryAvailabilityManifest
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InMemoryAvailabilityManifest"/> class that declares nothing.
     /// </summary>
     public InMemoryAvailabilityManifest()
-        : this(AvailabilityManifest.Empty)
     {
     }
 
-    /// <inheritdoc/>
-    public AvailabilityManifest Current => current;
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InMemoryAvailabilityManifest"/> class.
+    /// </summary>
+    /// <param name="current">The manifest.</param>
+    public InMemoryAvailabilityManifest(Cratis.Arc.Availability.AvailabilityManifest current)
+        : base(current)
+    {
+    }
 }

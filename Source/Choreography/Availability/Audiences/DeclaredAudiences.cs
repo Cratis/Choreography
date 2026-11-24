@@ -4,19 +4,17 @@
 namespace Cratis.Choreography.Availability.Audiences;
 
 /// <summary>
-/// An in-memory <see cref="IDeclaredAudiences"/>.
+/// The audiences a model declares. Forwards to <see cref="Cratis.Arc.Availability.Audiences.DeclaredAudiences"/>.
 /// </summary>
-/// <param name="declarations">The declared audiences with their descriptions and sources.</param>
-public class DeclaredAudiences(IEnumerable<AudienceDeclaration> declarations) : IDeclaredAudiences
+[Obsolete("The availability engine moved to Cratis.Arc.Availability (the Cratis.Arc.Availability package); use DeclaredAudiences there. This forwarder is removed in the next major release.")]
+public class DeclaredAudiences : Cratis.Arc.Availability.Audiences.DeclaredAudiences
 {
-    readonly HashSet<AudienceName> _audiences = [.. declarations.Select(_ => _.Name)];
-
     /// <summary>
     /// Initializes a new instance of the <see cref="DeclaredAudiences"/> class.
     /// </summary>
     /// <param name="audiences">The declared audiences.</param>
-    public DeclaredAudiences(IEnumerable<AudienceName> audiences)
-        : this(audiences.Select(_ => new AudienceDeclaration(_)))
+    public DeclaredAudiences(IEnumerable<Cratis.Arc.Availability.Audiences.AudienceName> audiences)
+        : base(audiences)
     {
     }
 
@@ -24,17 +22,8 @@ public class DeclaredAudiences(IEnumerable<AudienceDeclaration> declarations) : 
     /// Initializes a new instance of the <see cref="DeclaredAudiences"/> class.
     /// </summary>
     /// <param name="audiences">The declared audiences.</param>
-    public DeclaredAudiences(params AudienceName[] audiences)
-        : this((IEnumerable<AudienceName>)audiences)
+    public DeclaredAudiences(params Cratis.Arc.Availability.Audiences.AudienceName[] audiences)
+        : base(audiences)
     {
     }
-
-    /// <inheritdoc/>
-    public IReadOnlyCollection<AudienceName> All => _audiences;
-
-    /// <inheritdoc/>
-    public IReadOnlyCollection<AudienceDeclaration> Declarations { get; } = [.. declarations.DistinctBy(_ => _.Name)];
-
-    /// <inheritdoc/>
-    public bool IsDeclared(AudienceName audience) => _audiences.Contains(audience);
 }

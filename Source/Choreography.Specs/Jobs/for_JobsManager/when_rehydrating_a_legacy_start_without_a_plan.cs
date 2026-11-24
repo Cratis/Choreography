@@ -32,7 +32,18 @@ public class when_rehydrating_a_legacy_start_without_a_plan : given.the_manager
     [Fact]
     void should_log_the_specific_reason() => _logger.ReceivedCalls().Any(call =>
         call.GetMethodInfo().Name == nameof(ILogger.Log) &&
-        call.GetArguments()[2]!.ToString()!.Contains("without a saved step plan", StringComparison.Ordinal)).ShouldBeTrue();
+        FormattedMessage(call).Contains("without a saved step plan", StringComparison.Ordinal)).ShouldBeTrue();
     [Fact] void should_not_delete_the_legacy_starting_job() => _job.Verify(job => job.Remove(), Times.Never);
     [Fact] void should_preserve_the_status() => _storedJobs.Single().Status.ShouldEqual(JobStatus.StartingSteps);
+
+    /// <summary>
+    /// Newer logging generators pass a state whose ToString is empty, so render the message through the formatter the call carries.
+    /// </summary>
+    /// <param name="call">The logger call.</param>
+    /// <returns>The formatted message.</returns>
+    static string FormattedMessage(NSubstitute.Core.ICall call)
+    {
+        var arguments = call.GetArguments();
+        return (string)((Delegate)arguments[4]!).DynamicInvoke(arguments[2], arguments[3])!;
+    }
 }
