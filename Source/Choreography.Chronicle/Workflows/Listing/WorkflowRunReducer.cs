@@ -79,8 +79,16 @@ public class WorkflowRunReducer : IReducerFor<WorkflowRun>
     /// <param name="current">The model.</param>
     /// <param name="context">The context.</param>
     /// <returns>The updated model.</returns>
-    public WorkflowRun? On(WorkflowWaitOpened @event, WorkflowRun? current, EventContext context) => current is null ? null : Track(
-        current with { Waits = [.. current.Waits, new(@event.Wait, @event.Execution)] }, @event.Execution, NodeExecutionStatus.Waiting, context);
+    public WorkflowRun? On(WorkflowWaitOpened @event, WorkflowRun? current, EventContext context)
+    {
+        if (current is null)
+        {
+            return null;
+        }
+
+        var opened = current with { Waits = [.. current.Waits, new(@event.Wait, @event.Execution)] };
+        return Track(opened, @event.Execution, NodeExecutionStatus.Waiting, context);
+    }
 
     /// <summary>Tracks a resolved wait.</summary>
     /// <param name="event">The event.</param>
@@ -168,15 +176,19 @@ public class WorkflowRunReducer : IReducerFor<WorkflowRun>
     /// <param name="current">The model.</param>
     /// <param name="context">The context.</param>
     /// <returns>The updated model.</returns>
-    public WorkflowRun? On(WorkflowRunCancelled @event, WorkflowRun? current, EventContext context) => Finish(
-        current is null ? null : current with
+    public WorkflowRun? On(WorkflowRunCancelled @event, WorkflowRun? current, EventContext context)
+    {
+        if (current is null)
         {
-            PendingJobStops = [.. current.PendingJobStops
-                .Concat(current.Executions.Where(item => item.Status == NodeExecutionStatus.Scheduled && item.Job is not null).Select(item => item.Job!))
-                .Distinct()]
-        },
-        WorkflowRunStatus.Cancelled,
-        context);
+            return null;
+        }
+
+        var scheduledJobs = current.Executions
+            .Where(item => item.Status == NodeExecutionStatus.Scheduled && item.Job is not null)
+            .Select(item => item.Job!);
+        var cancelled = current with { PendingJobStops = [.. current.PendingJobStops.Concat(scheduledJobs).Distinct()] };
+        return Finish(cancelled, WorkflowRunStatus.Cancelled, context);
+    }
 
     /// <summary>Finishes the run.</summary>
     /// <param name="event">The event.</param>
@@ -193,18 +205,40 @@ public class WorkflowRunReducer : IReducerFor<WorkflowRun>
     public WorkflowRun? On(WorkflowNodeReconciled @event, WorkflowRun? current, EventContext context) =>
         current is null ? null : Touch(current with { CompletedAt = null, Status = WorkflowRunStatus.Running }, context);
 
-    static WorkflowRun? Track(WorkflowRun? current, NodeExecutionKey execution, NodeExecutionStatus status, EventContext context, WorkflowJobReference? job = null) => current is null ? null : Touch(
-        current with { Executions = [.. current.Executions.Where(item => item.Execution != execution), new(execution, status) { Job = job }] }, context);
-
-    static WorkflowRun? Close(WorkflowRun? current, WorkflowWaitId wait, NodeExecutionStatus status, EventContext context) =>
-        current?.Waits.FirstOrDefault(item => item.Wait == wait) is not { } opened ? Touch(current, context)
-        : Track(current with { Waits = [.. current.Waits.Where(item => item.Wait != wait)] }, opened.Execution, status, context);
-
-    static WorkflowRun? Touch(WorkflowRun? current, EventContext context) => current is null ? null : current with
+    static WorkflowRun? Track(WorkflowRun? current, NodeExecutionKey execution, NodeExecutionStatus status, EventContext context, WorkflowJobReference? job = null)
     {
-        LastActivityAt = context.Occurred,
-        Status = StatusOf(current)
-    };
+        if (current is null)
+        {
+            return null;
+        }
+
+        var executions = current.Executions.Where(item => item.Execution != execution).Append(new(execution, status) { Job = job });
+        return Touch(current with { Executions = [.. executions] }, context);
+    }
+
+    static WorkflowRun? Close(WorkflowRun? current, WorkflowWaitId wait, NodeExecutionStatus status, EventContext context)
+    {
+        if (current?.Waits.FirstOrDefault(item => item.Wait == wait) is not { } opened)
+        {
+            return Touch(current, context);
+        }
+
+        return Track(current with { Waits = [.. current.Waits.Where(item => item.Wait != wait)] }, opened.Execution, status, context);
+    }
+
+    static WorkflowRun? Touch(WorkflowRun? current, EventContext context)
+    {
+        if (current is null)
+        {
+            return null;
+        }
+
+        return current with
+        {
+            LastActivityAt = context.Occurred,
+            Status = StatusOf(current)
+        };
+    }
 
     static WorkflowRunStatus StatusOf(WorkflowRun current)
     {
@@ -213,10 +247,18 @@ public class WorkflowRunReducer : IReducerFor<WorkflowRun>
             return current.Status;
         }
 
-        return current.Executions.Any(item => item.Status is NodeExecutionStatus.Scheduled or NodeExecutionStatus.RetryPending)
-            || !current.Executions.Any(item => item.Status == NodeExecutionStatus.Waiting) ? WorkflowRunStatus.Running : WorkflowRunStatus.Waiting;
+        var isRunning = current.Executions.Any(item => item.Status is NodeExecutionStatus.Scheduled or NodeExecutionStatus.RetryPending)
+            || !current.Executions.Any(item => item.Status == NodeExecutionStatus.Waiting);
+        return isRunning ? WorkflowRunStatus.Running : WorkflowRunStatus.Waiting;
     }
 
-    static WorkflowRun? Finish(WorkflowRun? current, WorkflowRunStatus status, EventContext context) =>
-        current is null ? null : current with { Status = status, LastActivityAt = context.Occurred, CompletedAt = context.Occurred };
+    static WorkflowRun? Finish(WorkflowRun? current, WorkflowRunStatus status, EventContext context)
+    {
+        if (current is null)
+        {
+            return null;
+        }
+
+        return current with { Status = status, LastActivityAt = context.Occurred, CompletedAt = context.Occurred };
+    }
 }

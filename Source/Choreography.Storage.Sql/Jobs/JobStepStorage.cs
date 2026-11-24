@@ -181,11 +181,12 @@ public class JobStepStorage(Func<JobsDbContext> contextFactory, JsonSerializerOp
 
             await using var dbContext = contextFactory();
             var existing = await dbContext.JobSteps.FirstOrDefaultAsync(js => js.JobId == jobId.Value && js.JobStepId == jobStepId.Value);
-            var entity = state is JobStepState jobStepState ?
-                _serialization.ToEntity(jobStepState, existing?.Id ?? Guid.NewGuid()) :
-                new JobStep
+            var id = existing?.Id ?? Guid.NewGuid();
+            var entity = state is JobStepState jobStepState
+                ? _serialization.ToEntity(jobStepState, id)
+                : new JobStep
                 {
-                    Id = existing?.Id ?? Guid.NewGuid(),
+                    Id = id,
                     JobId = jobId.Value,
                     JobStepId = jobStepId.Value,
                     StateJson = _serialization.Serialize(state, typeof(TJobStepState))

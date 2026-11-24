@@ -45,8 +45,10 @@ public class a_run : Specification
         1,
         "manual",
         new WorkflowGraph(
-            [new WorkflowNode("trigger", WorkflowNodeKind.Trigger, new("manual", 1), WorkflowNodeConfiguration.Empty, ["next"], WorkflowNodePolicy.Default),
-             new WorkflowNode("action", WorkflowNodeKind.Action, new("action", 1), WorkflowNodeConfiguration.Empty, ["next"], WorkflowNodePolicy.Default)],
+            [
+                new WorkflowNode("trigger", WorkflowNodeKind.Trigger, new("manual", 1), WorkflowNodeConfiguration.Empty, ["next"], WorkflowNodePolicy.Default),
+                new WorkflowNode("action", WorkflowNodeKind.Action, new("action", 1), WorkflowNodeConfiguration.Empty, ["next"], WorkflowNodePolicy.Default)
+            ],
             [new WorkflowEdge("trigger", "next", "action")]),
         "catalog",
         []);

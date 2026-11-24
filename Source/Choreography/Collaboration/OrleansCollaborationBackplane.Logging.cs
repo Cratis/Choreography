@@ -5,10 +5,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Cratis.Choreography.Collaboration;
 
-/// <summary>
+/// <content>
 /// Structured log messages for <see cref="OrleansCollaborationBackplane"/>. All are best-effort diagnostics —
 /// the cross-replica presence path self-heals, so failures are logged at debug and never surfaced.
-/// </summary>
+/// </content>
 public sealed partial class OrleansCollaborationBackplane
 {
     [LoggerMessage(LogLevel.Debug, Message = "Failed to unsubscribe the collaboration observer for group {GroupKey}")]
