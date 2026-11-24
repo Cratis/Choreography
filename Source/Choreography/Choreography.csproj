@@ -38,6 +38,8 @@
         <PackageReference Include="Microsoft.Orleans.Serialization" />
         <PackageReference Include="Microsoft.Orleans.Serialization.SystemTextJson" />
         <PackageReference Include="Cratis.Fundamentals" />
+        <!-- The availability engine lives here; Cratis.Choreography.Availability forwards to it for one release. -->
+        <PackageReference Include="Cratis.Arc.Availability" />
         <PackageReference Include="Cratis.Metrics.Roslyn" PrivateAssets="all" />
         <PackageReference Include="OneOf" />
         <PackageReference Include="System.Reactive" />

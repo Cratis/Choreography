@@ -4,13 +4,8 @@
 namespace Cratis.Choreography.Availability;
 
 /// <summary>
-/// The exception that is thrown when a gate uses an availability block that is not defined. A model error, not a denial.
+/// Thrown when an availability name is not defined. Forwards to <see cref="Cratis.Arc.Availability.UndefinedAvailabilityException"/>.
 /// </summary>
-/// <param name="name">The name of the missing block.</param>
-public class UndefinedAvailabilityException(string name) : Exception($"The availability '{name}' is not defined.")
-{
-    /// <summary>
-    /// Gets the name of the missing block.
-    /// </summary>
-    public string Name { get; } = name;
-}
+/// <param name="name">The undefined name.</param>
+[Obsolete("The availability engine moved to Cratis.Arc.Availability (the Cratis.Arc.Availability package); use UndefinedAvailabilityException there. This forwarder is removed in the next major release.")]
+public class UndefinedAvailabilityException(string name) : Cratis.Arc.Availability.UndefinedAvailabilityException(name);

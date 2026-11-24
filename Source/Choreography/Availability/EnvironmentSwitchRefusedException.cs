@@ -4,14 +4,8 @@
 namespace Cratis.Choreography.Availability;
 
 /// <summary>
-/// The exception that is thrown when the grant-all-audiences switch is on in an environment that does not allow it.
+/// Thrown when granting every declared audience is refused. Forwards to <see cref="Cratis.Arc.Availability.EnvironmentSwitchRefusedException"/>.
 /// </summary>
-/// <param name="environmentName">The environment the switch was turned on in.</param>
-public class EnvironmentSwitchRefusedException(string? environmentName) : Exception(
-    $"Granting every declared audience is refused in the '{environmentName ?? "(unnamed)"}' environment. The switch is only allowed in local and test environments.")
-{
-    /// <summary>
-    /// Gets the environment the switch was turned on in.
-    /// </summary>
-    public string? EnvironmentName { get; } = environmentName;
-}
+/// <param name="environmentName">The environment the switch was refused in.</param>
+[Obsolete("The availability engine moved to Cratis.Arc.Availability (the Cratis.Arc.Availability package); use EnvironmentSwitchRefusedException there. This forwarder is removed in the next major release.")]
+public class EnvironmentSwitchRefusedException(string? environmentName) : Cratis.Arc.Availability.EnvironmentSwitchRefusedException(environmentName);

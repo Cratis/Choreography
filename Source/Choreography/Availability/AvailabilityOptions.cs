@@ -4,33 +4,7 @@
 namespace Cratis.Choreography.Availability;
 
 /// <summary>
-/// Options for the availability engine.
+/// Options for the availability engine. Forwards to <see cref="Cratis.Arc.Availability.AvailabilityOptions"/>.
 /// </summary>
-public class AvailabilityOptions
-{
-    /// <summary>
-    /// Gets or sets the name of the environment the host runs in.
-    /// </summary>
-    public string? EnvironmentName { get; set; }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether every declared audience is granted to every request. Off by default.
-    /// </summary>
-    /// <remarks>
-    /// This exists so a developer or a test run sees the whole application. It is refused outside a local or
-    /// test environment, see <see cref="AvailabilityEnvironments"/>.
-    /// </remarks>
-    public bool GrantAllDeclaredAudiences { get; set; }
-
-    /// <summary>
-    /// Verifies the options are allowed in the environment.
-    /// </summary>
-    /// <exception cref="EnvironmentSwitchRefusedException">The switch is on in an environment that does not allow it.</exception>
-    public void Validate()
-    {
-        if (GrantAllDeclaredAudiences && !AvailabilityEnvironments.AllowsGrantAll(EnvironmentName))
-        {
-            throw new EnvironmentSwitchRefusedException(EnvironmentName);
-        }
-    }
-}
+[Obsolete("The availability engine moved to Cratis.Arc.Availability (the Cratis.Arc.Availability package); use AvailabilityOptions there. This forwarder is removed in the next major release.")]
+public class AvailabilityOptions : Cratis.Arc.Availability.AvailabilityOptions;

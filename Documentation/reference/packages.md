@@ -10,14 +10,14 @@ services, and add `Cratis.Choreography.Chronicle` only when you use Cratis Chron
 
 | Package | Contains | Target frameworks |
 | --- | --- | --- |
-| `Cratis.Choreography` | Jobs, workers, state machines, workflows, patching, tenancy, the availability engine, typed grain keys, serializers, live collaboration presence and silo hosting | `net10.0`, `net11.0` |
+| `Cratis.Choreography` | Jobs, workers, state machines, workflows, patching, tenancy, typed grain keys, serializers, live collaboration presence and silo hosting | `net10.0`, `net11.0` |
 | `Cratis.Choreography.Storage` | The jobs and patch storage APIs and the in-memory providers | `net10.0`, `net11.0` |
 | `Cratis.Choreography.Storage.MongoDB` | The MongoDB providers for jobs and patches | `net10.0`, `net11.0` |
 | `Cratis.Choreography.Storage.Sql` | The SQL providers for jobs and patches, on EF Core for SQL Server, PostgreSQL and SQLite | `net10.0`, `net11.0` |
 | `Cratis.Choreography.Chronicle` | Event-sourced state machines and workflows whose runs are kept as Chronicle events, and the Append action | `net10.0`, `net11.0` |
 | `Cratis.Choreography.Arc` | The Execute action, which runs a Cratis Arc command as an action of a state machine or a workflow | `net10.0`, `net11.0` |
 
-Live collaboration presence and the [availability engine](../availability/index.md) ship inside `Cratis.Choreography`: they are not separate packages. It uses the ASP.NET Core shared framework
+Live collaboration presence ships inside `Cratis.Choreography`: it is not a separate package. The availability engine moved to `Cratis.Arc.Availability`; the obsolete [forwarder](../availability/index.md) stays for one release. It uses the ASP.NET Core shared framework
 and the Orleans packages that `Cratis.Choreography` already references.
 
 All six packages target `net10.0` and `net11.0`. The SQL provider uses EF Core 10 on both frameworks to stay within

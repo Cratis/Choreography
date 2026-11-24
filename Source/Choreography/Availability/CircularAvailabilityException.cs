@@ -4,13 +4,8 @@
 namespace Cratis.Choreography.Availability;
 
 /// <summary>
-/// The exception that is thrown when availability blocks build on each other in a cycle.
+/// Thrown when availability blocks form a cycle. Forwards to <see cref="Cratis.Arc.Availability.CircularAvailabilityException"/>.
 /// </summary>
-/// <param name="chain">The names in the cycle, ending with the name that closes it.</param>
-public class CircularAvailabilityException(IReadOnlyList<string> chain) : Exception($"Availability blocks form a cycle: {string.Join(" -> ", chain)}.")
-{
-    /// <summary>
-    /// Gets the names in the cycle, ending with the name that closes it.
-    /// </summary>
-    public IReadOnlyList<string> Chain { get; } = chain;
-}
+/// <param name="chain">The names that form the cycle.</param>
+[Obsolete("The availability engine moved to Cratis.Arc.Availability (the Cratis.Arc.Availability package); use CircularAvailabilityException there. This forwarder is removed in the next major release.")]
+public class CircularAvailabilityException(IReadOnlyList<string> chain) : Cratis.Arc.Availability.CircularAvailabilityException(chain);
