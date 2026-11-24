@@ -26,14 +26,13 @@ public record WorkflowRunSnapshot(
     /// </summary>
     /// <param name="state">The <see cref="WorkflowRunState"/>.</param>
     /// <returns>The <see cref="WorkflowRunSnapshot"/>.</returns>
-    public static WorkflowRunSnapshot Of(WorkflowRunState state) => new(
-        state.Run,
-        state.IsAdmitted,
-        state.Status,
-        [.. state.Executions.Values.Select(execution => new NodeExecutionSnapshot(execution.Key, execution.Status, execution.Attempt, execution.Outlet)
+    public static WorkflowRunSnapshot Of(WorkflowRunState state)
+    {
+        var executions = state.Executions.Values.Select(execution => new NodeExecutionSnapshot(execution.Key, execution.Status, execution.Attempt, execution.Outlet)
         {
             Reason = execution.Reason,
             IdempotencyKey = Coordination.WorkflowPlanner.IdempotencyKeyFor(state.Run, execution.Key)
-        })],
-        [.. state.OpenWaits.Keys]);
+        });
+        return new(state.Run, state.IsAdmitted, state.Status, [.. executions], [.. state.OpenWaits.Keys]);
+    }
 }

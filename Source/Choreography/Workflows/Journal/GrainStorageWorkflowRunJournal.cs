@@ -69,15 +69,17 @@ public class GrainStorageWorkflowRunJournal(IServiceProvider services) : IWorkfl
 
     static WorkflowJournalPosition TailOf(WorkflowRunJournalState state) => new(state.Facts.Count - 1);
 
-    static WorkflowRunJournalSnapshot Snapshot(WorkflowRunJournalState state) => new(
-        [.. state.Facts.Select(stored =>
+    static WorkflowRunJournalSnapshot Snapshot(WorkflowRunJournalState state)
+    {
+        var facts = state.Facts.Select(stored =>
         {
             var type = WorkflowRunFacts.TypeNamed(stored.Type) ?? throw new UnknownWorkflowFact(stored.Type);
             var fact = JsonSerializer.Deserialize(stored.Content, type, EngineJson.Options)
                 ?? throw new UnknownWorkflowFact(stored.Type);
             return new WorkflowRecordedFact(fact, new DateTimeOffset(stored.OccurredTicks, TimeSpan.Zero));
-        })],
-        TailOf(state));
+        });
+        return new([.. facts], TailOf(state));
+    }
 
     async Task<(GrainState<WorkflowRunJournalState> State, WorkflowRunJournalState Journal)> Read(WorkflowRunKey key)
     {

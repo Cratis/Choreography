@@ -82,11 +82,25 @@ public class WorkflowRunState(WorkflowRunId run)
     /// <summary>
     /// Gets where the run stands.
     /// </summary>
-    public WorkflowRunStatus Status =>
-        IsCancelled ? WorkflowRunStatus.Cancelled
-        : Outcome ?? (Executions.Values.Any(execution => execution.Status is NodeExecutionStatus.Scheduled or NodeExecutionStatus.RetryPending) || !Executions.Values.Any(execution => execution.Status == NodeExecutionStatus.Waiting)
-            ? WorkflowRunStatus.Running
-            : WorkflowRunStatus.Waiting);
+    public WorkflowRunStatus Status
+    {
+        get
+        {
+            if (IsCancelled)
+            {
+                return WorkflowRunStatus.Cancelled;
+            }
+
+            if (Outcome is { } outcome)
+            {
+                return outcome;
+            }
+
+            var isRunning = Executions.Values.Any(execution => execution.Status is NodeExecutionStatus.Scheduled or NodeExecutionStatus.RetryPending)
+                || !Executions.Values.Any(execution => execution.Status == NodeExecutionStatus.Waiting);
+            return isRunning ? WorkflowRunStatus.Running : WorkflowRunStatus.Waiting;
+        }
+    }
 
     /// <summary>
     /// Gets the execution for a key, creating its record when the history has none yet.

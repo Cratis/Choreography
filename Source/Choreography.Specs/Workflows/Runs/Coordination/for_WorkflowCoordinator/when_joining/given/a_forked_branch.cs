@@ -7,9 +7,23 @@ public class a_forked_branch : for_WorkflowCoordinator.given.a_coordinator
 {
     void Establish()
     {
-        Admit([Trigger(), Action("map"), ForEach("each", "map", "items"), Action("fast"), Action("slow"), Join("join", "each")],
-            [Edge("trigger", "next", "map"), Edge("map", "next", "each"), Edge("each", "each", "fast"),
-             Edge("each", "each", "slow"), Edge("fast", "next", "join"), Edge("slow", "next", "join")]);
+        Admit(
+            [
+                Trigger(),
+                Action("map"),
+                ForEach("each", "map", "items"),
+                Action("fast"),
+                Action("slow"),
+                Join("join", "each")
+            ],
+            [
+                Edge("trigger", "next", "map"),
+                Edge("map", "next", "each"),
+                Edge("each", "each", "fast"),
+                Edge("each", "each", "slow"),
+                Edge("fast", "next", "join"),
+                Edge("slow", "next", "join")
+            ]);
         Succeed(Root("map"), output: "{\"items\":[{\"key\":\"one\"}]}");
         Succeed(InBranch("fast", "each", "one"));
     }

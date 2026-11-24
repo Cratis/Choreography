@@ -18,7 +18,7 @@ public abstract partial class Job<TRequest, TJobState>
         Math.Max(1, ServiceProvider.GetService<IOptions<JobsOptions>>()?.Value?.MaxConcurrentStepStarts ?? new JobsOptions().MaxConcurrentStepStarts);
 
     /// <inheritdoc/>
-    public async Task<Result<JobError>> OnStepSucceeded(JobStepId stepId, JobStepResult jobStepResult)
+    public async Task<Result<JobError>> OnStepSucceeded(JobStepId stepId, JobStepResult result)
     {
         using var scope = _logger.BeginJobScope(JobId, JobKey);
         var (ignored, attempt, _, unsaved) = await IgnoreStepOutcome(stepId, stopped: false);
@@ -37,7 +37,7 @@ public abstract partial class Job<TRequest, TJobState>
         _attemptsToRun.Remove(stepId);
         State.Progress.SuccessfulSteps++;
         CountStepOutcomeInStage(stepId, succeeded: true);
-        return await PerformStepEventHandling(stepId, jobStepResult);
+        return await PerformStepEventHandling(stepId, result);
     }
 
     /// <inheritdoc/>

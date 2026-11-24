@@ -23,13 +23,13 @@ public record JobStepKey(JobId JobId, string Scope, string Namespace)
     /// <param name="key">Key to convert from.</param>
     public static implicit operator string(JobStepKey key) => key.ToString();
 
-    /// <inheritdoc/>
-    public override string ToString() => KeyHelper.Combine(JobId, Scope, Namespace);
-
     /// <summary>
     /// Parse a key from a string.
     /// </summary>
     /// <param name="key">String representation of the key.</param>
     /// <returns>A <see cref="JobStepKey"/> instance.</returns>
     public static JobStepKey Parse(string key) => KeyHelper.Parse<JobStepKey>(key);
+
+    /// <inheritdoc/>
+    public override string ToString() => KeyHelper.Combine(JobId, Scope, Namespace);
 }

@@ -16,10 +16,15 @@ public record ForEachConfiguration(WorkflowNodeId ItemsFrom, string ItemsPropert
     /// </summary>
     /// <param name="configuration">The node's <see cref="WorkflowNodeConfiguration"/>.</param>
     /// <returns>The configuration, or null when it does not describe a for-each.</returns>
-    public static ForEachConfiguration? From(WorkflowNodeConfiguration configuration) =>
-        EngineJson.TryRead<ForEachConfiguration>(configuration.Value) is { } read
-            && !string.IsNullOrEmpty(read.ItemsFrom?.Value)
-            && !string.IsNullOrEmpty(read.ItemsProperty)
-            ? read with { MaxParallelism = Math.Max(1, read.MaxParallelism) }
-            : null;
+    public static ForEachConfiguration? From(WorkflowNodeConfiguration configuration)
+    {
+        if (EngineJson.TryRead<ForEachConfiguration>(configuration.Value) is not { } read
+            || string.IsNullOrEmpty(read.ItemsFrom?.Value)
+            || string.IsNullOrEmpty(read.ItemsProperty))
+        {
+            return null;
+        }
+
+        return read with { MaxParallelism = Math.Max(1, read.MaxParallelism) };
+    }
 }
